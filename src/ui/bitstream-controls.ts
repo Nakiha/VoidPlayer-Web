@@ -285,9 +285,11 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       const entry=entries.get(slot); if(!entry?.tooltip)return;
       const rect=stage.getBoundingClientRect();
       const block=entry.enabled && stage.querySelector('.drawing-layer')?.hasAttribute('hidden') && !(event.target as Element).closest('button,input,select') ? entry.overlay?.hit(event.clientX-rect.left,event.clientY-rect.top):null;
-      entry.tooltip.hidden=!block; if(!block)return;
+      if (entry.tooltip.hidden !== !block) entry.tooltip.hidden = !block;
+      if (!block) return;
       const token=session.getPresentedFrame(slot);
-      entry.tooltip.textContent=`${slot} · ${formatTime(token?.normalizedMediaUs ?? 0)} · PTS\n${block.x}, ${block.y} · ${block.width}×${block.height} · ${predictionLabel(block.mode)} · QP ${block.qp ?? '—'}`;
+      const text = `${slot} · ${formatTime(token?.normalizedMediaUs ?? 0)} · PTS\n${block.x}, ${block.y} · ${block.width}×${block.height} · ${predictionLabel(block.mode)} · QP ${block.qp ?? '—'}`;
+      if (entry.tooltip.textContent !== text) entry.tooltip.textContent = text;
       const viewport=panel.closest('.viewport-surface')!.getBoundingClientRect(), tip=entry.tooltip.getBoundingClientRect();
       let x=event.clientX-viewport.left+12, y=event.clientY-viewport.top+12;
       if(x+tip.width>viewport.width-8)x=event.clientX-viewport.left-tip.width-12;

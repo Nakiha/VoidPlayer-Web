@@ -51,6 +51,7 @@ middle-filename[data-display]::after { grid-area: 1 / 1; justify-self: start; wi
   nav.category-navigation > .category-tabs > button:is([aria-selected=true], [aria-current=page]) {
     background: transparent; color: var(--accent); font-weight: 600;
   }
+  nav.category-navigation > .category-tabs > button:is([aria-selected=true], [aria-current=page]):hover { background: var(--glass-control-selected-hover); }
   nav.category-navigation > .category-tabs > button:is([aria-selected=true], [aria-current=page])::after {
     content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--accent);
   }
@@ -624,6 +625,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 /* Height handle on the panel's bottom edge; mirrors .dock-resize. */
 .analysis-resize { position: absolute; bottom: calc(var(--panel-resize-hit-width) / -2); left: 0; right: 0; height: var(--panel-resize-hit-width); cursor: row-resize; touch-action: none; z-index: 5; }
 .track-identity { padding-inline: var(--control-gap); touch-action: none; user-select: none; }
+button[aria-haspopup=menu], .choice-menu button { -webkit-user-select: none; user-select: none; }
 .choice-trigger { display: inline-flex; align-items: center; gap: var(--control-gap); padding-inline: var(--control-gap); border: 0; background: var(--surface-control); white-space: nowrap; font-size: var(--text-sm); }
 .choice-trigger > .icon:last-child { width: 12px; }
 .popup-menu { position: fixed; inset: auto; margin: 0; max-height: calc(100dvh - 8px); max-width: calc(100vw - 8px); overflow-y: auto; min-width: max(110px, var(--menu-trigger-width, 0px)); padding: var(--space-1); border: 0; border-radius: var(--radius-control); background: var(--preview-fill); box-shadow: var(--popover-shadow); color: var(--text); }

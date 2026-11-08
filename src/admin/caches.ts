@@ -1,15 +1,14 @@
 import { requestError, cacheName, cacheDetail } from './diagnostics.ts';
 import { apiError } from '../services/api-error.ts';
 import { localizedText, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
-import { formatDate, formatNumber, t, th, msg } from '../i18n.ts';
+import { formatDate, t, th, msg } from '../i18n.ts';
 import type {CacheEntry,CacheKind} from '../../shared/service/caches.ts';
 import type {CacheOverview as Overview} from '../../shared/service/admin.ts';
 import { icon } from '../ui/icons.ts';
 import { frameIndexTools } from '../services/frame-index.ts';
-import { emptyState } from './presentation.ts';
+import { emptyState, storageBytes as bytes } from './presentation.ts';
 
 type Page = { entries: CacheEntry[]; nextOffset: number | null; count: number };
-const bytes = (value: number) => { const unit = value >= 1024 ** 3 ? 3 : value >= 1024 ** 2 ? 2 : value >= 1024 ? 1 : 0; return `${formatNumber(value / 1024 ** unit, { maximumFractionDigits: unit ? 1 : 0 })} ${['B', 'KiB', 'MiB', 'GiB'][unit]}`; };
 const cacheKinds: CacheKind[] = ['frame-indexes', 'annotation-previews', 'media-thumbnails'];
 function kindLabel(kind: CacheKind) {
   if (kind === 'frame-indexes') return t(msg('admin.kindFrameIndexes', '帧索引'));
@@ -19,7 +18,21 @@ function kindLabel(kind: CacheKind) {
 export function cacheShell() {
   return `<section id="pane-caches" hidden>
     <header class="admin-heading"><h1>${th(msg("admin.cacheTitle", "缓存"))}</h1><button id="cache-refresh" class="icon-button" aria-label="${th(msg("admin.refreshCaches", "刷新缓存"))}">${icon('refreshRegular')}</button></header>
-    <h2>${th(msg('admin.storageUsage', '存储占用'))}</h2><div class="cache-overview admin-panel"><div class="cache-total"><span>${th(msg("admin.listHeadSize", "占用"))}</span><strong id="cache-total-bytes">—</strong><div class="cache-distribution" aria-hidden="true">${cacheKinds.map(kind => `<span data-segment="${kind}"></span>`).join('')}</div><span id="cache-total-count">${th(msg("admin.reading", "正在读取…"))}</span></div><div class="cache-volume"><div class="cache-volume-heading"><span>${th(msg("admin.disk", "所在磁盘"))}</span><span id="cache-volume-free">—</span></div><div class="cache-volume-bar" role="meter" aria-label="${th(msg("admin.diskUsage", "磁盘占用"))}"><span></span></div><div class="cache-volume-caption"><span id="cache-volume-used">—</span><span id="cache-volume-total">—</span></div></div></div>
+    <h2>${th(msg('admin.storageUsage', '存储占用'))}</h2>
+    <div class="cache-overview admin-panel">
+      <div class="cache-metric">
+        <span>${th(msg('admin.cacheTitle', '缓存'))}</span>
+        <strong id="cache-total-bytes">—</strong>
+        <div class="cache-distribution" aria-hidden="true">${cacheKinds.map(kind => `<span data-segment="${kind}"></span>`).join('')}</div>
+        <div class="cache-metric-caption" id="cache-total-count">${th(msg("admin.reading", "正在读取…"))}</div>
+      </div>
+      <div class="cache-metric">
+        <span>${th(msg('admin.diskUsage', '磁盘占用'))}</span>
+        <strong id="cache-volume-used">—</strong>
+        <div class="cache-volume-bar" role="meter" aria-label="${th(msg('admin.diskUsage', '磁盘占用'))}"><span></span></div>
+        <div class="cache-metric-caption"><span id="cache-volume-free">—</span><span id="cache-volume-total"></span></div>
+      </div>
+    </div>
     <h2>${th(msg('admin.cacheType', '缓存类型'))}</h2>
     <div class="cache-types" role="group" aria-label="${th(msg('admin.cacheType', '缓存类型'))}">${cacheKinds.map((kind, i) => `
       <button data-cache-kind="${kind}" aria-pressed="${i === 0}"><span class="cache-type-name"><i aria-hidden="true"></i>${kindLabel(kind)}</span>
@@ -69,7 +82,7 @@ export function installCaches(signal: AbortSignal, notice: (text: LocalizedValue
     localizedText($('total-bytes'), () => bytes(snapshot.bytes)); localizedText($('total-count'), () => t(msg("admin.cachesCount", "{n, plural, other {# 个缓存}}"), { n: snapshot.count }));
     const volume = overview.volume;
     localizedText($('volume-free'), () => volume ? t(msg("admin.diskFree", "{bytes} 可用"), { bytes: bytes(volume.availableBytes) }) : t(msg("admin.diskUnavailable", "磁盘容量不可用")));
-    localizedText($('volume-used'), () => volume ? t(msg("admin.diskUsed", "已用 {bytes}"), { bytes: bytes(volume.usedBytes) }) : ''); localizedText($('volume-total'), () => volume ? t(msg("admin.diskTotal", "共 {bytes}"), { bytes: bytes(volume.totalBytes) }) : '');
+    localizedText($('volume-used'), () => volume ? bytes(volume.usedBytes) : '—'); localizedText($('volume-total'), () => volume ? t(msg("admin.diskTotal", "共 {bytes}"), { bytes: bytes(volume.totalBytes) }) : '');
     meter(document.querySelector('.cache-volume-bar')!, volume?.usedBytes ?? null, volume?.totalBytes ?? 0);
     for (const type of snapshot.types) {
       const segment = panel.querySelector<HTMLElement>(`[data-segment="${type.kind}"]`)!;

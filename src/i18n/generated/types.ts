@@ -34,6 +34,7 @@ export interface Sources {
   "admin.analysisResources": "分析资源";
   "admin.analysisSave": "保存分析配置";
   "admin.analysisSaved": "分析配置已保存";
+  "admin.analysisTasks": "分析任务";
   "admin.analysisThreads": "解码线程上限";
   "admin.annotationDetails": "标注详情";
   "admin.annotationMeta": "{author} · 版本 {revision} · {date}";
@@ -74,12 +75,10 @@ export interface Sources {
   "admin.detailFrames": "{root} · {format} · {frames, plural, other {# 帧}}";
   "admin.dirNameAria": "目录名称";
   "admin.dirNamePh": "例如：拍摄素材";
-  "admin.disk": "所在磁盘";
   "admin.diskFree": "{bytes} 可用";
   "admin.diskTotal": "共 {bytes}";
   "admin.diskUnavailable": "磁盘容量不可用";
   "admin.diskUsage": "磁盘占用";
-  "admin.diskUsed": "已用 {bytes}";
   "admin.download": "下载";
   "admin.elapsed": "实际耗时";
   "admin.emptyPreviews": "编辑标注后，画面预览会在播放暂停时保存";
@@ -174,6 +173,7 @@ export interface Sources {
   "admin.originServerCount": "服务端计数；浏览器结果尚未提交";
   "admin.originServerRead": "服务端文件读取（含系统缓存）";
   "admin.overviewTitle": "概览";
+  "admin.overviewUpdated": "更新于 {time}";
   "admin.pageCaption": "共 {total} 项 · 第 {n} 页，仅显示可读的非空文件";
   "admin.pageTitle": "管理 · VoidPlayer";
   "admin.preferencesTitle": "首选项";
@@ -181,6 +181,7 @@ export interface Sources {
   "admin.prevPage": "上一页";
   "admin.procCpu": "进程 CPU";
   "admin.procMemory": "进程内存";
+  "admin.processLoad": "进程负载";
   "admin.rawData": "原始工作区数据";
   "admin.readMedia": "读取的媒体";
   "admin.reading": "正在读取…";
@@ -190,6 +191,7 @@ export interface Sources {
   "admin.reasonDuration": "达到时长上限";
   "admin.reasonError": "发生错误";
   "admin.reasonUser": "用户取消或连接中断";
+  "admin.recentMinute": "最近 60 秒";
   "admin.recentRequests": "最近 200 条请求，服务重启后清空";
   "admin.refreshCaches": "刷新缓存";
   "admin.refreshLogs": "刷新日志";
@@ -909,11 +911,13 @@ export interface Sources {
   "settings.wasmThreadsAutoGrow": "自动扩容";
   "settings.wasmThreadsManual": "手动";
   "settings.wasmThreadsSingle": "单线程";
+  "settings.wheelAuto": "自动";
+  "settings.wheelPan": "始终平移";
+  "settings.wheelVerticalZoom": "竖向滚动缩放";
   "settingsShell.about": "关于";
   "settingsShell.accentColor": "主题色";
   "settingsShell.accentColorHex": "主题色 HEX";
   "settingsShell.analysisConcurrency": "分析并发数";
-  "settingsShell.appearance": "外观";
   "settingsShell.av1Decoding": "AV1 解码";
   "settingsShell.chartHover": "码流分析悬浮面板显示方式";
   "settingsShell.chartHoverHint": "各图独立显示在悬浮线旁；合并显示在上面板下方";
@@ -933,6 +937,7 @@ export interface Sources {
   "settingsShell.experimental": "实验性功能";
   "settingsShell.finishAnnotatingCloseWindow": "结束标注 / 关闭窗口";
   "settingsShell.interfaceIcons": "界面图标";
+  "settingsShell.languageInteraction": "语言与交互";
   "settingsShell.license": "许可证";
   "settingsShell.light": "亮色";
   "settingsShell.lineTextEraser": "线条 / 文字 / 橡皮擦";
@@ -940,8 +945,8 @@ export interface Sources {
   "settingsShell.mediaDemuxing": "媒体解封装";
   "settingsShell.name": "名字";
   "settingsShell.openSourceCredits": "开源致谢";
-  "settingsShell.other": "其他";
   "settingsShell.playbackView": "播放与视图";
+  "settingsShell.preferences": "首选项";
   "settingsShell.previousNextFrame": "上一帧 / 下一帧";
   "settingsShell.projectSource": "项目源码";
   "settingsShell.rectangleEllipse": "矩形 / 椭圆";
@@ -954,6 +959,8 @@ export interface Sources {
   "settingsShell.version": "版本";
   "settingsShell.videoDecoding": "视频解码";
   "settingsShell.wasmThreads": "软件解码线程配置";
+  "settingsShell.wheelBehavior": "视口滚动行为";
+  "settingsShell.wheelHint": "捏合或 Ctrl 加滚轮始终缩放。";
   "settingsShell.workspace": "工作区";
   "sharing.addVideo": "请先添加视频再分享";
   "sharing.copyLink": "复制链接";
@@ -1230,6 +1237,14 @@ export interface Sources {
   "update.refresh": "保存现场并刷新";
   "update.retry": "目标版本已变化或服务暂不可用，请稍后再刷新。";
   "update.wait": "请先暂停播放，完成标注并等载入和保存结束，再刷新。";
+  "viewportTrace.download": "下载轨迹";
+  "viewportTrace.finished": "已录制 {seconds} 秒，{count} 次视口输入";
+  "viewportTrace.hint": "本地记录平移、缩放与帧间隔，最长 60 秒";
+  "viewportTrace.interval": "手势期间帧间隔 P95：{ms} ms";
+  "viewportTrace.recording": "录制中，最长 60 秒";
+  "viewportTrace.start": "开始录制";
+  "viewportTrace.stop": "停止录制";
+  "viewportTrace.title": "视口操作轨迹";
   "workbench.collapsePanel": "收起{panel}";
   "workbench.expandPanel": "展开{panel}";
   "workbench.pixels": "{p0} 像素";
@@ -1276,6 +1291,7 @@ export interface MessageParameters {
   "admin.analysisResources": {  };
   "admin.analysisSave": {  };
   "admin.analysisSaved": {  };
+  "admin.analysisTasks": {  };
   "admin.analysisThreads": {  };
   "admin.annotationDetails": {  };
   "admin.annotationMeta": { "author": string | number; "date": string | number; "revision": string | number };
@@ -1316,12 +1332,10 @@ export interface MessageParameters {
   "admin.detailFrames": { "format": string | number; "frames": number; "root": string | number };
   "admin.dirNameAria": {  };
   "admin.dirNamePh": {  };
-  "admin.disk": {  };
   "admin.diskFree": { "bytes": string | number };
   "admin.diskTotal": { "bytes": string | number };
   "admin.diskUnavailable": {  };
   "admin.diskUsage": {  };
-  "admin.diskUsed": { "bytes": string | number };
   "admin.download": {  };
   "admin.elapsed": {  };
   "admin.emptyPreviews": {  };
@@ -1416,6 +1430,7 @@ export interface MessageParameters {
   "admin.originServerCount": {  };
   "admin.originServerRead": {  };
   "admin.overviewTitle": {  };
+  "admin.overviewUpdated": { "time": string | number };
   "admin.pageCaption": { "n": string | number; "total": string | number };
   "admin.pageTitle": {  };
   "admin.preferencesTitle": {  };
@@ -1423,6 +1438,7 @@ export interface MessageParameters {
   "admin.prevPage": {  };
   "admin.procCpu": {  };
   "admin.procMemory": {  };
+  "admin.processLoad": {  };
   "admin.rawData": {  };
   "admin.readMedia": {  };
   "admin.reading": {  };
@@ -1432,6 +1448,7 @@ export interface MessageParameters {
   "admin.reasonDuration": {  };
   "admin.reasonError": {  };
   "admin.reasonUser": {  };
+  "admin.recentMinute": {  };
   "admin.recentRequests": {  };
   "admin.refreshCaches": {  };
   "admin.refreshLogs": {  };
@@ -2151,11 +2168,13 @@ export interface MessageParameters {
   "settings.wasmThreadsAutoGrow": {  };
   "settings.wasmThreadsManual": {  };
   "settings.wasmThreadsSingle": {  };
+  "settings.wheelAuto": {  };
+  "settings.wheelPan": {  };
+  "settings.wheelVerticalZoom": {  };
   "settingsShell.about": {  };
   "settingsShell.accentColor": {  };
   "settingsShell.accentColorHex": {  };
   "settingsShell.analysisConcurrency": {  };
-  "settingsShell.appearance": {  };
   "settingsShell.av1Decoding": {  };
   "settingsShell.chartHover": {  };
   "settingsShell.chartHoverHint": {  };
@@ -2175,6 +2194,7 @@ export interface MessageParameters {
   "settingsShell.experimental": {  };
   "settingsShell.finishAnnotatingCloseWindow": {  };
   "settingsShell.interfaceIcons": {  };
+  "settingsShell.languageInteraction": {  };
   "settingsShell.license": {  };
   "settingsShell.light": {  };
   "settingsShell.lineTextEraser": {  };
@@ -2182,8 +2202,8 @@ export interface MessageParameters {
   "settingsShell.mediaDemuxing": {  };
   "settingsShell.name": {  };
   "settingsShell.openSourceCredits": {  };
-  "settingsShell.other": {  };
   "settingsShell.playbackView": {  };
+  "settingsShell.preferences": {  };
   "settingsShell.previousNextFrame": {  };
   "settingsShell.projectSource": {  };
   "settingsShell.rectangleEllipse": {  };
@@ -2196,6 +2216,8 @@ export interface MessageParameters {
   "settingsShell.version": {  };
   "settingsShell.videoDecoding": {  };
   "settingsShell.wasmThreads": {  };
+  "settingsShell.wheelBehavior": {  };
+  "settingsShell.wheelHint": {  };
   "settingsShell.workspace": {  };
   "sharing.addVideo": {  };
   "sharing.copyLink": {  };
@@ -2472,6 +2494,14 @@ export interface MessageParameters {
   "update.refresh": {  };
   "update.retry": {  };
   "update.wait": {  };
+  "viewportTrace.download": {  };
+  "viewportTrace.finished": { "count": string | number; "seconds": string | number };
+  "viewportTrace.hint": {  };
+  "viewportTrace.interval": { "ms": string | number };
+  "viewportTrace.recording": {  };
+  "viewportTrace.start": {  };
+  "viewportTrace.stop": {  };
+  "viewportTrace.title": {  };
   "workbench.collapsePanel": { "panel": string | number };
   "workbench.expandPanel": { "panel": string | number };
   "workbench.pixels": { "p0": string | number };

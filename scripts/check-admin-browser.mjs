@@ -142,10 +142,18 @@ try {
     const box=row.getBoundingClientRect(), column=row.closest('.library-column').getBoundingClientRect();
     return box.top>=column.top-1&&box.bottom<=column.bottom+1;
   }),'a selected ancestor discovered on a later page is revealed in its column');
+  await player.locator('[data-accent-choice=rose]').evaluate(button => button.click());
   for (const theme of ['dark','light']) {
-    await player.evaluate(theme => localStorage.setItem('voidplayer.theme',theme),theme);
-    await managed.waitForFunction(theme => document.documentElement.dataset.theme===theme,theme);
+    await player.locator(`[data-theme-choice=${theme}]`).evaluate(button => button.click());
+    await managed.waitForFunction(theme => document.documentElement.dataset.theme===theme && document.documentElement.dataset.accent==='rose',theme);
+    const mount = player.locator('#source-list .library-mount[data-root-id=local]');
+    await mount.hover();
+    const playerHover = await mount.evaluate(el => getComputedStyle(el).backgroundColor);
+    const folder = active.locator('.library-column[data-directory="z-branch/leaf"] .library-folder').first();
+    await folder.hover();
+    assert.equal(await folder.evaluate(el => getComputedStyle(el).backgroundColor),playerHover,`${theme}: folder hover matches the player`);
     for (const row of await active.locator('.library-column-path').all()) {
+      assert.equal(await row.evaluate(el => getComputedStyle(el).backgroundColor),playerHover,`${theme}: path ancestors use the player hover fill`);
       assert.equal(await row.getAttribute('aria-selected'),'false','path ancestors do not count as selected items');
       assert.equal(await row.evaluate(el => el.classList.contains('library-item-selected')),false);
     }
@@ -588,7 +596,25 @@ try {
     await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-admin-shared-library-${theme}-${browserName}.png`});
   }
   await managed.close(); await player.locator('#toggle-sources').click();
-  const direct = await context.newPage(); await direct.goto(base + '/admin');
+  const direct = await context.newPage();
+  // Hold periodic work so each observation comes from selecting the overview.
+  await direct.addInitScript(() => {
+    const interval = window.setInterval.bind(window);
+    window.setInterval = (fn, delay, ...args) => interval(fn, Math.max(delay ?? 0, 60_000), ...args);
+  });
+  await direct.goto(base + '/admin#preferences'); await direct.waitForLoadState('networkidle');
+  for (let visit = 1; visit <= 2; visit++) {
+    await direct.locator('[data-pane=overview]').click();
+    await direct.waitForFunction(expected => document.querySelector('#cpu-trend')?.getAttribute('d')?.split('M').length === expected + 1, visit, { timeout: 5000 });
+    assert.notEqual(await direct.locator('#uptime').textContent(), '—');
+    assert.deepEqual(await direct.locator('.overview-trend path').evaluateAll(paths => paths.map(path => path.getTotalLength())), [0, 0],
+      'an isolated observation must show its metric without drawing a dot or bridging a gap');
+    if (visit === 2) {
+      await direct.locator('[data-pane=overview]').click();
+      await direct.waitForFunction(() => [...document.querySelectorAll('.overview-trend path')].every(path => path.getTotalLength() > 0));
+    }
+    await direct.locator('[data-pane=preferences]').click();
+  }
   await direct.getByRole('link', { name: '返回播放器', exact: true }).click(); await direct.waitForURL(base + '/');
   assert.equal(context.pages().length, 2, 'direct admin visits return within their current tab'); await direct.close();
   const otherPlayer = await context.newPage(); await otherPlayer.goto(base);
@@ -601,9 +627,27 @@ try {
 
   const navigationWidth = await page.locator('.admin-navigation').evaluate(nav => nav.getBoundingClientRect().width);
   assert.equal(await page.locator('.admin-brand .icon, .admin-nav-caption').count(), 0);
-  await page.locator('#admin-navigation-toggle').click();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const iconDrift = await page.locator('#admin-navigation-toggle').evaluate(async toggle => {
+    const nav = toggle.closest('nav'), icons = [...nav.querySelectorAll('[data-pane] .icon, .admin-back .icon')];
+    const initial = icons.map(icon => icon.getBoundingClientRect().left);
+    let drift = 0;
+    toggle.click();
+    do {
+      for (const [i, icon] of icons.entries()) drift = Math.max(drift, Math.abs(icon.getBoundingClientRect().left - initial[i]));
+      await new Promise(requestAnimationFrame);
+    } while (nav.parentElement.getAnimations().some(animation => animation.playState === 'running'));
+    return drift;
+  });
+  assert.ok(iconDrift <= 0.5, `navigation icons moved ${iconDrift}px while collapsing`);
   await page.waitForFunction(() => document.querySelector('.admin-navigation').getBoundingClientRect().width === 56);
   assert.equal(await page.locator('#admin-navigation-toggle').getAttribute('aria-expanded'), 'false');
+  const iconOffsets = await page.locator('.admin-navigation').evaluate(nav => {
+    const center = el => { const rect = el.getBoundingClientRect(); return rect.left + rect.width / 2; };
+    return [...nav.querySelectorAll('.icon')].map(icon => center(icon) - center(nav));
+  });
+  assert.ok(iconOffsets.every(offset => Math.abs(offset) <= 0.5), `collapsed navigation icon offsets: ${iconOffsets}`);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.getByRole('button', {name:'首选项', exact:true}).click();
   assert.equal(await page.locator('#pane-preferences #analysis-resources').isVisible(), true);
   assert.equal(await page.locator('#pane-overview #analysis-resources').count(), 0);
@@ -787,7 +831,7 @@ try {
   await page.getByRole('button', { name: '日志', exact: true }).click();
   assert.ok(await page.locator('.admin-log-retention').evaluate(el => el.getBoundingClientRect().bottom <= document.querySelector('.admin-log-tabs').getBoundingClientRect().top));
   await page.locator('#log-storage h3').filter({ hasText: '上传报告' }).waitFor();
-  assert.ok((await page.locator('#log-storage').textContent()).includes('保留到手动删除'));
+  await page.locator('#log-storage').filter({ hasText: '保留到手动删除' }).waitFor();
   assert.ok((await page.locator('#log-storage').textContent()).includes('运行日志'));
   const logStorage = await page.request.get(base + '/api/admin/logs').then(response => response.json());
   assert.equal(await page.getByRole('progressbar', {name:'报告数量', exact:true}).getAttribute('max'), String(logStorage.storage.reports.maxFiles));

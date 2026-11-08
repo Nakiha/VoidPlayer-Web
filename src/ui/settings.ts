@@ -1,3 +1,4 @@
+import type { WheelBehavior } from '../../shared/presentation/viewport.ts';
 import { MAX_WASM_DECODE_COUNT, setVvcFrameContextCount, setVvcThreadCount, setWasmThreadMode,
   vvcFrameContextCount, vvcThreadCount, wasmThreadMode, type WasmThreadMode } from '../media/policy/wasm-threads.ts';
 import { t, onLanguageChange, msg } from '../i18n.ts';
@@ -9,6 +10,15 @@ import { MAX_ANALYSIS_CONCURRENCY } from '../../shared/analysis/bitstream/task-p
 import { installChoiceMenu } from './choice-menu.ts';
 import { installSourceScrollbar } from './source-scrollbar.ts';
 import { FileHandleError, handleKey, pickVideoFiles, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../services/file-handles.ts';
+
+const wheelKey = 'voidplayer.viewport-wheel-behavior';
+function readWheelBehavior(): WheelBehavior {
+  try {
+    const value = localStorage.getItem(wheelKey);
+    if (value === 'pan' || value === 'vertical-zoom') return value;
+  } catch { /* Use the default when browser storage is unavailable. */ }
+  return 'auto';
+}
 
 /** One persistent window, with independent scrolling panes and one close/focus lifecycle. */
 export function installSettings() {
@@ -56,6 +66,24 @@ export function installSettings() {
   window.addEventListener(CHART_HOVER_STYLE_EVENT, syncHoverMenu, { signal: life.signal });
   onLanguageChange(syncHoverMenu, life.signal); syncHoverMenu();
   life.signal.addEventListener('abort', () => hoverMenu.dispose(), { once: true });
+  let wheelBehavior = readWheelBehavior();
+  const wheelChoices = () => [
+    { value: 'auto', label: t(msg('settings.wheelAuto', '自动')) },
+    { value: 'pan', label: t(msg('settings.wheelPan', '始终平移')) },
+    { value: 'vertical-zoom', label: t(msg('settings.wheelVerticalZoom', '竖向滚动缩放')) },
+  ] satisfies { value: WheelBehavior; label: string }[];
+  const wheelMenu = installChoiceMenu('viewport-wheel-behavior', wheelChoices, value => {
+    wheelBehavior = value as WheelBehavior;
+    try { localStorage.setItem(wheelKey, wheelBehavior); } catch { /* Still applies in this window. */ }
+    syncWheelMenu();
+  });
+  function syncWheelMenu() { wheelMenu.sync(wheelBehavior, wheelChoices().find(c => c.value === wheelBehavior)!.label, true); }
+  syncWheelMenu();
+  onLanguageChange(syncWheelMenu, life.signal);
+  window.addEventListener('storage', event => {
+    if (event.key === wheelKey || event.key === null) { wheelBehavior = readWheelBehavior(); syncWheelMenu(); }
+  }, { signal: life.signal });
+  life.signal.addEventListener('abort', () => wheelMenu.dispose(), { once: true });
   const concurrencyChoices = () => Array.from({ length: MAX_ANALYSIS_CONCURRENCY }, (_, i) => ({ value: String(i + 1),
     label: t(msg('settings.analysisConcurrencyCount', '{count, plural, other {# 路}}'), { count: i + 1 }) }));
   const concurrencyMenu = installChoiceMenu('analysis-concurrency', concurrencyChoices, value => setAnalysisConcurrency(Number(value)));
@@ -119,10 +147,10 @@ export function installSettings() {
   }
   onLanguageChange(() => { document.getElementById('settings-current-title')!.textContent = settingsPanes().find(([key]) => key === selected)![1]; }, life.signal);
   function open(invoker: HTMLElement | null = trigger) {
-    if (dialog.open) {
-      ++closeEpoch; delete dialog.dataset.closing;
-      return;
-    }
+    // A native close event can still be queued when a background tab reopens.
+    ++closeEpoch;
+    delete dialog.dataset.closing;
+    if (dialog.open) return;
     returnFocus = invoker;
     dialog.showModal(); trigger.setAttribute('aria-expanded', 'true'); select(selected, true);
     tabs.find(t => t.dataset.settingsPane === selected)!.focus({ preventScroll: true });
@@ -163,7 +191,7 @@ export function installSettings() {
   document.addEventListener('keydown', event => {
     if (matchesShortcut(event, 'settings') && !event.isComposing) { event.preventDefault(); if (!document.querySelector('dialog[open]') || dialog.open) open(document.activeElement instanceof HTMLElement ? document.activeElement : trigger); }
   }, { signal: life.signal });
-  return { openPane(id: string, invoker: HTMLElement | null = trigger) {
+  return { wheelBehavior: () => wheelBehavior, openPane(id: string, invoker: HTMLElement | null = trigger) {
     if (!tabs.some(tab => !tab.hidden && tab.dataset.settingsPane === id)) throw new Error(t(msg("settings.unknownSettingsPage", "未知设置页面")));
     if (dialog.open) select(id); else selected = id;
     open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus({ preventScroll: true });

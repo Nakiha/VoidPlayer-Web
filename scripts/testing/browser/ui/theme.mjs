@@ -18,9 +18,10 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  assert.equal(await page.locator('[data-theme-choice=system]').getAttribute('aria-checked'),'true');
  await choose('light');assert.equal(await theme(),'light');
  await page.emulateMedia({colorScheme:'light'});await page.emulateMedia({colorScheme:'dark'});assert.equal(await theme(),'light');
- // Inline bootstrap must resolve the stored choice even before the app module runs.
+ // Keep the render-blocking theme bootstrap, but prevent the player module from running.
+ const playerModule=await page.locator('script[type=module][src]').first().evaluate(script=>script.src);
  const boot=await context.newPage();await boot.emulateMedia({colorScheme:'dark'});
- await boot.route('**/assets/*.js',route=>route.abort());await boot.goto(base);
+ await boot.route(playerModule,route=>route.abort());await boot.goto(base);
  assert.equal(await boot.locator('html').getAttribute('data-theme'),'light');await boot.close();
  await page.reload();assert.equal(await theme(),'light');
  // Reload resolves before bootstrap's dynamic main import necessarily publishes the tools.
@@ -95,7 +96,13 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  // Compact presets and custom colors stay independent of the review.
  const reviewBefore=await evidence();
  await page.locator('#settings-open').click();
- assert.equal(await page.locator('.accent-palette .accent-choices [data-accent-choice]').count(),12);
+ const swatches=page.locator('.accent-palette .accent-choices [data-accent-choice]');
+ assert.equal(await swatches.count(),12);
+ assert.equal(await swatches.evaluateAll(buttons=>buttons.every(button=>{
+  const box=button.getBoundingClientRect(), dot=button.querySelector('.accent-swatch').getBoundingClientRect();
+  const gaps=[dot.left-box.left,box.right-dot.right,dot.top-box.top,box.bottom-dot.bottom];
+  return Math.min(...gaps)>=0 && Math.max(...gaps)-Math.min(...gaps)<.1;
+ })),true,'square color controls center their swatches with equal padding');
  await page.locator('[data-accent-choice=sky]').click();assert.equal(await page.locator('html').getAttribute('data-accent'),'sky');
  const hex=page.locator('#accent-hex');await hex.fill('#E048B8');await hex.press('Enter');
  assert.equal(await page.locator('html').getAttribute('data-accent'),'custom');
@@ -112,7 +119,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  for (const mode of ['light','dark']) {
   await page.locator(`[data-theme-choice=${mode}]`).click();await page.locator('#settings').screenshot({path:artifact(`voidplayer-accent-${mode}-${name}.png`)});
  }
- const customBoot=await context.newPage();await customBoot.route('**/assets/*.js',route=>route.abort());await customBoot.goto(base);
+ const customBoot=await context.newPage();await customBoot.route(playerModule,route=>route.abort());await customBoot.goto(base);
  assert.equal(await customBoot.locator('html').getAttribute('data-accent'),'custom');
  assert.equal(await customBoot.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--accent').trim()),await page.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--accent').trim()),'custom first paint matches the loaded app');
  await customBoot.close();
@@ -156,7 +163,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
   await peer.waitForFunction(color=>document.querySelector('#theme-base-hex').value===color,color);
   assert.deepEqual(await evidence(),customBefore,'base edits preserve video pixels, marks and layout');
   const colors=await page.locator('html').evaluate(e=>{const style=getComputedStyle(e);return ['--surface','--surface-panel','--text','--accent'].map(token=>style.getPropertyValue(token).trim());});
-  const early=await context.newPage();await early.route('**/assets/*.js',route=>route.abort());await early.goto(base);
+  const early=await context.newPage();await early.route(playerModule,route=>route.abort());await early.goto(base);
   assert.equal(await early.locator('html').getAttribute('data-custom-theme'),'');
   assert.deepEqual(await early.locator('html').evaluate(e=>{const style=getComputedStyle(e);return ['--surface','--surface-panel','--text','--accent'].map(token=>style.getPropertyValue(token).trim());}),colors,'custom palette matches before app modules load');await early.close();
   await page.locator('#settings').screenshot({path:artifact(`voidplayer-custom-base-${mode}-${name}.png`)});

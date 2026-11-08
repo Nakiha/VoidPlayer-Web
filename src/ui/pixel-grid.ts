@@ -29,7 +29,7 @@ export function installPixelGrid(canvas: HTMLCanvasElement, label: HTMLElement) 
     for (let x = grid.startX; x <= current.width; x += grid.spacingX) { ctx.moveTo(crisp(x), 0); ctx.lineTo(crisp(x), current.height); }
     for (let y = grid.startY; y <= current.height; y += grid.spacingY) { ctx.moveTo(0, crisp(y)); ctx.lineTo(current.width, crisp(y)); }
     ctx.stroke();
-    label.textContent = grid.label;
+    if (label.textContent !== grid.label) label.textContent = grid.label;
     // Read-only QA evidence, never a visible performance counter.
     canvas.dataset.gridDraws = String(++draws);
     canvas.dataset.gridPixels = `${grid.cellWidth}x${grid.cellHeight}`;
@@ -44,11 +44,15 @@ export function installPixelGrid(canvas: HTMLCanvasElement, label: HTMLElement) 
   for (const query of appearance) query.addEventListener('change', schedule);
   return {
     update(next: GridView | null) {
-      canvas.hidden = label.hidden = !next;
+      if (canvas.hidden !== !next) canvas.hidden = !next;
+      if (label.hidden !== !next) label.hidden = !next;
       const key = next ? [next.width, next.height, next.imageWidth, next.imageHeight, next.sourceWidth, next.sourceHeight, next.zoom, next.panX, next.panY, window.devicePixelRatio].join('/') : '';
       current = next;
-      if (key === signature) return;
-      signature = key; schedule();
+      if (key === signature && !pending) return;
+      signature = key;
+      // Geometry is committed alongside the video. Only theme changes need their own frame.
+      if (pending) cancelAnimationFrame(pending);
+      paint();
     },
     dispose() {
       disposed = true; if (pending) cancelAnimationFrame(pending); themeChanges.disconnect();

@@ -36,8 +36,15 @@ function paintFrameNow(canvas: HTMLCanvasElement, frame: DecodedFrame, recoverin
   }
   canvas.dataset.displayTarget='sdr';canvas.dataset.captureTarget='sdr';
   canvas.dataset.colorContract=frame.kind==='yuv'?(presentationColor(frame.kind,frame.description).hdr?'common-yuv-hdr-preview':'common-yuv-sdr'):frame.kind==='rgba8'?'rgba-resource':'browser-managed';
-  const fallbackGeometry=gpuFallbackGeometry(canvas);
-  if(fallbackGeometry&&!surfaces.has(canvas)){const surface=createFallbackSurface(canvas);if(surface)surface.geometry(fallbackGeometry);}
+  const geometry = gpuFallbackGeometry(canvas) ?? currentGeometry.get(canvas);
+  if (geometry) {
+    const surface = surfaces.get(canvas);
+    if (surface?.opaqueOnly && !hasOpaquePicture(frame)) {
+      surfaces.delete(canvas);
+      surface.dispose();
+    }
+    if (!surfaces.has(canvas)) createFallbackSurface(canvas, frame)?.geometry(geometry);
+  }
   const start=performance.now();
   paintFrameContent(canvas,frame);
   if(frame.kind!=='yuv')canvas.dataset.colorExecutor=frame.kind==='rgba8'?'rgba-upload':'browser-managed';
@@ -133,14 +140,21 @@ export function bindPresentationResources(canvas: HTMLCanvasElement, resources: 
   captureBudgets.set(canvas, resources);
   if (recovered) recoveryObservers.set(canvas, recovered);
 }
-function createFallbackSurface(canvas: HTMLCanvasElement) {
+function hasOpaquePicture(frame: DecodedFrame) {
+  if (frame.kind === 'yuv') return true; // The raw-plane renderer emits opaque RGB.
+  if (frame.kind !== 'video-sample' || frame.sample?.rotation !== 0 || presentationColor(frame.kind, frame.description).canvasConversion) return false;
+  const format = frame.description.format ?? '';
+  return /^(I(420|422|444)(P10|P12)?|NV12|RGBX|BGRX)$/.test(format);
+}
+
+function createFallbackSurface(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   let surface: ReturnType<typeof createPresentationSurface> = null;
   try {
     surface = createPresentationSurface(canvas, () => {
       if (!surface || surfaces.get(canvas) !== surface) return;
       cpuFallback.add(canvas);
       recoverFrame(canvas, true);
-    }, cpuFallback.has(canvas));
+    }, cpuFallback.has(canvas), hasOpaquePicture(frame));
   } catch (error) {
     if (cpuFallback.has(canvas)) throw error;
     cpuFallback.add(canvas);
@@ -172,7 +186,7 @@ function recoverFrame(canvas: HTMLCanvasElement, replaceSurface = false) {
   try {
     if (replaceSurface) { const surface = surfaces.get(canvas); surfaces.delete(canvas); surface?.dispose(); }
     const geometry = currentGeometry.get(canvas)!;
-    if (!surfaces.has(canvas) && !gpuGeometry(canvas, geometry)) createFallbackSurface(canvas)?.geometry(geometry);
+    if (!surfaces.has(canvas) && !gpuGeometry(canvas, geometry)) createFallbackSurface(canvas, frame)?.geometry(geometry);
     paintFrameNow(canvas, frame, true);
     recoveryObservers.get(canvas)?.(frame);
     canvas.dataset.presentationRecovery = 'ready';
@@ -286,7 +300,7 @@ export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_E
 
 const surfaces = new Map<HTMLCanvasElement, NonNullable<ReturnType<typeof createPresentationSurface>>>();
 const geometryObservers=new WeakMap<HTMLCanvasElement,Set<(g:PresentationGeometry|null)=>void>>();
-const currentGeometry=new WeakMap<HTMLCanvasElement,PresentationGeometry|null>();
+let currentGeometry=new WeakMap<HTMLCanvasElement,PresentationGeometry|null>();
 export function observePresentationGeometry(canvas:HTMLCanvasElement,listener:(g:PresentationGeometry|null)=>void){const set=geometryObservers.get(canvas)??new Set();set.add(listener);geometryObservers.set(canvas,set);listener(currentGeometry.get(canvas)??null);return()=>{set.delete(listener);if(!set.size)geometryObservers.delete(canvas);};}
 export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: PresentationGeometry | null) {
   currentGeometry.set(canvas,geometry);for(const listener of geometryObservers.get(canvas)??[]){try{listener(geometry);}catch{}}
@@ -299,9 +313,11 @@ export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: Pre
     if (surfaces.has(canvas)) { surfaces.get(canvas)!.dispose(); surfaces.delete(canvas); canvas.width = canvas.height = 1; }
     return;
   }
-  if (!surfaces.has(canvas) && geometry) createFallbackSurface(canvas);
+  const frame = retainedFrames.get(canvas);
+  if (!surfaces.has(canvas) && frame) createFallbackSurface(canvas, frame);
   surfaces.get(canvas)?.geometry(geometry);
 }
 export function disposePresentation() {
+  currentGeometry = new WeakMap();
   for (const [canvas, frame] of retainedFrames) { frame.close(); cpuFallback.delete(canvas); } retainedFrames.clear();
   for (const release of captureLeases.values()) release(); captureLeases.clear(); disposeGpuPresentation(); for (const surface of surfaces.values()) surface.dispose(); surfaces.clear(); }

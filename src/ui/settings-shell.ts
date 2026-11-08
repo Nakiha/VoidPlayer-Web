@@ -8,7 +8,7 @@ import { ACCENTS, BASE_COLORS, customTheme } from './appearance.ts';
 import { shortcutLabel } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
 export const settingsPanes = () => [
-  ['appearance', t(msg("settingsShell.appearance", "外观")), 'appearance'], ['workspace', t(msg("settingsShell.workspace", "工作区")), 'stack'],
+  ['appearance', t(msg('settingsShell.preferences', '首选项')), 'settings'], ['workspace', t(msg("settingsShell.workspace", "工作区")), 'stack'],
   ['identity', t(msg("settingsShell.user", "用户")), 'user'], ['shortcuts', t(msg("settingsShell.shortcuts", "快捷键")), 'keyboard'], ['logs', t(msg("settingsShell.logs", "日志")), 'fileText'], ['performance', t(msg("settingsShell.colorDecoding", "色彩与解码")), 'colorDecoding'],
   ['experimental', t(msg('settingsShell.experimental', '实验性功能')), 'diagnostics'], ['about', t(msg("settingsShell.about", "关于")), 'info'],
 ] as const;
@@ -18,9 +18,9 @@ export function settingsShell() {
   return `<dialog id="settings" class="settings-window" aria-label="${th(msg("shell.settings", "设置"))}">
     <div class="settings-body"><nav class="settings-navigation category-navigation" aria-label="${th(msg("settingsShell.settingsCategories", "设置分类"))}"><div class="category-tabs" role="tablist" aria-orientation="vertical">${settingsPanes().map(([id, label, glyph]) => `<button id="settings-tab-${id}" role="tab" data-settings-pane="${id}" aria-controls="settings-pane-${id}" aria-selected="${id === 'appearance'}" tabindex="${id === 'appearance' ? 0 : -1}">${icon(glyph)}<span>${label}</span></button>`).join('')}</div></nav>
     <div class="settings-content">
-      <header class="settings-floating-header"><h2 id="settings-current-title">${th(msg("settingsShell.appearance", "外观"))}</h2><button id="settings-close" class="icon-button" aria-label="${th(msg("settingsShell.closeSettings", "关闭设置"))}">${icon('close')}</button></header>
+      <header class="settings-floating-header"><h2 id="settings-current-title">${th(msg('settingsShell.preferences', '首选项'))}</h2><button id="settings-close" class="icon-button" aria-label="${th(msg("settingsShell.closeSettings", "关闭设置"))}">${icon('close')}</button></header>
       <section id="settings-pane-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" tabindex="0">
-        ${paneTitle(t(msg("settingsShell.appearance", "外观")))}
+        ${paneTitle(t(msg('settingsShell.preferences', '首选项')))}
         <div class="settings-section"><h4 class="settings-section-title" id="theme-label">${th(msg("settingsShell.displayMode", "显示模式"))}</h4>
         <div class="theme-options settings-card" role="radiogroup" aria-labelledby="theme-label">${[['system',t(msg("settingsShell.system", "跟随系统"))],['light',t(msg("settingsShell.light", "亮色"))],['dark',t(msg("settingsShell.dark", "暗色"))],['custom',t(msg("settingsShell.custom", "自定义"))]].map(([id,label]) => `<button role="radio" data-theme-choice="${id}" aria-checked="false"><span class="appearance-sample sample-${id}" aria-hidden="true"><span class="sample-header"></span><span class="sample-sidebar"></span><span class="sample-content"></span></span><span>${label}</span></button>`).join('')}</div>
         </div>
@@ -43,11 +43,15 @@ export function settingsShell() {
           </div>
         </div>
         <p class="settings-caption" id="accent-input-hint" role="status"></p></div>
-        <div class="settings-section"><h4 class="settings-section-title" id="appearance-other-label">${th(msg('settingsShell.other', '其他'))}</h4>
+        <div class="settings-section"><h4 class="settings-section-title" id="appearance-other-label">${th(msg('settingsShell.languageInteraction', '语言与交互'))}</h4>
           <div class="settings-group" role="group" aria-labelledby="appearance-other-label">
             <div class="settings-action-row appearance-other-row">
               <div><h4 id="language-label">${th(msg('language.label', '语言 / Language'))}</h4><p id="language-status" role="status"></p></div>
               <button id="language-choice" type="button" class="settings-choice" aria-labelledby="language-label"></button>
+            </div>
+            <div class="settings-action-row appearance-other-row">
+              <div><h4 id="viewport-wheel-label">${th(msg('settingsShell.wheelBehavior', '视口滚动行为'))}</h4><p id="viewport-wheel-hint">${th(msg('settingsShell.wheelHint', '捏合或 Ctrl 加滚轮始终缩放。'))}</p></div>
+              <button id="viewport-wheel-behavior" type="button" class="settings-choice" aria-labelledby="viewport-wheel-label" aria-describedby="viewport-wheel-hint"></button>
             </div>
             <div class="settings-action-row appearance-other-row">
               <div><h4 id="chart-hover-label" class="settings-icon-label">${icon('chart')}<span>${th(msg('settingsShell.chartHover', '码流分析悬浮面板显示方式'))}</span></h4><p id="chart-hover-hint">${th(msg('settingsShell.chartHoverHint', '各图独立显示在悬浮线旁；合并显示在上面板下方'))}</p></div>

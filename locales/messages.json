@@ -151,6 +151,10 @@
     "source": "分析配置已保存",
     "params": {}
   },
+  "admin.analysisTasks": {
+    "source": "分析任务",
+    "params": {}
+  },
   "admin.analysisThreads": {
     "source": "解码线程上限",
     "params": {}
@@ -333,10 +337,6 @@
     "source": "例如：拍摄素材",
     "params": {}
   },
-  "admin.disk": {
-    "source": "所在磁盘",
-    "params": {}
-  },
   "admin.diskFree": {
     "source": "{bytes} 可用",
     "params": {
@@ -356,12 +356,6 @@
   "admin.diskUsage": {
     "source": "磁盘占用",
     "params": {}
-  },
-  "admin.diskUsed": {
-    "source": "已用 {bytes}",
-    "params": {
-      "bytes": "string | number"
-    }
   },
   "admin.download": {
     "source": "下载",
@@ -764,6 +758,12 @@
     "source": "概览",
     "params": {}
   },
+  "admin.overviewUpdated": {
+    "source": "更新于 {time}",
+    "params": {
+      "time": "string | number"
+    }
+  },
   "admin.pageCaption": {
     "source": "共 {total} 项 · 第 {n} 页，仅显示可读的非空文件",
     "params": {
@@ -793,6 +793,10 @@
   },
   "admin.procMemory": {
     "source": "进程内存",
+    "params": {}
+  },
+  "admin.processLoad": {
+    "source": "进程负载",
     "params": {}
   },
   "admin.rawData": {
@@ -829,6 +833,10 @@
   },
   "admin.reasonUser": {
     "source": "用户取消或连接中断",
+    "params": {}
+  },
+  "admin.recentMinute": {
+    "source": "最近 60 秒",
     "params": {}
   },
   "admin.recentRequests": {
@@ -3944,6 +3952,18 @@
     "source": "单线程",
     "params": {}
   },
+  "settings.wheelAuto": {
+    "source": "自动",
+    "params": {}
+  },
+  "settings.wheelPan": {
+    "source": "始终平移",
+    "params": {}
+  },
+  "settings.wheelVerticalZoom": {
+    "source": "竖向滚动缩放",
+    "params": {}
+  },
   "settingsShell.about": {
     "source": "关于",
     "params": {}
@@ -3958,10 +3978,6 @@
   },
   "settingsShell.analysisConcurrency": {
     "source": "分析并发数",
-    "params": {}
-  },
-  "settingsShell.appearance": {
-    "source": "外观",
     "params": {}
   },
   "settingsShell.av1Decoding": {
@@ -4040,6 +4056,10 @@
     "source": "界面图标",
     "params": {}
   },
+  "settingsShell.languageInteraction": {
+    "source": "语言与交互",
+    "params": {}
+  },
   "settingsShell.license": {
     "source": "许可证",
     "params": {}
@@ -4068,12 +4088,12 @@
     "source": "开源致谢",
     "params": {}
   },
-  "settingsShell.other": {
-    "source": "其他",
-    "params": {}
-  },
   "settingsShell.playbackView": {
     "source": "播放与视图",
+    "params": {}
+  },
+  "settingsShell.preferences": {
+    "source": "首选项",
     "params": {}
   },
   "settingsShell.previousNextFrame": {
@@ -4122,6 +4142,14 @@
   },
   "settingsShell.wasmThreads": {
     "source": "软件解码线程配置",
+    "params": {}
+  },
+  "settingsShell.wheelBehavior": {
+    "source": "视口滚动行为",
+    "params": {}
+  },
+  "settingsShell.wheelHint": {
+    "source": "捏合或 Ctrl 加滚轮始终缩放。",
     "params": {}
   },
   "settingsShell.workspace": {
@@ -5348,6 +5376,43 @@
   },
   "update.wait": {
     "source": "请先暂停播放，完成标注并等载入和保存结束，再刷新。",
+    "params": {}
+  },
+  "viewportTrace.download": {
+    "source": "下载轨迹",
+    "params": {}
+  },
+  "viewportTrace.finished": {
+    "source": "已录制 {seconds} 秒，{count} 次视口输入",
+    "params": {
+      "count": "string | number",
+      "seconds": "string | number"
+    }
+  },
+  "viewportTrace.hint": {
+    "source": "本地记录平移、缩放与帧间隔，最长 60 秒",
+    "params": {}
+  },
+  "viewportTrace.interval": {
+    "source": "手势期间帧间隔 P95：{ms} ms",
+    "params": {
+      "ms": "string | number"
+    }
+  },
+  "viewportTrace.recording": {
+    "source": "录制中，最长 60 秒",
+    "params": {}
+  },
+  "viewportTrace.start": {
+    "source": "开始录制",
+    "params": {}
+  },
+  "viewportTrace.stop": {
+    "source": "停止录制",
+    "params": {}
+  },
+  "viewportTrace.title": {
+    "source": "视口操作轨迹",
     "params": {}
   },
   "workbench.collapsePanel": {

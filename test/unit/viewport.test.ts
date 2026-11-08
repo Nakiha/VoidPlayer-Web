@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  PanMomentumFilter, Viewport, unobscuredFitArea, fitReference, wheelZoomFactor, ZOOM_MAX, classifyWheel, fitContain, fittedSize, gridArrangement, normalizeWheelDelta,
+  WheelGesture, Viewport, unobscuredFitArea, fitReference, wheelZoomFactor, ZOOM_MAX, fitContain, fittedSize, gridArrangement, normalizeWheelDelta,
 } from '../../shared/presentation/viewport.ts';
 
 test('grid keeps the first four tracks in a two-by-two reading order', () => {
@@ -163,19 +163,42 @@ test('apply validates patches for the automation surface', () => {
   assert.throws(() => v.apply({ offsetX: Infinity }));
 });
 
-test('wheel classification: known signals first, heuristic otherwise', () => {
-  // Chromium/Firefox trackpad pinch arrives as ctrl+wheel.
-  assert.equal(classifyWheel(4, 0, true), 'zoom');
-  // A single line notch is only 40 normalized pixels.
-  assert.equal(classifyWheel(-1, 1, false), 'zoom');
-  assert.equal(classifyWheel(1, 2, false), 'zoom');
-  assert.equal(classifyWheel(0, 1, false), 'pan');
-  // Large pixel deltas zoom, including fractional deltas from a mouse wheel.
-  assert.equal(classifyWheel(120, 0, false), 'zoom');
-  assert.equal(classifyWheel(-100, 0, false), 'zoom');
-  assert.equal(classifyWheel(90.90908893868948, 0, false), 'zoom');
-  assert.equal(classifyWheel(3.000030517578125, 0, false), 'pan');
-  assert.equal(classifyWheel(12, 0, false), 'pan');
+test('pixel pans retain their intent through acceleration and reversals; explicit zoom and fresh mouse notches still work', () => {
+  const gesture = new WheelGesture();
+  const sample = (deltaX: number, deltaY: number, timeStamp: number, deltaMode = 0, ctrlKey = false, momentum?: boolean) =>
+    gesture.classify({ deltaX, deltaY, timeStamp, deltaMode, ctrlKey, momentum });
+  assert.equal(sample(3, -5, 0), 'pan');
+  assert.equal(sample(1, -78, 8), 'pan');
+  assert.equal(sample(0, 90, 16), 'pan');
+  assert.equal(sample(0, 120, 400), 'zoom');
+  assert.equal(sample(0, -100, 700), 'zoom');
+  assert.equal(sample(0, 90.90908893868948, 920), 'zoom');
+  assert.equal(sample(10, 90, 1200), 'pan');
+  assert.equal(sample(0, 3, 1208, 0, true), 'zoom');
+  assert.equal(sample(0, -1, 1216, 1), 'zoom');
+  assert.equal(sample(0, 1, 1224, 2), 'zoom');
+  assert.equal(sample(1, 0, 1232, 1), 'pan');
+});
+
+test('decelerating direct input and the native inertia tail both pan', () => {
+  const gesture = new WheelGesture();
+  for (let i = 0; i < 30; i++) {
+    const event = { deltaX: -24 * .95 ** i, deltaY: 60 * .95 ** i, deltaMode: 0, ctrlKey: false, timeStamp: i * 8 };
+    assert.equal(gesture.classify(event), 'pan');
+    assert.equal(gesture.classify({ ...event, momentum: false }), 'pan');
+  }
+  assert.equal(gesture.classify({ deltaX: 0, deltaY: 75, deltaMode: 0, ctrlKey: false, timeStamp: 256, momentum: true }), 'pan');
+  assert.equal(gesture.classify({ deltaX: 0, deltaY: -80, deltaMode: 0, ctrlKey: false, timeStamp: 264 }), 'pan');
+});
+
+test('forced modes keep pinch zoom and native momentum continues the preceding axis', () => {
+  const gesture = new WheelGesture();
+  const event = { deltaX: 0, deltaY: 120, deltaMode: 1, timeStamp: 0, ctrlKey: false };
+  assert.equal(gesture.classify(event, 'pan'), 'pan');
+  for (const mode of ['auto', 'pan', 'vertical-zoom'] as const) assert.equal(gesture.classify({ ...event, ctrlKey: true }, mode), 'zoom');
+  assert.equal(gesture.classify(event, 'vertical-zoom'), 'zoom');
+  assert.equal(gesture.classify({ ...event, deltaX: 20, deltaY: 1 }, 'vertical-zoom'), 'pan');
+  assert.equal(gesture.classify({ ...event, timeStamp: 12, momentum: true }, 'vertical-zoom'), 'pan');
 });
 
 test('wheel delta normalization covers line and page modes', () => {
@@ -183,41 +206,6 @@ test('wheel delta normalization covers line and page modes', () => {
   assert.equal(normalizeWheelDelta(3, 1), 120);
   assert.equal(normalizeWheelDelta(1, 2), 800);
 });
-
-test('momentum filter cuts the synthetic decay tail after a fling', () => {
-  const f = new PanMomentumFilter();
-  // Fingers fling: irregular large deltas — all pass.
-  let t = 0;
-  assert.equal(f.accept(-30, -55, t += 16), true);
-  assert.equal(f.accept(-42, -70, t += 16), true);
-  assert.equal(f.accept(-25, -61, t += 16), true);
-  // Lift-off: macOS momentum — smooth 0.95 decay at frame cadence.
-  let mag = 60;
-  const accepted = [];
-  for (let i = 0; i < 12; i++) {
-    mag *= 0.95;
-    accepted.push(f.accept(0, -mag, t += 16));
-  }
-  assert.deepEqual(accepted, [true, false, false, false, false, false, false, false, false, false, false, false]);
-});
-
-test('momentum filter keeps deliberate slow scrolling responsive', () => {
-  const f = new PanMomentumFilter();
-  let t = 1000;
-  // Slow, steady finger scroll: near-constant deltas — never cut.
-  for (let i = 0; i < 20; i++) assert.equal(f.accept(0, -5, t += 16), true, `step ${i}`);
-  // Deliberate deceleration with irregular ratios — passes.
-  assert.equal(f.accept(0, -4.2, t += 16), true);
-  assert.equal(f.accept(0, -3.9, t += 24), true);
-  // A gap restarts the gesture.
-  assert.equal(f.accept(0, -1, t += 200), true);
-  // Direction change is always direct input.
-  let m = 20;
-  assert.equal(f.accept(0, -m, t += 16), true);
-  for (let i = 0; i < 5; i++) { m *= 0.95; assert.equal(f.accept(0, -m, t += 16) === false, i >= 2); }
-  assert.equal(f.accept(0, m, t += 16), true);
-});
-
 
 test('choosing 1x recenters even when already at 1x after panning', () => {
   const view = new Viewport(); view.panBy(1000, -500);

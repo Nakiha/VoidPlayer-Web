@@ -73,6 +73,25 @@ try {
     assert.deepEqual(result.rotation, result.rotationExpected);
     assert.equal(result.surfaces, 0);
     console.log(`PASS ${name}: direct native/RGBA upload, lazy pixels, rotation, buffer recycling, 2D fallback and cleanup`);
+    // A slot can switch from opaque YUV to an alpha-bearing image without a new viewport.
+    const transition = await page.evaluate(async () => {
+      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
+      const { rgbaDescription } = await import('/shared/media/frame-description.ts');
+      const { yuvFixture } = await import('/test/helpers/yuv-fixture.ts');
+      const source = document.getElementById('source'), f = yuvFixture();
+      setPresentationGeometry(source, { width: 12, height: 8, imageWidth: 6, imageHeight: 4, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 });
+      paintFrame(source, { kind: 'yuv', description: f.description, pixels: f.pixels, width: 5, height: 3 });
+      const first = document.querySelector('.frame-presentation');
+      const opaque = first.getContext('webgl').getContextAttributes().premultipliedAlpha;
+      paintFrame(source, {kind: 'rgba8', description: rgbaDescription(1, 1), width: 1, height: 1, pixels: new Uint8ClampedArray([255, 0, 0, 128])});
+      const surface = document.querySelector('.frame-presentation');
+      const scratch = document.createElement('canvas'); scratch.width = 12; scratch.height = 8;
+      const ctx = scratch.getContext('2d'); ctx.fillStyle = 'blue'; ctx.fillRect(0, 0, 12, 8); ctx.drawImage(surface, 0, 0);
+      const at = (x,y) => [...ctx.getImageData(x,y,1,1).data];
+      const result = { opaque, center: at(6,4), margin: at(0,0), original: [...captureFrame(source).getContext('2d').getImageData(0,0,1,1).data] };
+      disposePresentation(); return result;
+    });
+    assert.deepEqual(transition, { opaque: true, center: [128,0,127,255], margin: [0,0,255,255], original: [255,0,0,128] });
     const hdrResults = await page.evaluate(async () => {
       const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
       const { VideoSample } = await import('/node_modules/mediabunny/dist/modules/src/index.js');

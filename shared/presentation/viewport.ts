@@ -222,48 +222,42 @@ export function fittedSize(track: TrackGeometry, reference: TrackGeometry | null
 }
 
 export type WheelIntent = 'zoom' | 'pan';
+export type WheelBehavior = 'auto' | 'pan' | 'vertical-zoom';
 
 export function normalizeWheelDelta(delta: number, deltaMode: number): number {
   return deltaMode === 1 ? delta * 40 : deltaMode === 2 ? delta * 800 : delta;
 }
 
-/** Pinch and discrete vertical wheel input zoom. Pixel-mode scrolling has
- *  no reliable device identity, so retain the notch heuristic for that case. */
-export function classifyWheel(deltaY: number, deltaMode: number, ctrlKey: boolean): WheelIntent {
-  if (ctrlKey) return 'zoom';
-  if (deltaY !== 0 && (deltaMode === 1 || deltaMode === 2)) return 'zoom';
-  return Number.isFinite(deltaY) && Math.abs(deltaY) >= 50 ? 'zoom' : 'pan';
-}
+type WheelSample = { deltaX: number; deltaY: number; deltaMode: number; ctrlKey: boolean; timeStamp: number; momentum?: boolean };
 
-/** macOS sends synthetic "momentum" wheel events after the fingers leave the
- *  trackpad, and no web API flags them. Their signature is a smooth decay
- *  tail: same direction, regular frame cadence, each step a near-constant
- *  fraction of the previous one. Direct manipulation is irregular. This
- *  filter lets the first couple of decay steps through (they are usually
- *  still fingers slowing down) and cuts the rest of the tail, so a fling
- *  stops almost immediately after lift-off — matching the desktop app's
- *  inertia-free pan. */
-export class PanMomentumFilter {
-  private lastT = 0;
-  private lastMag = 0;
-  private lastDir = 0;
-  private streak = 0;
+/** Pixel-mode wheel events can come from either device. Keep a continuous pan
+ * through acceleration, reversals and vertical-only portions of the gesture. */
+export class WheelGesture {
+  private lastAt = -Infinity;
+  private lastIntent: WheelIntent | null = null;
+  private lastBehavior: WheelBehavior = 'auto';
 
-  /** Returns true when the event should be applied. */
-  accept(dx: number, dy: number, now: number): boolean {
-    const mag = Math.hypot(dx, dy);
-    const dir = mag === 0 ? 0 : Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx) : Math.sign(dy) * 2;
-    const dt = now - this.lastT;
-    const decaying = this.lastMag > 0 && mag > 0 && dir === this.lastDir &&
-      dt >= 2 && dt <= 40 && mag <= this.lastMag * 0.995 && mag >= this.lastMag * 0.4;
-    this.streak = decaying ? this.streak + 1 : 0;
-    this.lastT = now;
-    this.lastMag = mag;
-    this.lastDir = dir;
-    return this.streak < 3;
+  classify(event: WheelSample, behavior: WheelBehavior = 'auto'): WheelIntent {
+    // Read the unit before the deltas: some browsers expose different values
+    // depending on whether a wheel handler has inspected deltaMode.
+    const { deltaMode, deltaX, deltaY, ctrlKey, timeStamp, momentum } = event;
+    if (ctrlKey) { this.lastIntent = null; return 'zoom'; }
+    const gap = timeStamp - this.lastAt;
+    const previous = behavior === this.lastBehavior && gap >= 0 && gap < 160 ? this.lastIntent : null;
+    let intent: WheelIntent;
+    if (behavior === 'pan') intent = 'pan';
+    else if (momentum && previous) intent = previous;
+    else if (behavior === 'vertical-zoom') intent = deltaY !== 0 && Math.abs(deltaY) >= Math.abs(deltaX) ? 'zoom' : 'pan';
+    else if (momentum) intent = 'pan';
+    else if (deltaMode !== 0) intent = deltaY !== 0 ? 'zoom' : 'pan';
+    else intent = previous === 'pan' || deltaX !== 0 || Math.abs(deltaY) < 50 ? 'pan' : 'zoom';
+
+    this.lastAt = timeStamp;
+    this.lastIntent = intent;
+    this.lastBehavior = behavior;
+    return intent;
   }
 }
-
 
 /** One shared seam snapped in screen space, including a fractional panel origin. */
 export function splitPixelGeometry(fraction: number, width: number, left: number, dpr: number, inset = 0) {

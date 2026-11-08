@@ -31,6 +31,11 @@ try {
  assert.equal((await page.request.delete(base+'/api/admin/caches/annotation-previews',{data:{all:true}})).status(),403);
  await page.goto(base+'/admin');await chooseTestGuest(page);await page.locator('[data-pane=caches]').click();await page.locator('.cache-row').waitFor();
  assert.equal(await page.locator('[data-pane=frame-indexes]').count(),0);assert.equal(await page.locator('#cache-total-count').textContent(),'54 个缓存');
+ const bars=await page.locator('.cache-overview :is(.cache-distribution,.cache-volume-bar)').evaluateAll(elements=>
+  elements.map(el=>{const {top,width,height}=el.getBoundingClientRect(); return {top,width,height};}));
+ assert.equal(bars.length,2);
+ assert.ok(Math.abs(bars[0].top-bars[1].top)<1 && Math.abs(bars[0].width-bars[1].width)<1 && bars[0].height===bars[1].height,
+  'cache distribution and disk usage bars share a baseline and dimensions');
  for(const scheme of ['dark','light']){await page.emulateMedia({colorScheme:scheme});await page.waitForFunction(s=>document.documentElement.dataset.theme===s,scheme);await page.screenshot({path:`/tmp/voidplayer-caches-frames-${scheme}-${name}.png`});}
  let releaseTab;
  const tabGate=new Promise(resolve=>{releaseTab=resolve;});

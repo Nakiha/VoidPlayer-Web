@@ -10,8 +10,9 @@ export function setAnnotationViewport(svg: SVGSVGElement, g: PresentationGeometr
   views.set(svg, g);
   const w = g.imageWidth * g.zoom, h = g.imageHeight * g.zoom;
   const x = (g.width - w) / 2 + g.offsetX, y = (g.height - h) / 2 + g.offsetY;
-  svg.setAttribute('preserveAspectRatio', 'none');
-  svg.setAttribute('viewBox', `${-x / w * 1000} ${-y / h * 1000 / aspect} ${g.width / w * 1000} ${g.height / h * 1000 / aspect}`);
+  if (svg.getAttribute('preserveAspectRatio') !== 'none') svg.setAttribute('preserveAspectRatio', 'none');
+  const box = `${-x / w * 1000} ${-y / h * 1000 / aspect} ${g.width / w * 1000} ${g.height / h * 1000 / aspect}`;
+  if (svg.getAttribute('viewBox') !== box) svg.setAttribute('viewBox', box);
 }
 export function annotationFrameRect(svg: SVGSVGElement) {
   const g = views.get(svg), stage = svg.closest('.frame-stage')!.getBoundingClientRect();

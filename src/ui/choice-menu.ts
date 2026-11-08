@@ -45,7 +45,22 @@ export function installChoiceMenu(id:string, choices:Choice[] | (() => Choice[])
   return {
     close: controller.close,
     setOptions(next: Choice[] | (() => Choice[])) { choices = next; updateOptions(typeof next === 'function' ? next() : next); },
-    sync(next:string,text:string,enabled:boolean) { menu.setAttribute('aria-label',button.getAttribute('aria-label') ?? ''); value=next;label.textContent=text; if (sample && next) { const current = preview!(next); sample.replaceChildren(...current.childNodes); sample.style.cssText = current.style.cssText; }button.disabled=!enabled; if(!enabled)controller.close();buttons.forEach((b,i)=>{if(!options[i].action)b.setAttribute('aria-checked',String(options[i].value===value));}); },
+    sync(next: string, text: string, enabled: boolean) {
+      menu.setAttribute('aria-label', button.getAttribute('aria-label') ?? '');
+      value = next;
+      if (label.textContent !== text) label.textContent = text;
+      if (sample && next) {
+        const current = preview!(next);
+        sample.replaceChildren(...current.childNodes);
+        sample.style.cssText = current.style.cssText;
+      }
+      if (button.disabled === enabled) button.disabled = !enabled;
+      if (!enabled) controller.close();
+      buttons.forEach((item, i) => {
+        const checked = String(options[i].value === value);
+        if (!options[i].action && item.getAttribute('aria-checked') !== checked) item.setAttribute('aria-checked', checked);
+      });
+    },
     dispose() { stopLanguage(); dialog?.removeEventListener('close', controller.close); dialog?.removeEventListener('settings-pane-change', controller.close); controller.dispose(); menu.remove(); },
   };
 }

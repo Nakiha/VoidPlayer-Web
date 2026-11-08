@@ -412,6 +412,15 @@ export class ReviewSession {
       log.warn('session', '故障现场：播放队列', { reason, slot, mediaId: info.id, queue: this.readers.get(track.source)?.snapshot() ?? null });
     }
   }
+  get trackCount() { return this.tracks.size; }
+  getViewportTracks() {
+    return this.order.flatMap(slot => {
+      const track = this.tracks.get(slot);
+      if (!track) return [];
+      const { width, height } = track.source.info;
+      return [{ slot, width, height, visible: track.visible !== false }];
+    });
+  }
   getState() {
     return structuredClone({
       version: 1, busy: this.busy, playing: this.playing, positionUs: this.positionUs,

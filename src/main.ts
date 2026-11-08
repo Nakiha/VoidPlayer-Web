@@ -55,6 +55,7 @@ import { parseLibraryFileLink } from './ui/library-link.ts';
 import { bindTimelinePreview, syncTimelineProgress } from './ui/seek-preview.ts';
 import { installTrackDrag } from './ui/track-drag.ts';
 import { createViewBindings } from './ui/view-bindings.ts';
+import { installViewportTrace } from './ui/viewport-trace.ts';
 import { installViewportGestures } from './ui/viewport-gestures.ts';
 import { installViewportChrome } from './ui/viewport-chrome.ts';
 import { installPixelGrid } from './ui/pixel-grid.ts';
@@ -243,6 +244,7 @@ window.addEventListener('voidplayer:presentation-error', () => {
 window.addEventListener('voidplayer:ui-error', event => showError((event as CustomEvent).detail), { signal: uiEvents.signal });
 const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
+const viewportTrace = installViewportTrace(session, viewport, settings.wheelBehavior, settings.close, uiEvents.signal);
 const workspaceTransfer = installWorkspaceTransfer(session, {
   openSharedSpace: (space, seededIds) => seededIds ? annotationSync.attachWorkspace(space, seededIds) : annotationSync.openSpace(space),
   annotationScope: annotationSync.scope,
@@ -263,7 +265,7 @@ window.addEventListener('pagehide', event => {
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
 const grids = Object.fromEntries(SLOTS.map(slot => [slot, installPixelGrid($<HTMLCanvasElement>(`grid-${slot}`), $(`grid-label-${slot}`))])) as Record<Slot, ReturnType<typeof installPixelGrid>>;
-const viewBindings = createViewBindings({ $, screens, canvases, grids, viewport, session, drawingEditor });
+const viewBindings = createViewBindings({ $, screens, canvases, grids, viewport, session, drawingEditor, trace: viewportTrace });
 const { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll } = viewBindings;
 const fitTask = createFrameTask(fitAll);
 const resizeObserver = new ResizeObserver(fitTask.schedule);
@@ -500,8 +502,8 @@ for (const slot of SLOTS) {
   }, { signal: uiEvents.signal });
   stage.addEventListener('pointercancel', () => { drawingStart = undefined; clickedDrawing = undefined; }, { signal: uiEvents.signal });
 }
-installViewportGestures({ $, screens, viewport, session, getTrigger: () => inputTrigger,
-  applyViewTransform, syncSplitGeometry, syncZoomSelect, render });
+installViewportGestures({ $, screens, viewport, session, trace: viewportTrace, wheelBehavior: settings.wheelBehavior, getTrigger: () => inputTrigger,
+  applyViewTransform, zoomAnchor: viewBindings.zoomAnchor, syncSplitGeometry, syncZoomSelect, render });
 installTimeInput($<HTMLInputElement>('position'),{
   read:()=>session.getState().positionUs,format:formatTime,parse:parseTimeInput,
   begin:()=>session.pause(),commit:ptsUs=>act(()=>session.seek(ptsUs),'seek.time',{ptsUs}),

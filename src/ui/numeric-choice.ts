@@ -49,8 +49,10 @@ export function installNumericChoice(id: string, options: {
   return {
     close() { menu.close(); finish(false, false); },
     sync(next: string, text: string, enabled: boolean) {
-      value = Number(next); menu.sync(next, text, enabled); valueButton.textContent = text;
-      valueButton.disabled = !enabled; wrapper.dataset.disabled = String(!enabled);
+      value = Number(next); menu.sync(next, text, enabled);
+      if (valueButton.textContent !== text) valueButton.textContent = text;
+      if (valueButton.disabled === enabled) valueButton.disabled = !enabled;
+      if (wrapper.dataset.disabled !== String(!enabled)) wrapper.dataset.disabled = String(!enabled);
       if (!enabled) finish(false, false); localize();
     },
     dispose() { life.abort(); menu.dispose(); },

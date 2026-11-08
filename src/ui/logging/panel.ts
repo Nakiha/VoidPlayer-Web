@@ -17,7 +17,16 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
     return `<div class="settings-section"><h4 class="settings-section-title">${th(msg("logPanel.uploadLogs", "上传日志"))}<span class="section-title-info" role="img" tabindex="0" aria-label="${th(msg("logPanel.aboutLogs", "日志说明"))}" data-tooltip="${tip}">${icon('info')}</span></h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="${th(msg("logPanel.logSession", "日志会话"))}"></button><div class="log-submit-row"><button type="button" data-action="download">${icon('download')}${th(msg("logPanel.downloadLogs", "下载日志"))}</button><button type="button" class="primary" data-action="upload">${icon('export')}${th(msg("logPanel.sendLogs", "发送日志"))}</button></div></div>
     <div class="log-description-field"><textarea id="log-description" aria-label="${th(msg("logPanel.problemDescriptionOptional", "问题描述（选填）"))}" maxlength="${LOG_DESCRIPTION_LIMIT}" rows="1" placeholder="${th(msg("logPanel.reportDescriptionPlaceholder", "(可选) 填写日志下载/发送时的描述信息"))}" spellcheck="false"></textarea></div>
     </div><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div>
-    </div><section class="settings-section log-details"><h4 class="settings-section-title">${th(msg("logPanel.localLogs", "本地日志"))}</h4><section class="settings-card log-report" aria-label="${th(msg("logPanel.localLogs", "本地日志"))}"><header class="log-report-toolbar">
+    </div><section class="settings-section">
+      <h4 class="settings-section-title">${th(msg('viewportTrace.title', '视口操作轨迹'))}</h4>
+      <div class="settings-card log-settings-card viewport-trace-card">
+        <div class="viewport-trace-summary"><span id="viewport-trace-status" role="status">${th(msg('viewportTrace.hint', '本地记录平移、缩放与帧间隔，最长 60 秒'))}</span>
+          <small id="viewport-trace-interval" hidden></small></div>
+        <div class="log-submit-row"><button id="viewport-trace-start" type="button">${icon('play')}${th(msg('viewportTrace.start', '开始录制'))}</button>
+          <button id="viewport-trace-stop" type="button" hidden>${th(msg('viewportTrace.stop', '停止录制'))}</button>
+          <button id="viewport-trace-download" type="button" disabled hidden>${icon('download')}${th(msg('viewportTrace.download', '下载轨迹'))}</button></div>
+      </div>
+    </section><section class="settings-section log-details"><h4 class="settings-section-title">${th(msg("logPanel.localLogs", "本地日志"))}</h4><section class="settings-card log-report" aria-label="${th(msg("logPanel.localLogs", "本地日志"))}"><header class="log-report-toolbar">
       <span class="log-preview-status" role="status"></span>
       <div class="log-preview-navigation" role="group" aria-label="${th(msg("logPanel.logPages", "日志分页"))}" hidden>
         <button type="button" class="icon-button" data-page="previous" aria-label="${previous}" title="${previous}">${icon('caretLeft')}</button>

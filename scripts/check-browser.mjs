@@ -2655,7 +2655,114 @@ try {
     assert.equal(await page.locator('.toast').filter({ hasText: '重新选择' }).count(), 0, 'one-time histories do not produce a reselect warning');
     await page.screenshot({ path: path.join(screenshots, 'local-history-unsupported.png') });
   });
-  await check('canvas grid repaints for system theme changes without geometry changes', async page => {
+  await check('dropdown labels ignore double-click selection and retain keyboard navigation', async page => {
+    await page.locator('#settings-open').click();
+    const language = page.locator('#language-choice');
+    await language.locator('span').dblclick();
+    assert.equal(await page.evaluate(() => window.getSelection().toString()), '', 'a double-click cannot select the dropdown label');
+    if (await language.getAttribute('aria-expanded') === 'true') await page.keyboard.press('Escape');
+    await language.press('ArrowDown');
+    await page.locator('#language-choice-menu:popover-open').waitFor();
+    await page.keyboard.press('Escape');
+    await language.click();
+    await page.locator('#language-choice-menu:popover-open').waitFor();
+    await page.keyboard.press('Escape');
+    await page.locator('#accent-hex').fill('#aabbcc');
+    await page.locator('#accent-hex').evaluate(input => input.select());
+    assert.equal(await page.locator('#accent-hex').evaluate(input => input.selectionEnd - input.selectionStart), 7);
+  });
+  await check('viewport scroll preferences persist, sync and preserve pinch and inertia', async page => {
+    const id = listing.entries.find(e => e.name === 'ci_h264_smoke.mp4').id;
+    await page.evaluate(id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ slot: 'A', id }), id);
+    const menu = page.locator('#viewport-wheel-behavior');
+    const settings = async p => {
+      await p.locator('#settings-open').click();
+      await p.getByRole('tab', { name: '首选项', exact: true }).click();
+    };
+    const choose = async value => {
+      await menu.click(); await page.locator(`#viewport-wheel-behavior-menu [data-value="${value}"]`).click();
+      await page.locator('#settings-close').click(); await page.locator('#settings').waitFor({ state: 'hidden' });
+    };
+    const wheel = (dx, dy, ctrl = false, tail = false) => page.locator('#stage-A').evaluate((el, [dx, dy, ctrl, tail]) => {
+      const before = window.voidPlayer.getViewport();
+      const event = new WheelEvent('wheel', { deltaX: dx, deltaY: dy, ctrlKey: ctrl, clientX: 300, clientY: 230, bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'momentum', { value: tail }); el.dispatchEvent(event);
+      const after = window.voidPlayer.getViewport();
+      return [after.zoom / before.zoom, after.offsetX - before.offsetX, after.offsetY - before.offsetY];
+    }, [dx, dy, ctrl, tail]);
+    const pinch = () => page.locator('#stage-A').evaluate(el => {
+      const before = window.voidPlayer.getViewport().zoom;
+      for (const [type, scale] of [['gesturestart', 1], ['gesturechange', 1.1], ['gestureend', 1.1]]) {
+        el.dispatchEvent(Object.assign(new Event(type, { bubbles: true, cancelable: true }), { clientX: 300, clientY: 230, scale }));
+      }
+      return window.voidPlayer.getViewport().zoom / before;
+    });
+    await settings(page); assert.equal(await menu.innerText(), '自动');
+    await choose('pan');
+    assert.deepEqual(await wheel(0, -120), [1, 0, 120]);
+    assert.deepEqual(await wheel(0, -24, false, true), [1, 0, 24]);
+    assert.ok((await wheel(0, -8, true))[0] > 1);
+    assert.ok(Math.abs(await pinch() - 1.1) < 1e-9);
+    const [peer] = await Promise.all([page.waitForEvent('popup'), page.evaluate(() => { window.open(location.href); })]);
+    try {
+      await settings(peer);
+      assert.equal(await peer.locator('#viewport-wheel-behavior').innerText(), '始终平移');
+      await settings(page); await choose('vertical-zoom');
+      await peer.locator('#viewport-wheel-behavior').filter({ hasText: '竖向滚动缩放' }).waitFor();
+      assert.ok((await wheel(0, -6))[0] > 1);
+      assert.deepEqual(await wheel(12, 0), [1, -12, 0]);
+      assert.deepEqual(await wheel(6, 0, false, true), [1, -6, 0]);
+      assert.ok((await wheel(0, -5, true))[0] > 1);
+      assert.ok(Math.abs(await pinch() - 1.1) < 1e-9);
+      await page.reload(); await settings(page);
+      assert.equal(await menu.innerText(), '竖向滚动缩放');
+      await choose('auto');
+    } finally { await peer.close(); }
+  });
+  await check('viewport gesture trace records only on demand and downloads locally', async page => {
+    const id = listing.entries.find(e => e.name === 'ci_h264_smoke.mp4').id;
+    await page.evaluate(id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ slot: 'A', id }), id);
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.frame);
+    const openLogs = async () => { await page.locator('#settings-open').click(); await page.locator('#settings-tab-logs').click(); };
+    await openLogs();
+    const download = page.locator('#viewport-trace-download');
+    assert.equal(await download.isHidden(), true, 'no download action until a trace is ready');
+    const uploads = [];
+    page.on('request', req => { if (req.method() === 'POST' && /\/api\/logs/.test(req.url())) uploads.push(req.url()); });
+    await page.locator('#viewport-trace-start').click();
+    await page.locator('#settings').waitFor({ state: 'hidden' });
+    const picture = await page.locator('#image-A').boundingBox(), x = picture.x + picture.width / 2, y = picture.y + picture.height / 2;
+    await page.mouse.move(x, y); await page.mouse.down({ button: 'right' });
+    await page.mouse.move(x + 20, y + 10, { steps: 3 }); await page.mouse.up({ button: 'right' });
+    await page.mouse.wheel(2, 3);
+    await page.waitForFunction(() => window.voidPlayer.getViewport().offsetY !== 10);
+    const applied = await page.locator('#stage-A').evaluate(el => {
+      const before = window.voidPlayer.getViewport();
+      // Both axes can exceed a mouse notch during a fast two-finger pan.
+      for (const [dx, dy] of [[4, -8], [6, -75], [0, -64], [0, -59], [0, -54], [0, -50], [0, -46]]) {
+        el.dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, bubbles: true, cancelable: true }));
+      }
+      const after = window.voidPlayer.getViewport();
+      const tail = new WheelEvent('wheel', { deltaY: -40, bubbles: true, cancelable: true });
+      Object.defineProperty(tail, 'momentum', { value: true }); el.dispatchEvent(tail);
+      return [after.zoom - before.zoom, after.offsetX - before.offsetX, after.offsetY - before.offsetY, window.voidPlayer.getViewport().offsetY - after.offsetY];
+    });
+    assert.deepEqual(applied, [0, -10, 356, 40], 'direct and native momentum displacements are both conserved');
+    await openLogs(); await page.locator('#viewport-trace-stop').click();
+    await page.locator('#viewport-trace-interval').filter({ hasText: 'P95' }).waitFor();
+    const [file] = await Promise.all([page.waitForEvent('download'), download.click()]);
+    assert.match(file.suggestedFilename(), /^voidplayer-viewport-.*\.json$/);
+    const json = await readFile(await file.path(), 'utf8'), trace = JSON.parse(json);
+    assert.equal(trace.schema, 'voidplayer-viewport-trace');
+    assert.equal(trace.endReason, 'manual');
+    assert.ok(trace.rows.some(r => r.type === 'input' && r.kind === 'drag' && r.onImage && r.decision === 'apply'));
+    assert.ok(trace.rows.some(r => r.type === 'input' && r.kind === 'wheel-pan'));
+    assert.ok(trace.rows.some(r => r.type === 'commit' && r.firstInput && r.lastInput && r.gridMs >= 0));
+    assert.ok(trace.summary.gestureRafIntervalMs.count > 0 && trace.summary.latestInputToCommitEndMs.count > 0);
+    assert.ok(!json.includes('ci_h264_smoke.mp4'));
+    assert.deepEqual(uploads, []);
+  });
+  await check('canvas grid follows pan in the same frame and repaints on theme changes', async page => {
     const id=listing.entries.find(e=>e.name==='ci_h264_smoke.mp4').id;
     await page.evaluate(id=>window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id}),id);
     await page.emulateMedia({colorScheme:'light'});
@@ -2669,6 +2776,48 @@ try {
     const after=await page.locator('#grid-A').evaluate(e=>Number(e.dataset.gridDraws));
     await settle(page);
     assert.equal(await page.locator('#grid-A').evaluate(e=>Number(e.dataset.gridDraws)),after,'no continuous redraw while paused');
+    const stage = page.locator('#stage-A'), box = await stage.boundingBox();
+    await stage.evaluate(el => el.addEventListener('pointerdown', e => { el.dataset.testPanId = String(e.pointerId); }, { once: true }));
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down({ button: 'right' });
+    const aligned = await stage.evaluate(async el => {
+      const grid = document.querySelector('#grid-A'), image = document.querySelector('#image-A');
+      const rect = el.getBoundingClientRect(), x = Math.floor(rect.left + rect.width / 2), y = Math.floor(rect.top + rect.height / 2);
+      const sourceWidth = window.voidPlayer.getState().tracks[0].width;
+      const dpr = grid.width / el.clientWidth, ctx = grid.getContext('2d');
+      const samples = [];
+      for (const dx of [5, 18, 31, 9]) {
+        el.dispatchEvent(new PointerEvent('pointermove', { pointerId: Number(el.dataset.testPanId), buttons: 2, clientX: x + dx, clientY: y, bubbles: true }));
+        await new Promise(requestAnimationFrame);
+        const picture = image.getBoundingClientRect(), spacing = picture.width * 320 / sourceWidth;
+        const origin = ((picture.left - rect.left) % spacing + spacing) % spacing;
+        const column = Math.round(origin * dpr);
+        samples.push(column < grid.width && ctx.getImageData(column, 1, 1, 2).data.every((v, i) => i % 4 !== 3 || v > 0));
+      }
+      return samples;
+    });
+    await page.mouse.up({ button: 'right' });
+    assert.deepEqual(aligned, [true, true, true, true], 'the painted grid and the picture agree on every drag frame, including reversals');
+    const zoom = await stage.evaluate(async el => {
+      const frame = () => new Promise(requestAnimationFrame);
+      const results = [];
+      for (const burst of [false, true]) {
+        await window.voidPlayer.setViewport({ zoom: 1.5, offsetX: 19, offsetY: -8 });
+        await frame(); await frame();
+        const grid = document.querySelector('#grid-A'), before = Number(grid.dataset.gridDraws);
+        for (const [clientX, clientY, deltaY] of [[180, 200, -4], [230, 215, 6], [290, 224, -8], [204, 177, -3]]) {
+          el.dispatchEvent(new WheelEvent('wheel', { clientX, clientY, deltaY, ctrlKey: true, bubbles: true, cancelable: true }));
+          if (!burst) await frame();
+        }
+        await frame();
+        results.push({ view: window.voidPlayer.getViewport(), box: document.querySelector('#annotations-A').getAttribute('viewBox'), paints: Number(grid.dataset.gridDraws) - before });
+      }
+      return results;
+    });
+    assert.equal(zoom[0].paints, 4);
+    assert.equal(zoom[1].paints, 1, 'one frame of zoom inputs paints the final geometry once');
+    assert.deepEqual(zoom[1].view, zoom[0].view, 'batching preserves every moving zoom anchor and reversal');
+    assert.equal(zoom[1].box, zoom[0].box);
   });
   assert.ok(completedChecks > 0, 'Browser filter matched no checks');
   console.log(`Browser regressions passed (${browserName}); status screenshots saved under artifacts/source-activity.`);

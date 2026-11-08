@@ -1,3 +1,4 @@
+import type { ViewportTrace } from './viewport-trace.ts';
 import { SLOTS } from '../../shared/review/model.ts';
 import type { Slot } from '../../shared/review/model.ts';
 import { setPresentationGeometry } from '../presentation/presenter.ts';
@@ -17,6 +18,7 @@ export type ViewBindingDeps = {
   grids: Record<Slot, ReturnType<typeof installPixelGrid>>;
   viewport: Viewport;
   session: ReviewSession;
+  trace: ViewportTrace;
   drawingEditor: { viewChanged(): void };
 };
 
@@ -28,8 +30,22 @@ export function createViewBindings(deps: ViewBindingDeps) {
   let primaryFitted: { width: number; height: number } | null = null;
   let gridDirection: GridDirection = 'vertical';
 
-  function syncTrackLayout() {
-    const tracks = session.getState().tracks.filter(track => track.visible);
+  function imageTransform() {
+    const { zoom, offsetX, offsetY } = viewport;
+    return zoom === 1 && !offsetX && !offsetY ? '' : `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
+  }
+  function zoomAnchor(target: Element | null, clientX: number, clientY: number) {
+    const wrap = target?.closest('.image-wrap') ?? target?.closest('.video-card')?.querySelector('.image-wrap') ?? screens.querySelector('.image-wrap:not([hidden])');
+    if (!(wrap instanceof HTMLElement)) return { x: 0, y: 0 };
+    // Read the browser's actual transformed rectangle, including its subpixel rounding.
+    // Earlier inputs in this frame may have moved this anchor before the canvases repaint.
+    const value = imageTransform();
+    if (wrap.style.transform !== value) wrap.style.transform = value;
+    const rect = wrap.getBoundingClientRect();
+    return { x: clientX - (rect.left + rect.width / 2) + viewport.offsetX, y: clientY - (rect.top + rect.height / 2) + viewport.offsetY };
+  }
+
+  function syncTrackLayout(tracks: ReturnType<ReviewSession['getViewportTracks']>) {
     const split = viewport.mode === 'split' && tracks.length > 1;
     const grid = viewport.arrangement === 'grid' && !split;
     const rect = screens.getBoundingClientRect(), style = getComputedStyle(screens);
@@ -68,22 +84,25 @@ export function createViewBindings(deps: ViewBindingDeps) {
   }
 
   function applyViewTransform() {
+    const trace = deps.trace.active ? deps.trace : undefined;
+    const begin = trace ? performance.now() : 0;
+    let presenterMs = 0, gridMs = 0;
     const { zoom, offsetX, offsetY } = viewport;
-    const loadedSlots = new Set(session.getState().tracks.map(track => track.slot));
-    const value = zoom === 1 && !offsetX && !offsetY ? '' : `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
-    for (const slot of SLOTS) {
+    const value = imageTransform();
+    // Read stage sizes together, before transforms, overlays or canvases write to the DOM.
+    const sizes = Array.from(fittedTracks, ([slot, fitted]) => {
+      const stage = $(`stage-${slot}`);
+      return { slot, fitted, stage, width: stage.clientWidth, height: stage.clientHeight };
+    });
+    for (const { slot, fitted, stage, width, height } of sizes) {
       const image = $(`image-${slot}`);
       if (image.style.transform !== value) image.style.transform = value;
-      const stage = $(`stage-${slot}`);
-      const fitted = fittedTracks.get(slot);
-      const displayOffsetY = offsetY + (fitted?.centerY ?? 0);
-      const presentation = fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, zoom, offsetX, offsetY: displayOffsetY, dpr: devicePixelRatio } : null;
-      // A loaded track can be hidden by its eye toggle or the split layout.
-      // Keep its retained frame while its card is hidden: null geometry releases
-      // presentation resources, so a paused track would have nothing to redraw.
-      // Unloaded slots still release their surfaces and frame resources.
-      if (presentation || !loadedSlots.has(slot)) setPresentationGeometry(canvases[slot], presentation);
-      for (const prefix of ['annotations', 'drawing']) setAnnotationViewport($<SVGSVGElement>(`${prefix}-${slot}`), presentation, fitted ? fitted.sourceWidth / fitted.sourceHeight : 1);
+      const displayOffsetY = offsetY + fitted.centerY;
+      const presentation = { width, height, imageWidth: fitted.width, imageHeight: fitted.height, zoom, offsetX, offsetY: displayOffsetY, dpr: devicePixelRatio };
+      const beforePresent = trace ? performance.now() : 0;
+      setPresentationGeometry(canvases[slot], presentation);
+      if (trace) { presenterMs += performance.now() - beforePresent; trace.geometry(slot, presentation); }
+      for (const prefix of ['annotations', 'drawing']) setAnnotationViewport($<SVGSVGElement>(`${prefix}-${slot}`), presentation, fitted.sourceWidth / fitted.sourceHeight);
       const split = viewport.mode === 'split' && fittedTracks.size === 2;
       const first = stage.closest('.video-card')!.classList.contains('view-first');
       const cut = Math.max(0, Math.min(1, viewport.splitPos));
@@ -91,11 +110,16 @@ export function createViewBindings(deps: ViewBindingDeps) {
       const recovery = $(`recover-${slot}`);
       // Wiping hides a portion intentionally; recovery concerns pan/zoom outside
       // the whole stage. Keep the control within the track's exposed portion.
-      recovery.hidden = !fitted || right - left < .08 || !needsViewRecovery({ width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted?.width ?? 0, imageHeight: fitted?.height ?? 0, zoom, offsetX, offsetY: displayOffsetY });
-      recovery.style.left = `${(left + right) / 2 * 100}%`;
-      grids[slot].update(fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, sourceWidth: fitted.sourceWidth, sourceHeight: fitted.sourceHeight, zoom, panX: offsetX, panY: displayOffsetY } : null);
+      const hidden = right - left < .08 || !needsViewRecovery(presentation);
+      if (recovery.hidden !== hidden) recovery.hidden = hidden;
+      const position = `${(left + right) / 2 * 100}%`;
+      if (recovery.style.left !== position) recovery.style.left = position;
+      const beforeGrid = trace ? performance.now() : 0;
+      grids[slot].update({ width, height, imageWidth: fitted.width, imageHeight: fitted.height, sourceWidth: fitted.sourceWidth, sourceHeight: fitted.sourceHeight, zoom, panX: offsetX, panY: displayOffsetY });
+      if (trace) gridMs += performance.now() - beforeGrid;
     }
     drawingEditor.viewChanged();
+    trace?.commit(begin, presenterMs, gridMs);
   }
 
   function syncSplitGeometry() {
@@ -113,11 +137,20 @@ export function createViewBindings(deps: ViewBindingDeps) {
   }
 
   function fitAll() {
-    syncTrackLayout();
+    const loaded = session.getViewportTracks();
+    const allTracks = loaded.filter(track => track.visible);
+    syncTrackLayout(allTracks);
     syncSplitGeometry();
     fittedTracks.clear();
-    const allTracks = session.getState().tracks.filter(t => t.visible);
     const tracks = viewport.mode === 'split' ? allTracks.slice(0, 2) : allTracks;
+    for (const slot of SLOTS) {
+      if (tracks.some(track => track.slot === slot)) continue;
+      // Hiding a loaded slot must retain its paused frame. Only unload releases it.
+      if (!loaded.some(track => track.slot === slot)) setPresentationGeometry(canvases[slot], null);
+      grids[slot].update(null);
+      const recovery = $(`recover-${slot}`);
+      if (!recovery.hidden) recovery.hidden = true;
+    }
     if (!tracks.length) { primaryFitted = null; applyViewTransform(); return; }
     const geometries = new Map(tracks.map(track => [track.slot, trackGeometry(track)]));
     const referenceGeometry = fitReference([...geometries.values()]);
@@ -142,5 +175,5 @@ export function createViewBindings(deps: ViewBindingDeps) {
     applyViewTransform();
   }
 
-  return { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll };
+  return { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll, zoomAnchor };
 }

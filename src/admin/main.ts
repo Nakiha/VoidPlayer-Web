@@ -13,7 +13,8 @@ import { installLiveLocalization, localizedText, localizedFragment, localizedAtt
 import { initializeLanguage, onLanguageChange, formatDate, t, th, msg } from '../i18n.ts';
 import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
 import { installAnnotationAdmin } from './annotations.ts';
-import { emptyState, installRecordNavigation } from './presentation.ts';
+import { emptyState, installRecordNavigation, storageBytes } from './presentation.ts';
+import { installOverview, type OverviewStatus } from './overview.ts';
 import { renderLogStorage } from './log-storage.ts';
 import { installCaches } from './caches.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
@@ -27,13 +28,13 @@ import { icon } from '../ui/icons.ts';
 import { installWorkspaceAdmin } from './workspaces.ts';
 import { installMeasurements } from './measurement.ts';
 import { adminShell, PANES } from './shell.ts';
-import type {AdminStatus,RootConfiguration as RootConfig,LogPage,LogDocument,LibraryScanStatus} from '../../shared/service/admin.ts';
+import type {RootConfiguration as RootConfig,LogPage,LogDocument,LibraryScanStatus} from '../../shared/service/admin.ts';
 
 type Root = { id: string; name: string; path: string };
 
 type LogEntry = LogPage['entries'][number];
 type Scan = LibraryScanStatus & { errors: Record<string, unknown>[]; offset: number };
-type Status = AdminStatus & { identity: { id: string; name: string }; http: { activeRequests: number; connections: number; completedRequests: number; abortedRequests: number } };
+
 const disposeLanguage = await initializeLanguage();
 const life = new AbortController();
 const toasts = installToasts(life.signal);
@@ -90,8 +91,8 @@ function notice(message: LocalizedValue, error = false) {
   dismissNotice?.();
   dismissNotice = value ? toasts.show(message, {kind}) : undefined;
 }
-async function api<T>(url: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}): Promise<T> {
-  const response = await fetch(url, { method, cache: 'no-store', headers: { ...(method !== 'GET' ? { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.any([life.signal, AbortSignal.timeout(15000)]) });
+async function api<T>(url: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}, signal = life.signal): Promise<T> {
+  const response = await fetch(url, { method, cache: 'no-store', headers: { ...(method !== 'GET' ? { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
   const value = await response.json();
   if (!response.ok) throw apiError(response.status, value);
   return value;
@@ -180,26 +181,35 @@ function scanSummary(value: LibraryScanStatus) {
     offline ? t(msg('admin.scanOfflineRoots','{count} 个媒体库离线'),{count:offline}) : '',
     errors ? t(msg('admin.scanErrorTotal','{count} 处读取错误'),{count:errors}) : ''].filter(Boolean).join(' · ');
 }
-function renderStatus(value: Status) {
+function renderStatus(value: OverviewStatus) {
   scanStatus=value.library; rootStates = value.library.roots;
   analysisSettings.update(value.analysis);
   const seconds = Math.floor(value.uptimeSeconds), hours = Math.floor(seconds / 3600);
   text('uptime', () => hours ? t(msg("admin.hoursMinutes", "{h} 小时 {m} 分"), { h: hours, m: Math.floor(seconds % 3600 / 60) }) : t(msg("activity.durationMinutesSeconds", "{m} 分 {s} 秒"), { m: Math.floor(seconds / 60), s: seconds % 60 }));
-  text('memory', () => bytes(value.memory.rss)); text('cpu', () => `${value.cpuPercent.toFixed(1)}%`); text('connections', () => String(value.http.connections));
+  text('memory', () => storageBytes(value.memory.rss)); text('cpu', () => `${value.cpuPercent.toFixed(1)}%`); text('connections', () => String(value.http.connections));
   text('version', () => `${value.version} · ${value.revision}`); text('runtime', () => `${value.runtime} · ${value.platform}`);
-  text('data-dir', () => value.dataDir); text('identity', () => value.identity.name); localizedAttribute($('identity'), 'title', () => value.identity.id);
-  text('system-memory', () => `${bytes(value.memory.systemFree)} / ${bytes(value.memory.systemTotal)}`);
+  text('data-dir', () => value.dataDir); text('identity', () => value.identity.name); localizedAttribute($('identity'), 'data-tooltip', () => value.identity.id);
+  text('system-memory', () => `${storageBytes(value.memory.systemFree)} / ${storageBytes(value.memory.systemTotal)}`);
+  const free = $<HTMLMeterElement>('system-free-meter');
+  free.hidden = value.memory.systemTotal <= 0;
+  if (!free.hidden) free.value = value.memory.systemFree / value.memory.systemTotal;
+  text('analysis-summary', () => t(msg('admin.analysisResourceStatus', '当前上限 {limit} 路 · {running} 项运行中 · {queued} 项排队'), { limit:value.analysis.concurrency, running:value.analysis.running, queued:value.analysis.queued }));
   text('requests', () => t(msg("admin.requestsSummary", "{done} 次完成 · {active} 次处理中 · {aborted} 次中断"), { done: value.http.completedRequests, active: value.http.activeRequests, aborted: value.http.abortedRequests }));
   text('root-summary', () => t(msg("admin.rootsSummary", "{n, plural, other {# 个目录}} · {o} 个离线"), { n: value.library.roots.length, o: value.library.roots.filter(r => r.state === 'offline').length }));
   text('scan-summary', () => scanSummary(value.library));
   const watch = value.library.watch;
   text('watch-summary', () => watch ? t(msg("admin.watchSummary", "{active} / {limit, plural, other {# 个目录}}{calibration}{partial}"), {active:watch.active,limit:watch.limit,calibration:watch.limited ? t(msg('admin.watchCalibrated', ' · 其余由周期校准覆盖')) : '',partial:watch.unavailableRoots.length ? t(msg('admin.watchPartial', ' · 部分目录监听不可用')) : ''}) : t(msg("admin.watchPollOnly", "仅周期校准")));
   renderRootStates();
+  if (statusError) notice(() => '');
 }
+const overview = installOverview(life.signal, signal => api<OverviewStatus>('/api/admin/status?view=overview', 'GET', undefined, {}, signal),
+  renderStatus, error => { notice(() => requestError(error), true); statusError = true; });
 async function poll(force = false) {
-  if (polling || document.hidden) return; polling = true;
+  if (document.hidden) return;
+  if (pane === 'overview') return overview.refresh();
+  if (polling) return;
+  polling = true;
   try {
-    if (pane === 'overview') renderStatus(await api<Status>('/api/admin/status?view=overview'));
     if (scanCadence.ready(pane === 'library') || force && pane === 'library') await loadScan();
     if (requestCadence.ready(pane === 'logs' && logsMode === 'requests') || force && pane === 'logs' && logsMode === 'requests') {
       await loadRequests();
@@ -355,6 +365,7 @@ compactNavigation.addEventListener('change', revealCurrentCategory, { signal: li
 for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
   history.replaceState(null, '', `#${id}`); pane = id; measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   revealCurrentCategory();
+  if (id === 'overview') void overview.refresh(); else overview.stop();
   libraryBrowser.activate(id === 'library');
   scanCadence.reset(); requestCadence.reset();
   if (id === 'preferences') {void analysisSettings.load();}
@@ -408,14 +419,15 @@ document.querySelector<HTMLAnchorElement>('.admin-back')!.onclick = event => {
 window.addEventListener('beforeunload', event => { if (rootDirty || analysisSettings.dirty) { event.preventDefault(); event.returnValue = ''; } });
 const timer = setInterval(() => void poll(), 3000);
 window.addEventListener('pagehide', () => { clearInterval(timer); life.abort(); disposeTheme(); disposeLanguage(); }, { once: true });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { scanCadence.reset(); requestCadence.reset(); void poll(true); } }, { signal: life.signal });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { scanCadence.reset(); requestCadence.reset(); void poll(true); } else overview.stop(); }, { signal: life.signal });
 installLiveLocalization(document.body, life.signal);
 observeIdentity(life.signal, {
   invalidated() {
+    overview.reset();
     requestEpoch++; requestAbort?.abort(); requestAbort = undefined; requestSnapshot = undefined; recentRequests = [];
     requestCadence.reset(); renderRequests(); $('requests-view').hidden = true; $('uploads-view').hidden = false; syncLogViews();
   },
-  confirmed() { if (pane === 'logs' && logsMode === 'requests') void poll(true); },
+  confirmed() { if (pane === 'overview') void overview.refresh(); else if (pane === 'logs' && logsMode === 'requests') void poll(true); },
 });
 updateRootActions(); void analysisSettings.load();
 void chooseInitialIdentity(life.signal).then(()=>poll()).catch(error=>notice(() => requestError(error),true));

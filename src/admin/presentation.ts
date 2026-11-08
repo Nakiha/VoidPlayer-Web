@@ -1,6 +1,10 @@
 import { icon } from '../ui/icons.ts';
-import { th, t, msg } from '../i18n.ts';
+import { formatNumber, th, t, msg } from '../i18n.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
+export function storageBytes(value: number) {
+  const unit = value >= 1024 ** 3 ? 3 : value >= 1024 ** 2 ? 2 : value >= 1024 ? 1 : 0;
+  return `${formatNumber(value / 1024 ** unit, { maximumFractionDigits: unit ? 1 : 0 })} ${['B', 'KiB', 'MiB', 'GiB'][unit]}`;
+}
 export function recordBackButton() {
   return `<button type="button" class="admin-record-back">${icon('caretLeft')}${th(msg('admin.backToList', '返回列表'))}</button>`;
 }

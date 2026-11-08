@@ -8,12 +8,14 @@ export function presentationRect(g:PresentationGeometry){const width=g.imageWidt
 export function presentationSampling(sourceWidth: number, geometry: PresentationGeometry) {
   return geometry.imageWidth * geometry.zoom * geometry.dpr > sourceWidth ? 'nearest' : 'bilinear';
 }
-export function createPresentationSurface(source: HTMLCanvasElement, onLost?: () => void, force2d = false) {
+export function createPresentationSurface(source: HTMLCanvasElement, onLost?: () => void, force2d = false, opaqueOnly = false) {
   const stage = source.closest<HTMLElement>('.frame-stage');
   if (!stage) return null;
   const canvas = document.createElement('canvas'); canvas.className = 'frame-presentation'; canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', source.getAttribute('aria-label') ?? '当前视频画面');
   stage.prepend(canvas);
-  const gl = force2d ? null : canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true });
+  // For opaque pictures, sampled pixels already have alpha 1 and the cleared
+  // background is transparent black. This buffer is already premultiplied.
+  const gl = force2d ? null : canvas.getContext('webgl', { alpha: true, premultipliedAlpha: opaqueOnly, antialias: false, preserveDrawingBuffer: true });
   const ctx = gl ? null : canvas.getContext('2d');
   if (!gl && !ctx) { canvas.remove(); return null; }
   let useGl=!!gl,disposed=false;
@@ -93,6 +95,7 @@ export function createPresentationSurface(source: HTMLCanvasElement, onLost?: ()
   }
   source.classList.add('frame-source'); upload();
   return {
+    opaqueOnly: !!gl && opaqueOnly,
     upload,
     uploadYuv(d:FrameDescription,pixels:Uint8ClampedArray,rotation=0) {
       if(!gl || !useGl || !texture || gl.isContextLost())return false;

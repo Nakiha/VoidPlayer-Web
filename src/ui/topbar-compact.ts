@@ -54,7 +54,10 @@ export function installTopbarCompact(topbar: HTMLElement, signal: AbortSignal) {
   const update = () => { if (!signal.aborted && !frame) frame = requestAnimationFrame(sync); };
   // Labels and disabled state can change during a session render. Reconcile
   // before paint instead of waiting for ResizeObserver's next animation frame.
-  const content = new MutationObserver(() => {
+  const zoomControl = topbar.querySelector('#zoom-select-control');
+  const content = new MutationObserver(records => {
+    // The zoom control has a fixed width. Its numeric label changes throughout a pinch.
+    if (records.every(record => record.type !== 'attributes' && zoomControl?.contains(record.target))) return;
     if (microtask) return; microtask = true;
     queueMicrotask(() => { microtask = false; if (frame) cancelAnimationFrame(frame); sync(); });
   });

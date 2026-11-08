@@ -68,7 +68,7 @@ dialog.settings-window { background: var(--surface-panel); border: 0; }
 .accent-heading { display: flex; align-items: center; justify-content: space-between;  gap: 10px; }
 #accent-current, #theme-base-current { color: var(--text-secondary); font-size: 12px; }
 .accent-choices { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; }
-.accent-choice { display: flex; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 8px; background: transparent; box-shadow: none; }
+.accent-choice { display: flex; place-self: center; justify-content: center; align-items: center; width: 100%; max-width: 36px; height: auto; min-height: 0; aspect-ratio: 1; padding: 0; border: 0; border-radius: 8px; background: transparent; box-shadow: none; }
 .accent-choice[aria-checked=true] { background: var(--surface-stripe); }
 .accent-swatch { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--swatch-light); color: #fff; }
 :root[data-theme=dark] .accent-swatch { background: var(--swatch-dark); color: #202125; }
@@ -368,6 +368,9 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 .saved-workspace-row[aria-pressed=true]:not(:hover) { background: var(--surface-selected); }
 .saved-workspace-open strong { font-weight: 500; }
 .log-settings-card { padding: 16px; }
+.viewport-trace-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.viewport-trace-summary { flex: 1 1 180px; min-width: 0; display: grid; gap: 4px; font-size: 13px; }
+.viewport-trace-summary small { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .log-settings-card .log-session-row { padding-bottom: 0; border-bottom: 0; }
 .log-settings-card .log-description-field { margin-top: 14px; }
 .log-settings-card .log-submit-row { padding-top: 0; margin-top: 0; border-top: 0; }
@@ -454,7 +457,7 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 /* Log actions share the session toolbar. */
 #settings-pane-logs .log-session-row { flex-wrap: wrap; gap: 4px; }
 #settings-pane-logs .log-session-row .settings-choice { flex: 1 1 160px; }
-#settings-pane-logs .log-submit-row { gap: 4px; flex-wrap: nowrap; justify-content: flex-end; margin: 0 0 0 auto; padding: 0; border: 0; }
+#settings-pane-logs .log-submit-row { gap: 4px; flex-wrap: wrap; justify-content: flex-end; margin: 0 0 0 auto; padding: 0; border: 0; }
 #settings-pane-logs .log-report { padding: 16px; container: log-report / inline-size; }
 #settings-pane-logs .log-report-toolbar { padding: 0; gap: 8px; justify-content: flex-start; flex-wrap: nowrap; }
 #settings-pane-logs .log-preview-status { flex: 0 1 auto; min-width: 0; white-space: normal; color: var(--text); font-size: 13px; }

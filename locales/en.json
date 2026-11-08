@@ -135,6 +135,10 @@
     "source": "分析配置已保存",
     "translation": "Analysis settings saved"
   },
+  "admin.analysisTasks": {
+    "source": "分析任务",
+    "translation": "Analysis tasks"
+  },
   "admin.analysisThreads": {
     "source": "解码线程上限",
     "translation": "Decoder thread limit"
@@ -295,10 +299,6 @@
     "source": "例如：拍摄素材",
     "translation": "e.g. footage"
   },
-  "admin.disk": {
-    "source": "所在磁盘",
-    "translation": "Volume"
-  },
   "admin.diskFree": {
     "source": "{bytes} 可用",
     "translation": "{bytes} free"
@@ -314,10 +314,6 @@
   "admin.diskUsage": {
     "source": "磁盘占用",
     "translation": "Disk usage"
-  },
-  "admin.diskUsed": {
-    "source": "已用 {bytes}",
-    "translation": "Used {bytes}"
   },
   "admin.download": {
     "source": "下载",
@@ -695,6 +691,10 @@
     "source": "概览",
     "translation": "Overview"
   },
+  "admin.overviewUpdated": {
+    "source": "更新于 {time}",
+    "translation": "Updated {time}"
+  },
   "admin.pageCaption": {
     "source": "共 {total} 项 · 第 {n} 页，仅显示可读的非空文件",
     "translation": "{total} items · page {n}, readable non-empty files only"
@@ -722,6 +722,10 @@
   "admin.procMemory": {
     "source": "进程内存",
     "translation": "Process memory"
+  },
+  "admin.processLoad": {
+    "source": "进程负载",
+    "translation": "Process load"
   },
   "admin.rawData": {
     "source": "原始工作区数据",
@@ -758,6 +762,10 @@
   "admin.reasonUser": {
     "source": "用户取消或连接中断",
     "translation": "Cancelled by user or connection lost"
+  },
+  "admin.recentMinute": {
+    "source": "最近 60 秒",
+    "translation": "Last 60 seconds"
   },
   "admin.recentRequests": {
     "source": "最近 200 条请求，服务重启后清空",
@@ -3661,6 +3669,18 @@
     "source": "单线程",
     "translation": "Single-threaded"
   },
+  "settings.wheelAuto": {
+    "source": "自动",
+    "translation": "Automatic"
+  },
+  "settings.wheelPan": {
+    "source": "始终平移",
+    "translation": "Always pan"
+  },
+  "settings.wheelVerticalZoom": {
+    "source": "竖向滚动缩放",
+    "translation": "Zoom on vertical scroll"
+  },
   "settingsShell.about": {
     "source": "关于",
     "translation": "About"
@@ -3676,10 +3696,6 @@
   "settingsShell.analysisConcurrency": {
     "source": "分析并发数",
     "translation": "Analysis concurrency"
-  },
-  "settingsShell.appearance": {
-    "source": "外观",
-    "translation": "Appearance"
   },
   "settingsShell.av1Decoding": {
     "source": "AV1 解码",
@@ -3757,6 +3773,10 @@
     "source": "界面图标",
     "translation": "Interface icons"
   },
+  "settingsShell.languageInteraction": {
+    "source": "语言与交互",
+    "translation": "Language and interaction"
+  },
   "settingsShell.license": {
     "source": "许可证",
     "translation": "License"
@@ -3785,13 +3805,13 @@
     "source": "开源致谢",
     "translation": "Open-source credits"
   },
-  "settingsShell.other": {
-    "source": "其他",
-    "translation": "Other"
-  },
   "settingsShell.playbackView": {
     "source": "播放与视图",
     "translation": "Playback & view"
+  },
+  "settingsShell.preferences": {
+    "source": "首选项",
+    "translation": "Preferences"
   },
   "settingsShell.previousNextFrame": {
     "source": "上一帧 / 下一帧",
@@ -3840,6 +3860,14 @@
   "settingsShell.wasmThreads": {
     "source": "软件解码线程配置",
     "translation": "Software decoder thread settings"
+  },
+  "settingsShell.wheelBehavior": {
+    "source": "视口滚动行为",
+    "translation": "Viewport scrolling"
+  },
+  "settingsShell.wheelHint": {
+    "source": "捏合或 Ctrl 加滚轮始终缩放。",
+    "translation": "Pinch or Ctrl + scroll always zooms."
   },
   "settingsShell.workspace": {
     "source": "工作区",
@@ -4947,6 +4975,38 @@
   "update.wait": {
     "source": "请先暂停播放，完成标注并等载入和保存结束，再刷新。",
     "translation": "Pause playback, finish editing annotations and wait for loading and saving to complete before refreshing."
+  },
+  "viewportTrace.download": {
+    "source": "下载轨迹",
+    "translation": "Download trace"
+  },
+  "viewportTrace.finished": {
+    "source": "已录制 {seconds} 秒，{count} 次视口输入",
+    "translation": "Recorded {seconds} s · {count} viewport inputs"
+  },
+  "viewportTrace.hint": {
+    "source": "本地记录平移、缩放与帧间隔，最长 60 秒",
+    "translation": "Record pan, zoom and frame intervals locally for up to 60 seconds"
+  },
+  "viewportTrace.interval": {
+    "source": "手势期间帧间隔 P95：{ms} ms",
+    "translation": "Gesture frame interval (P95): {ms} ms"
+  },
+  "viewportTrace.recording": {
+    "source": "录制中，最长 60 秒",
+    "translation": "Recording for up to 60 seconds"
+  },
+  "viewportTrace.start": {
+    "source": "开始录制",
+    "translation": "Start recording"
+  },
+  "viewportTrace.stop": {
+    "source": "停止录制",
+    "translation": "Stop recording"
+  },
+  "viewportTrace.title": {
+    "source": "视口操作轨迹",
+    "translation": "Viewport gesture trace"
   },
   "workbench.collapsePanel": {
     "source": "收起{panel}",
