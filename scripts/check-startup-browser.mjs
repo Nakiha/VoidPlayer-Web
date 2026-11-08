@@ -111,6 +111,7 @@ try {
     built.on('pageerror', error => builtErrors.push(error.message));
     await built.route('**/assets/player-*.js', route => route.fulfill({status:504, headers:{'cache-control':'no-store'}, body:'Unavailable module'}));
     await built.goto(builtBase);
+    assert.equal(await built.locator('head meta[name="darkreader-lock"]').count(), 1, 'native palette protection is present before player startup');
     await built.locator('#startup-fallback').waitFor({state:'visible', timeout:5000});
     assert.equal(await built.locator('#app').isVisible(), false);
     for (const theme of ['dark', 'light']) {

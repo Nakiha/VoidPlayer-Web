@@ -54,10 +54,11 @@ try {
   observeErrors(player, 'player');
   await player.goto(base); await chooseTestGuest(player); await player.waitForFunction(() => document.getElementById('server-status')?.dataset.state === 'connected');
   await player.locator('#server-status').hover();
-  await player.locator('#control-tooltip').filter({ hasText: '打开服务管理' }).waitFor({ state: 'visible' });
+  await player.locator('#control-tooltip').filter({ hasText: '打开后端管理页' }).waitFor({ state: 'visible' });
   let [page] = await Promise.all([context.waitForEvent('page', { timeout: 5000 }), player.locator('#server-status').click()]);
   page.setDefaultTimeout(15000); observeErrors(page, 'admin-first');
   await page.waitForURL(base + '/admin'); await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
+  assert.equal(await page.locator('head meta[name="darkreader-lock"]').count(), 1, 'admin retains its native palette');
   assert.equal(await player.url(), base + '/');
   // Returning to an existing player must retain its in-memory review and tab.
   await player.evaluate(() => { window.adminReturnMarker = 'preserve-review'; });
