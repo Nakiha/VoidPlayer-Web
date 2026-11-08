@@ -5,21 +5,33 @@ const originalPath = name => readFileSync(new URL(`../../../../node_modules/@pho
 const name=process.argv[2]??'webkit';
 await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {viewport:{width:1280,height:800},deviceScaleFactor:2} }, async ({ page, ready }) => {
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.clock.install();
  await ready();
  // The entry page loads the player with a dynamic import after the HTTPS check.
  await page.waitForFunction(()=>!!window.voidPlayer?.tools);
  // Check the icon without media: middle pixels must fade in one direction,
  // rather than flash as thin separators move across the central gap.
- const arrangement=await page.evaluate(async()=>{
-   const svg=document.querySelector('#arrangement svg'),nodes=[...svg.children];
-   const sizes=[18,36,Math.round(svg.getBoundingClientRect().width),Math.round(svg.getBoundingClientRect().width*devicePixelRatio)];
-   const record=async value=>{
-     const frames=[svg.outerHTML],start=performance.now();
+ await page.waitForLoadState('networkidle');
+ await page.clock.pauseAt(new Date(await page.evaluate(()=>Date.now())+100));
+ await page.evaluate(()=>window.arrangementNodes=[...document.querySelector('#arrangement svg').children]);
+ const record=async value=>{
+   await page.evaluate(value=>{
+     const svg=document.querySelector('#arrangement svg');
+     window.arrangementFrames=[svg.outerHTML];
+     const start=performance.now();
      window.voidPlayer.setViewport({arrangement:value});
-     await new Promise(resolve=>{
-       const sample=now=>{frames.push(svg.outerHTML);if(now-start<300)requestAnimationFrame(sample);else resolve();};
-       requestAnimationFrame(sample);
-     });
+     const sample=now=>{
+       window.arrangementFrames.push(svg.outerHTML);
+       if(now-start<300)requestAnimationFrame(sample);
+     };
+     requestAnimationFrame(sample);
+   },value);
+   // Advance every scheduled animation frame, independent of the hosted GPU's
+   // screen rate. Rasterization below still uses the browser's actual SVG path.
+   await page.clock.runFor(320);
+   return page.evaluate(async()=>{
+     const svg=document.querySelector('#arrangement svg'),frames=window.arrangementFrames;
+     const sizes=[18,36,Math.round(svg.getBoundingClientRect().width),Math.round(svg.getBoundingClientRect().width*devicePixelRatio)];
      const pixels=[];
      for(const frame of frames){
        const clone=new DOMParser().parseFromString(frame,'image/svg+xml').documentElement;
@@ -38,16 +50,24 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
        pixels.push(samples);
      }
      return {pixels,shapes:new Set(frames).size};
-   };
-   const forward=await record('grid'),backward=await record('horizontal');
-   window.voidPlayer.setViewport({arrangement:'grid'});
-   await new Promise(resolve=>setTimeout(resolve,60));
+   });
+ };
+ const forward=await record('grid'),backward=await record('horizontal');
+ await page.evaluate(()=>window.voidPlayer.setViewport({arrangement:'grid'}));
+ await page.clock.runFor(60);
+ const continuous=await page.evaluate(()=>{
+   const svg=document.querySelector('#arrangement svg');
    const before=[...svg.children].map(path=>[path.getAttribute('d'),path.getAttribute('opacity')]);
    window.voidPlayer.setViewport({arrangement:'horizontal'});
-   const continuous=JSON.stringify(before)===JSON.stringify([...svg.children].map(path=>[path.getAttribute('d'),path.getAttribute('opacity')]));
-   await new Promise(resolve=>setTimeout(resolve,300));
-   return {forward,backward,continuous,sameNodes:nodes.every((node,i)=>node===svg.children[i]),rest:svg.querySelector('path').getAttribute('d')};
+   return JSON.stringify(before)===JSON.stringify([...svg.children].map(path=>[path.getAttribute('d'),path.getAttribute('opacity')]));
  });
+ await page.clock.runFor(320);
+ const arrangement=await page.evaluate(()=>{
+   const svg=document.querySelector('#arrangement svg');
+   return {sameNodes:window.arrangementNodes.every((node,i)=>node===svg.children[i]),rest:svg.querySelector('path').getAttribute('d')};
+ });
+ Object.assign(arrangement,{forward,backward,continuous});
+ await page.clock.resume();
  for(const [direction,sign] of [['forward',1],['backward',-1]]){
    const {pixels,shapes}=arrangement[direction];
    assert.ok(shapes>5,`${direction}: sample intermediate arrangement shapes`);
@@ -131,13 +151,23 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
    });
    window.transportObserver.observe(row,{subtree:true,childList:true,attributes:true});
  });
+ await page.clock.pauseAt(new Date(await page.evaluate(()=>Date.now())+100));
  for(let i=0;i<3;i++){
-   await page.locator('#play').click();await page.waitForFunction(()=>window.voidPlayer.getState().playing);
-   await page.waitForTimeout(100);
-   await page.locator('#play').click();await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
-   await page.waitForTimeout(150);
+   // This already-visible control uses trusted input without waiting for a
+   // screen-rate stability sample while the JavaScript animation clock pauses.
+   await page.locator('#play').click({force:true});
+   assert.equal(await page.evaluate(()=>window.voidPlayer.getState().playing),true);
+   await page.clock.runFor(100);
+   await page.locator('#play').click({force:true});
+   assert.equal(await page.evaluate(()=>window.voidPlayer.getState().playing),false);
+   await page.clock.runFor(150);
+   await page.evaluate(async()=>{
+     await Promise.all(document.querySelector('#control-tooltip').getAnimations().map(animation=>animation.finished.catch(()=>{})));
+   });
    assert.equal(await tip.isVisible(),false,'playback tooltip stays dismissed during state changes');
  }
+ await page.clock.runFor(300);
+ await page.clock.resume();
  await page.waitForFunction(()=>[...document.querySelectorAll('#play path')].every((path,i)=>path.getAttribute('d')===window.playRestPaths[i]));
  const morphed=await page.evaluate(()=>({rest:window.playRestPaths,box:window.playRestBox,samples:window.transportSamples}));
  assert.deepEqual(morphed.rest,[originalPath('play')],'play retains the original rounded outline and stroke weight');
