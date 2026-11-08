@@ -503,12 +503,14 @@ try {
   // 缩窄绘图区使全览低于 1px 柱 + 间隔容量，验证聚合桶仍按峰值定位。
   await fullRange(page);
   await page.setViewportSize({ width: 640, height: 800 });
+  await settleAppearance(page);
   // Buckets may already exist at 1280px. Wait for the resized drawing, whose
   // full-domain padding depends on width, before capturing the click baseline.
   await page.waitForFunction(() => {
     const canvas = document.getElementById('analysis-canvas'), qa = window.__vpAnalysis;
-    return qa?.glyphs.some(g => g.kind === 'bucket')
+    return qa?.queryPending.length===0&&qa.glyphs.some(g => g.kind === 'bucket')
       && Math.abs(canvas.width / Math.min(2, devicePixelRatio || 1) - canvas.getBoundingClientRect().width) <= 1
+      && Math.abs(canvas.height / Math.min(2, devicePixelRatio || 1) - canvas.getBoundingClientRect().height) <= 1
       && +canvas.dataset.axisStart === qa.view.start && +canvas.dataset.axisEnd === qa.view.end;
   });
   const bucketBox = await page.locator('#analysis-canvas').boundingBox();
@@ -517,9 +519,23 @@ try {
     return bs[Math.floor(bs.length / 2)];
   });
   assert.ok(bucket, '全览应有区间桶 glyph');
+  const peak=await page.evaluate(async bucket=>{
+    const query=window.voidPlayer.tools.find(tool=>tool.name==='query_analysis');
+    const result=await query.execute({slot:bucket.slot,axis:'pts',startUs:bucket.startUs,endUs:bucket.endUs,pixelWidth:4096});
+    const samples=result.samples.filter(sample=>sample.effectivePtsUs>=bucket.startUs&&sample.effectivePtsUs<bucket.endUs&&sample.sizeBytes!=null);
+    return samples.reduce((peak,sample)=>!peak||sample.sizeBytes>peak.sizeBytes?sample:peak,null);
+  },bucket);
+  assert.ok(peak&&Number.isSafeInteger(peak.effectivePtsUs),'桶的独立包查询须含可定位峰值');
   const viewB0 = await page.evaluate(() => window.__vpAnalysis.view);
-  await page.mouse.click(bucketBox.x + bucket.cx, bucketBox.y + bucket.cy);
-  await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
+  await saveDiagnostics(page,'bucket-click-target',{bucket,bucketBox,peak,view:viewB0});
+  // The responsive header can move the canvas after its glyphs are ready.
+  // Locator-relative trusted input waits for the actual canvas to settle.
+  await page.locator('#analysis-canvas').click({position:{x:bucket.cx,y:bucket.cy}});
+  await page.waitForFunction(expected=>window.voidPlayer.getState().positionUs===expected&&!window.voidPlayer.getState().busy,peak.effectivePtsUs,{timeout:8000});
+  await page.waitForFunction(bucket=>{
+    const direct=window.__vpAnalysis.inspection?.direct;
+    return direct?.kind==='bucket'&&direct.slot===bucket.slot&&direct.bucketStartUs===bucket.startUs&&direct.bucketEndUs===bucket.endUs;
+  },bucket,{timeout:8000});
   const viewB1 = await page.evaluate(() => window.__vpAnalysis.view);
   assert.deepEqual(viewB1, viewB0, '桶点击只定位，不缩放视图');
   posBefore = await page.locator('#position').inputValue();
@@ -549,9 +565,9 @@ try {
   const clicked = await page.evaluate(() => window.__vpAnalysis.glyphs.find(g => g.kind === 'sample' && g.slot === 'B' && !g.stacked));
   assert.ok(clicked, '应有 B 逐样本 glyph');
   const viewBefore = await page.evaluate(() => window.__vpAnalysis.view);
-  await page.mouse.click(box.x + clicked.cx, box.y + clicked.cy);
+  await page.locator('#analysis-canvas').click({position:{x:clicked.cx,y:clicked.cy}});
   try {
-    await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
+    await page.waitForFunction(expected=>window.voidPlayer.getState().positionUs===expected&&!window.voidPlayer.getState().busy,clicked.axisUs,{timeout:8000});
   } catch {
     // 失败保留现场：目标 glyph、检查快照与视图一起带出，不改测试快照换目标。
     const scene = await page.evaluate(() => ({ inspection: window.__vpAnalysis.inspection, view: window.__vpAnalysis.view }));
