@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
+import { waitForDialogClosed } from '../../browser-contracts.mjs';
 const name=process.argv[2]??'webkit';
 await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {viewport:{width:1280,height:800}} }, async ({ page, ready, artifact }) => {
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -147,7 +148,7 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
   assert.equal(await page.locator('#settings').evaluate(e=>e.open),true,'Space in dialog does not activate close');
   await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
-  await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));
+  await page.locator('#settings-close').click();await waitForDialogClosed(page);
   await page.locator('#position').fill('00:01.000');await page.keyboard.press('Space');
   assert.equal(await page.locator('#position').inputValue(),'00:01.000 ');assert.equal(await playing(),false);
   await page.keyboard.press('Escape');

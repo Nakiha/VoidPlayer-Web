@@ -155,10 +155,14 @@ await withBrowserFixture({ caseName: 'annotation', engine: name, pageOptions: {"
       source.width = size; source.height = 1;
       for (let x = 0; x < size; x++) { ctx.fillStyle = x % 2 ? '#0000ff' : '#ff0000'; ctx.fillRect(x, 0, 1, 1); }
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source); gl.drawArrays(gl.TRIANGLES, 0, 3);
-      const view = target.getBoundingClientRect(), image = document.querySelector('#image-A').getBoundingClientRect();
+      const view = target.getBoundingClientRect(), image = document.querySelector('#image-A');
+      // CSS layout rounds rectangles to 1/64 px. Keep the declared fit width for
+      // a 4096-texel oracle, where that rounding changes the interpolated color.
+      const viewport = window.voidPlayer.getViewport(), imageWidth = parseFloat(image.style.width) * viewport.zoom;
+      const imageLeft = (view.width - imageWidth) / 2 + viewport.offsetX;
       const px = Math.floor(view.width * .53), py = Math.floor(view.height / 2);
       const pixel = new Uint8Array(4); gl.readPixels(px, target.height - py - 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-      const u = (view.left + px + .5 - image.left) / image.width;
+      const u = ((px + .5) * view.width / target.width - imageLeft) / imageWidth;
       const sample = Math.max(0, Math.min(size - 1, u * size - .5));
       const fraction = sample - Math.floor(sample), red = Math.floor(sample) % 2 ? fraction : 1 - fraction;
       results.push({ size, pixel: [...pixel], expectedRed: size === 2 ? (Math.floor(u * size) % 2 ? 0 : 255) : Math.round(red * 255) });

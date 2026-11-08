@@ -98,8 +98,11 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
    assert.equal(await playhead.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 122, 255)');
    assert.equal(await page.locator('.subtrack-row:not(.selected) .track-playhead:not(.track-seek-preview)').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(142, 142, 147)');
    await page.mouse.move(5,5);await page.locator('#control-tooltip').waitFor({state:'hidden'});
+   await label.locator('.filename').evaluate(el=>{el.style.maxWidth='54px';});
+   await page.waitForFunction(slot=>document.querySelector(`[data-track-drag=${slot}] .subtrack-name .filename`)?.hasAttribute('data-display'),slot);
    await label.hover();await page.locator('#control-tooltip').waitFor({state:'visible'});
-   assert.equal(await page.locator('#control-tooltip').textContent(),trackName,'filename hover exposes the complete source path');
+   assert.equal(await page.locator('#control-tooltip').textContent(),trackName,'a truncated filename exposes the complete source path');
+   await label.locator('.filename').evaluate(el=>{el.style.maxWidth='';});
  }
  // Resize the shared header/row column without rebuilding tracks or stealing timeline space.
  const splitter=page.locator('#track-label-resize');

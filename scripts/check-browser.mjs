@@ -394,8 +394,8 @@ try {
     await page.waitForFunction(()=>+document.querySelector('#analysis-canvas').dataset.plotRight>0);
     await page.locator('#analysis-zoom-in').click();
     await page.waitForFunction(()=>!document.querySelector('#analysis-zoom-out').disabled);
-    await browseLibrary(page, listing.entries.find(entry => entry.name === 'av1_10s_1920x1080.webm').rootId);
-    const row=page.locator('#source-list .source-row').filter({has:page.locator('.filename',{hasText:'av1_10s_1920x1080.webm'})});
+    await browseLibrary(page, listing.entries.find(entry => entry.name === 'review/shots/path-tooltip.mp4').rootId);
+    const row=page.locator('#source-list .source-row').filter({has:page.locator('.filename',{hasText:'same.mp4'})});
     await row.waitFor();
     const add=row;
     const targets=[page.locator('#fullscreen'),page.locator('#server-status'),page.locator('#analysis-zoom-in'),page.locator('#analysis-zoom-out'),page.locator('#analysis-window'),page.locator('#analysis-range-trigger'),add,page.locator('#subtrack-add-mark')];

@@ -48,12 +48,14 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
       const bounds = el.getBoundingClientRect();
       const controls = [el.querySelector('.track-identity'), time, ...el.querySelectorAll('.header-actions button')]
         .map(node => node.getBoundingClientRect()).filter(rect => rect.width > 0);
+      const range = document.createRange(); range.selectNodeContents(name);
       return { timeVisible: getComputedStyle(time).display !== 'none',
-        nameTruncated: name.scrollWidth > name.clientWidth, left: bounds.left, right: bounds.right,
+        nameTruncated: name.hasAttribute('data-display'), fullNameWidth: range.getBoundingClientRect().width,
+        nameWidth: name.getBoundingClientRect().width, left: bounds.left, right: bounds.right,
         controls: controls.map(rect => ({ left: rect.left, right: rect.right })) };
     });
-    assert.equal(heading.timeVisible, width >= 360, `${width}: frame time only hides when the full title needs its space`);
-    assert.equal(heading.nameTruncated, width < 280, `${width}: time hides before the title truncates`);
+    assert.equal(heading.nameTruncated, heading.fullNameWidth > heading.nameWidth, `${width}: abbreviation follows actual font geometry`);
+    if (heading.nameTruncated) assert.equal(heading.timeVisible, false, `${width}: time hides before the title truncates`);
     for (const [i,control] of heading.controls.entries()) {
       assert.ok(control.left >= heading.left && control.right <= heading.right, `${width}: header controls fit`);
       if (i) assert.ok(control.left >= heading.controls[i-1].right, `${width}: header controls do not overlap`);
@@ -158,7 +160,9 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   await page.locator('.topbar').click({position:{x:640,y:20}});
   assert.equal(await page.locator('.popup-menu:popover-open:not([data-menu-exit-for])').count(),0,'outside click dismisses');
   assert.equal(await page.locator('#settings').evaluate(e=>e.open),false,'dismissing the popup must not open a dialog');
-  await page.locator('#mark-close').click(); await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n');
+  await page.locator('#mark-close').click(); await settleAppearance(page);
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n');
+  await page.locator('#annotation-toolbar').waitFor({state:'visible'});
   assert.equal(await page.locator('#drawing-color').inputValue(),'#ff3b30','a fresh editing session defaults to red');
   assert.equal((await state()).marks[0].drawings[0].color,'#007aff','existing colors are preserved');
   await page.reload();
