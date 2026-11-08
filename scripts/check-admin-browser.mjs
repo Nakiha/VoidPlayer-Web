@@ -341,6 +341,10 @@ try {
       sample();
     });
     await action(); await managed.waitForTimeout(320);
+    await pressedFile.evaluate(async el=>{
+      await Promise.all(el.getAnimations().map(animation=>animation.finished.catch(()=>{})));
+      await new Promise(requestAnimationFrame);
+    });
     return managed.evaluate(() => {cancelAnimationFrame(window.filePressFrame);return window.filePressSamples;});
   };
   for (const theme of ['dark','light']) {

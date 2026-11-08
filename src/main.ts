@@ -715,7 +715,6 @@ if (!localOnly && annotationLink.has('annotation')) void act(async () => {
 
 import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); viewportChrome.dispose(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); dropFeedback.dispose(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
-// First frame is rendered and handlers are wired; only GPU warmup (background)
-// and explicit deep-link loads (already async) are still outstanding,
-// so bootstrap can reveal without waiting for them.
+// GPU admission is complete and handlers are wired. Explicit deep-link loads
+// are already async, so bootstrap can reveal without waiting for them.
 window.dispatchEvent(new Event('voidplayer:shell-ready'));

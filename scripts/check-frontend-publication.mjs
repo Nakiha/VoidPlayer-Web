@@ -82,7 +82,7 @@ try {
     for (const {page} of pages) {
       await page.evaluate(() => window.dispatchEvent(new Event('focus')));
       await page.locator('#server-update:visible').waitFor();
-      await page.locator('.toast-warning').filter({ hasText:/后端已发布新版|server has published an update/ }).waitFor();
+      await page.locator('.toast-warning:not([data-leaving])').filter({ hasText:/后端已发布新版|server has published an update/ }).waitFor();
     }
     console.log('Published', label, next.buildId);
   }

@@ -174,10 +174,14 @@ jobs:
           retention-days: 14
 
   unit:
-    name: Verify media-dependent Node regressions
+    name: Verify media-dependent Node regressions (${{ matrix.part }})
     needs: [cores, qa-media]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [playback, containers, analysis]
     steps:
       - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
@@ -200,16 +204,16 @@ jobs:
         with:
           ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
           ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
-      - run: node scripts/run-tests.mjs ci-node-media
+      - run: node scripts/run-tests.mjs ci-node-media-${{ matrix.part }}
         env:
           VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
       - name: Preserve complete unit outcomes and failures
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: media-node-reports
+          name: media-node-reports-${{ matrix.part }}
           path: |
-            .run/test-suites/ci-node-media/
+            .run/test-suites/ci-node-media-${{ matrix.part }}/
             .run/test-suites/build-receipt.json
           if-no-files-found: error
           retention-days: 30

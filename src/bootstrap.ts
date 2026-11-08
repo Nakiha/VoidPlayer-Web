@@ -12,7 +12,7 @@ function revealApp() {
 }
 // Theme styles are render-blocking HTML links, so the shell never flashes
 // unstyled; main.ts signals shell-ready once its first frame is rendered, and
-// heavier warmup (GPU, library) finishes after reveal without blocking it.
+// explicit library/deep-link loading can finish after reveal without blocking it.
 let disposeLanguage = () => {};
 try {
   if (!localOnly && (!globalThis.isSecureContext || location.pathname === '/connection')) {
@@ -22,9 +22,9 @@ try {
     revealApp(); // The guide is usable while its connection probe is still pending.
     await ready;
   } else {
-    // Reveal on main.ts's first rendered frame; module evaluation (GPU warmup,
-    // annotation deep-link restore) still completes before this branch
-    // resolves, so load failures keep surfacing here.
+    // Reveal on main.ts's first ready frame after GPU admission. Explicit
+    // annotation deep-link restoration remains async; module failures still
+    // surface here.
     let shellReady!: () => void;
     const shell = new Promise<void>(resolve => { shellReady = resolve; });
     window.addEventListener('voidplayer:shell-ready', () => shellReady(), { once: true });

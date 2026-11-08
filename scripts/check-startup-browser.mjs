@@ -40,33 +40,40 @@ try {
         await route.continue();
       });
       await page.addInitScript(() => {
-        // Hold GPU setup after shell insertion; no real GPU/decode is needed here.
+        // Hold GPU admission after shell insertion; media APIs must stay closed.
         window.releaseStartupGpu = null;
         const gate = new Promise(resolve => { window.releaseStartupGpu = resolve; });
         Object.defineProperty(navigator, 'gpu', { configurable: true, value: { requestAdapter: async () => { await gate; return null; } } });
         window.startupFrames = [];
         function frame() {
           const app = document.getElementById('app');
-          if (app?.childElementCount && getComputedStyle(app).visibility !== 'hidden') {
+          if (app?.childElementCount && app.getClientRects().length && getComputedStyle(app).visibility !== 'hidden') {
             window.startupFrames.push({ ready: !!window.voidPlayer, single: !!document.querySelector('.screens.single'), inert: app.inert });
           }
-          if (performance.now() < 6000) requestAnimationFrame(frame);
+          if (!window.stopStartupFrames) requestAnimationFrame(frame);
         }
         requestAnimationFrame(frame);
       });
       await page.goto(base);
       await page.waitForFunction(() => !!document.querySelector('#settings-open'));
       assert.equal(await page.locator('html').evaluate(el => getComputedStyle(el).backgroundColor), theme === 'dark' ? 'rgb(33, 33, 33)' : 'rgb(245, 245, 247)');
-      // Shell-first reveal: the app is visible while GPU warmup is still gated.
-      await page.waitForFunction(() => !document.querySelector('#app').hasAttribute('data-initializing'));
+      // 2.1 prepares WebGPU before exposing load/restore APIs. A slow module
+      // graph may show the guard card; hidden DOM is not an interactive frame.
+      assert.equal(await page.evaluate(()=>!!window.voidPlayer),false,'pending GPU admission does not expose media APIs');
+      assert.equal(await page.locator('#app').evaluate(el=>!el.getClientRects().length||el.inert),true);
+      await page.evaluate(() => window.releaseStartupGpu());
+      await page.waitForFunction(() => {
+        const app=document.querySelector('#app');
+        return !!window.voidPlayer&&!app.hidden&&!app.inert&&!app.hasAttribute('data-initializing');
+      });
       assert.notEqual(await page.locator('#app').evaluate(el => getComputedStyle(el).visibility), 'hidden');
       assert.equal(await page.locator('#app').evaluate(el => el.inert), false);
       assert.equal(await page.locator('#startup-fallback').isVisible(), false);
       const zoomWidth = await page.locator('#zoom-select-control').evaluate(el => el.getBoundingClientRect().width);
       const buttonSize = await page.locator('html').evaluate(el => parseFloat(getComputedStyle(el).getPropertyValue('--button-size')));
       assert.equal(zoomWidth, buttonSize, 'disabled zoom reserves only an icon button');
-      await page.evaluate(() => window.releaseStartupGpu());
       await page.waitForFunction(() => window.startupFrames.length > 2);
+      await page.evaluate(()=>{window.stopStartupFrames=true;});
       assert.ok((await page.evaluate(() => window.startupFrames)).every(frame => frame.ready && frame.single && !frame.inert));
       assert.deepEqual(errors, []);
       assert.equal(await page.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false, 'development uses live modules');
@@ -169,7 +176,7 @@ try {
     await slow.close();
     await verifyOfflinePlayer(browser, name, config.staticDir);
     await browser.close(); browser = undefined;
-    console.log(`PASS ${name}: early theme, shell-first reveal, complete first UI frame, development/built entry/static/dynamic module failures, optimized dependency 504, fallback without retry, timeout/late recovery and disarmed guard`);
+    console.log(`PASS ${name}: early theme, GPU admission, complete first interactive UI frame, development/built entry/static/dynamic module failures, optimized dependency 504, fallback without retry, timeout/late recovery and disarmed guard`);
   }
 } finally {
   await browser?.close(); await web?.close(); await service?.close();
