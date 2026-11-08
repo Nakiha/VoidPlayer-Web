@@ -4,6 +4,17 @@
 
 Linux 功能测试中的无窗口 Chromium 使用显式 SwiftShader WebGPU；macOS/Windows 使用本机图形后端，避免把硬件解码纹理跨后端导入。有窗口诊断和播放基准保留真实显卡。WebKit 播放验证使用 macOS 26，Linux WebKit 不提供播放验收；缺失 WebGPU 的明确拒绝通过能力注入单独检查。GPU/色彩测试缺少所需 adapter 直接失败，不静默当作成功。CI 不设置软件 GPU 的性能门禁。
 
+2.1.0 的 CI 修复：Linux 无窗口 Chromium 显式使用 ANGLE/SwiftShader 和软件视频解码，并关闭软件图形进程的 GPU watchdog，
+避免慢速 shader 编译被浏览器终止；只影响功能测试启动，真实设备丢失、资源错误和套件超时仍失败。有窗口测试、macOS/Windows 与播放基准保留原生路径。
+分析工具条换行、区间按钮和弹出编辑器的尺寸观察只调度下一帧布局更新，复用可取消的 frame task；卸载时取消待执行更新。
+复用双引擎 Sites 与 WebKit analysis-layout 的既有素材、视口和错误断言，不增加媒体/解码循环，不忽略 ResizeObserver 错误或恢复失败提示。
+浏览器启动契约补充 Linux 软件参数、原生平台、有窗口配置、调用者参数保留与去重检查，无需启动浏览器。
+
+Actions 迁移到 checkout/setup-node/setup-python v7、cache（含 restore/save）v6、upload-artifact v7、download-artifact v8；
+Emscripten 安装迁移至 emscripten-core/setup-emsdk v16，core 与编译器锁不变。保留压缩 artifact、隐藏文件配置、校验失败门禁和现有缓存键；
+download-artifact v8 默认摘要不匹配即失败。Dependabot 每月集中检查 Actions 更新。
+
+
 专注模式玻璃残留复用 shortcuts 双引擎用例：在正式构建后验证进入、闲置淡出时的底板透明且所有受支持的 backdrop filter 均为 none，
 退出后恢复原材质。修复前 Chromium 的实际计算样式仍为 blur；调整前缀声明顺序后，压缩产物保留标准取消规则。
 沿用现有片源、窗口与淡出等待，只增加计算样式观察，不增加媒体加载、播放或浏览器矩阵。

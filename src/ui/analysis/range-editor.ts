@@ -9,6 +9,7 @@ import { AXIS_H, drawTimeAxis, formatAxis, plotGeometry } from './canvas.ts';
 import type { CanvasColors } from './canvas.ts';
 import { bindMenuTrigger } from '../menu.ts';
 import { installChartNavigation } from './chart-navigation.ts';
+import { createFrameTask } from '../frame-task.ts';
 import { MIN_ANALYSIS_SPAN_US as MIN_SPAN_US } from './shared.ts';
 import type { AnalysisAction as Action } from './shared.ts';
 
@@ -94,12 +95,19 @@ export function installAnalysisRangeEditor(deps: AnalysisRangeEditorDeps) {
   // 工具条可横向滚动：触发按钮移动时编辑器跟随，锚定关系不脱钩。
   rangeTrigger.closest('.analysis-tools')?.addEventListener('scroll', positionRangeEditor, { signal, passive: true });
   // 触发按钮的标签随区间变化；居中锚定必须跟随按钮自身的宽度。
-  const rangeTriggerObs = new ResizeObserver(() => { positionRangeEditor(); syncHeadStack(); });
+  const rangeLayout = createFrameTask(() => { positionRangeEditor(); syncHeadStack(); refreshCardAvoidance(); });
+  const rangeTriggerObs = new ResizeObserver(() => rangeLayout.schedule());
   rangeTriggerObs.observe(rangeTrigger);
   // 编辑器自身的高度也会随胶囊换行变化，卡片避让要跟着新的矩形重算。
-  const rangeEditorObs = new ResizeObserver(() => { positionRangeEditor(); refreshCardAvoidance(); });
+  const rangeEditorObs = new ResizeObserver(() => rangeLayout.schedule());
   rangeEditorObs.observe(rangeEditor);
-  signal.addEventListener('abort', () => { closeRangeEditor(); rangeTriggerObs.disconnect(); rangeEditorObs.disconnect(); rangeEditor.remove(); }, { once: true });
+  signal.addEventListener('abort', () => {
+    rangeLayout.dispose();
+    closeRangeEditor();
+    rangeTriggerObs.disconnect();
+    rangeEditorObs.disconnect();
+    rangeEditor.remove();
+  }, { once: true });
 
   function rangeGeometry() { return plotGeometry(Math.max(1, rangeNavigation.clientWidth || Math.min(460, innerWidth - 48)), RAIL_INSET, RAIL_INSET); }
   /** 编辑器打开时作为顶部面板内的浮层对等方：悬浮卡片据此避让。 */

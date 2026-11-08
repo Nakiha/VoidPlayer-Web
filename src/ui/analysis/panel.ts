@@ -40,6 +40,7 @@ import { installAnalysisGestures } from './gestures.ts';
 import { installFilterGestures } from './filter-gestures.ts';
 import { installAnalysisRangeEditor } from './range-editor.ts';
 import { publishAnalysisTestHook } from './test-hook.ts';
+import { createFrameTask } from '../frame-task.ts';
 import { zoomTimeRange } from '../../../shared/analysis/metadata/projection.ts';
 import './panel.css';
 
@@ -1218,13 +1219,14 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const required = primary + contentWidth(tools) + contentWidth(statusItems) + gap * 2;
     headEl.classList.toggle('status-stacked', required > inner + .5);
   }
-  const wrapObs = new ResizeObserver(() => {
+  const wrapLayout = createFrameTask(() => {
     if (signal.aborted) return;
     const toolsBottom = tools.getBoundingClientRect().bottom;
     const statusTop = statusEl.getBoundingClientRect().top;
     headEl.classList.toggle('status-wrapped', statusTop - toolsBottom > 2);
     syncHeadStack();
   });
+  const wrapObs = new ResizeObserver(() => wrapLayout.schedule());
   wrapObs.observe(tools);
   wrapObs.observe(statusEl);
 
@@ -1253,6 +1255,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     offProgress();
     stopLanguage();
     resizer_obs.disconnect();
+    wrapLayout.dispose();
     wrapObs.disconnect();
     themeChanges.disconnect();
     closeRangeEditor();
