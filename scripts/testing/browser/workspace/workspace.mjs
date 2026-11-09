@@ -33,7 +33,10 @@ await withBrowserFixture({ caseName: 'workspace', engine: name, pageOptions: {"v
  const after=await restored.evaluate(()=>({state:window.voidPlayer.getState(),view:window.voidPlayer.getViewport(),layout:window.voidPlayer.getWorkspace()}));
  assert.deepEqual(after.state.tracks.map(t=>[t.slot,t.id,t.offsetUs]),saved.tracks.map(t=>[t.slot,t.mediaId,t.offsetUs]));
  assert.deepEqual(after.state.marks,saved.marks);assert.equal(after.state.positionUs,saved.positionUs);assert.deepEqual(after.view,saved.viewport);
- assert.ok(await restored.locator('.annotation-row img').count()>0,'restored annotation cards retain their previews');
+ const restoredPreview=restored.locator('.annotation-row img').first();
+ await restoredPreview.waitFor({state:'visible',timeout:15000});
+ await restoredPreview.evaluate(image=>image.decode());
+ assert.ok(await restoredPreview.evaluate(image=>image.naturalWidth>0&&image.naturalHeight>0),'restored annotation cards retain decoded previews');
  assert.deepEqual(after.layout,saved.layout);assert.equal(after.state.playing,false);
  // Restored openers must also support settings that rebuild decoders.
  await restored.evaluate(async () => {

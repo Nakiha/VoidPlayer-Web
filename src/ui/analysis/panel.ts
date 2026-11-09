@@ -3,6 +3,7 @@ import { analysisRetryButton } from './retry.ts';
 import { createSettledAnalysisDemand } from './settled-demand.ts';
 import { animatePlaybackIcon } from '../playback-icon.ts';
 import { installBitstreamDiagrams, type BitstreamDiagram } from "./bitstream-diagrams.ts";
+import { resetNaluFilter, type NaluFilter } from './nalu-filter.ts';
 // 顶部码流分析面板：工具条 + Canvas + 覆盖层 + 会话共用查询。
 // 数据全部走 ReviewSession.queryAnalysis（与 Agent 同一入口）；悬停只读
 // 索引，不解码、不 seek；单击可显示帧经 resolveAnalysisSeek 定位到展示 PTS。
@@ -161,7 +162,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   type DeepEntry = { mode: BitstreamDiagram; slot: Slot; host: HTMLElement; abort: AbortController; panel: ReturnType<typeof installBitstreamDiagrams> };
   const deepPanels = new Map<string, DeepEntry>();
   const naluGroups = new Map<Slot, HTMLElement>();
-  const filters = new Map<Slot, { identity: string; hiddenTypes: Set<number> }>();
+  const filters = new Map<Slot, NaluFilter & { identity: string }>();
   const deepKey = (mode: BitstreamDiagram, slot: Slot) => `${mode}:${slot}`;
   const deepFor = (mode: BitstreamDiagram, slot: Slot) => deepPanels.get(deepKey(mode, slot));
   function syncNaluMinimum() {
@@ -274,7 +275,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     for (const track of selected) {
       const identity = `${track.mediaId}|${track.sourceGen}`;
       const previousFilter = filters.get(track.slot);
-      if (previousFilter) { if (previousFilter.identity !== identity) previousFilter.hiddenTypes.clear(); previousFilter.identity = identity; }
+      if (previousFilter) { if (previousFilter.identity !== identity) resetNaluFilter(previousFilter); previousFilter.identity = identity; }
       else filters.set(track.slot, { identity, hiddenTypes: new Set() });
       for (const mode of ['nalu-size', 'nalu-types', 'references'] as const) {
         if (!diagrams.has(mode)) continue;
@@ -284,7 +285,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         const abort = new AbortController(), slot = track.slot;
         const panel = installBitstreamDiagrams(host, session, act, abort.signal, {
           axis: () => prefs.axis, range: () => viewRange(), domain: () => domainBounds(), containerColumn: () => containerColumn(), set: (start, end) => setView(start, end),
-        }, { hiddenTypes: filters.get(slot)!.hiddenTypes, filterChanged: () => { clearSharedHover(); refreshDeep(); }, hover: hoverDeep,
+        }, { filter: filters.get(slot)!, filterChanged: () => { clearSharedHover(); refreshDeep(); }, hover: hoverDeep,
           pinned: () => inspection.state.pinned != null, layoutChanged: syncNaluMinimum, rendered: positionIndividualCards,
           inspection: () => inspectionUi(slot), slotColor: () => slotColors.get(slot) ?? '#888', avoid: rangeEditorBounds });
         deepPanels.set(key, { mode, slot, host, abort, panel });
