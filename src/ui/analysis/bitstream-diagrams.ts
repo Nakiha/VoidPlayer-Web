@@ -10,6 +10,7 @@ import { MIN_ANALYSIS_SPAN_US, type AnalysisAction, type AnalysisViewport, type 
 import { analysisDetailTable, analysisMetricValue, analysisTrackBadge, installFloatingAnalysisCard } from './card.ts';
 import { installChartNavigation } from './chart-navigation.ts';
 import { installFilterGestures } from './filter-gestures.ts';
+import { selectNaluType, discoverNaluTypes, resetNaluFilter, type NaluFilter } from './nalu-filter.ts';
 export type BitstreamDiagram = 'nalu-size' | 'nalu-types' | 'references';
 const palette = ['#6aaeff', '#f0b429', '#5bc9b3', '#bca0f8', '#ef839f', '#d4bd82', '#67c8ec', '#a8cd75'];
 const typeColor = (type: number) => palette[type % palette.length];
@@ -23,7 +24,7 @@ function drawContainerBar(ctx: CanvasRenderingContext2D, x: number, y: number, w
 const seconds = (us: number) => `${(us / 1e6).toFixed(3)}s`;
 type CardPresentation = { size: boolean; types: boolean; header?: boolean };
 type Point = { x: number; y: number; picture?: DiagramPicture; bucket?: DiagramBucket };
-export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSession, act: AnalysisAction, signal: AbortSignal, viewport: AnalysisViewport, options: { hiddenTypes: Set<number>; filterChanged(): void; hover(value: ChartHover | null, clientX?: number, clientY?: number): void; pinned(): boolean; layoutChanged?(): void; rendered?(): void; slotColor?(): string; avoid?(): DOMRect | undefined; inspection(): { status: string; pending: boolean; percent: number; state: string; name: string } }) {
+export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSession, act: AnalysisAction, signal: AbortSignal, viewport: AnalysisViewport, options: { filter: NaluFilter; filterChanged(): void; hover(value: ChartHover | null, clientX?: number, clientY?: number): void; pinned(): boolean; layoutChanged?(): void; rendered?(): void; slotColor?(): string; avoid?(): DOMRect | undefined; inspection(): { status: string; pending: boolean; percent: number; state: string; name: string } }) {
   host.innerHTML = `<div class="bitstream-diagram-head"><div class="bitstream-diagram-navigation"><strong></strong><output></output></div><div class="bitstream-diagram-legend"></div></div><div class="bitstream-diagram-plot"><canvas tabindex="0" role="img" ></canvas><div class="bitstream-diagram-empty"><div class="bitstream-empty-copy"><strong role="status"></strong><span></span></div><button type="button" class="bitstream-empty-action"></button></div></div><output class="bitstream-diagram-detail" aria-live="polite"></output>`;
   const canvas = host.querySelector('canvas')!, ctx = canvas.getContext('2d')!;
   const plot = host.querySelector<HTMLElement>('.bitstream-diagram-plot')!;
@@ -86,7 +87,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
   let data: ReturnType<ReviewSession['queryBitstreamChart']> = null;
   let chosenAu: number | undefined, chosenBucket: number | undefined, points: Point[] = [];
   let raf = 0, lastSignature = '', geometry = { left: 65, right: 66 };
-  const hiddenTypes = options?.hiddenTypes ?? new Set<number>();
+  const { hiddenTypes } = options.filter;
   let sharedHover: ChartHover | null = null;
   let pointerRaf = 0, pendingPointer: PointerEvent | null = null;
   const clearHover = () => {
@@ -172,7 +173,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
     const w = Math.max(1, Math.floor(plot.clientWidth)), sharedGeometry = plotGeometry(w), left = sharedGeometry.gutter, right = left + sharedGeometry.plotW, top = 8, span = sharedGeometry.plotW;
     geometry = { left, right };
     const base = slot ? session.queryBitstreamChart(slot, undefined, undefined, Math.max(32, Math.min(4096, Math.round(span))), viewport.axis()) : null;
-    if (base && identity && identity !== base.sourceVersion) { hiddenTypes.clear(); chosenAu = chosenBucket = undefined; }
+    if (base && identity && identity !== base.sourceVersion) { resetNaluFilter(options.filter); chosenAu = chosenBucket = undefined; }
     if (base) identity = base.sourceVersion;
     const domain = viewport.domain(), duration = Math.max(1, domain.end - domain.start);
     const { start: startUs, end: endUs } = viewport.range();
@@ -192,6 +193,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
     const minimumPlot = Number.parseFloat(style.getPropertyValue('--analysis-chart-min-plot-height')) || 36;
     const minimumTypeRow = Number.parseFloat(style.getPropertyValue('--analysis-type-row-min-height')) || 10;
     const headerTypes = [...new Set(headers.flatMap(header => header.nalus.map(n => n.type)))];
+    discoverNaluTypes(options.filter,[...(data?.types??[]),...headerTypes]);
     const shownHeaderTypes = headerTypes.filter(type => !hiddenTypes.has(type));
     const typeRows = mode === 'nalu-types' ? new Set([...(data?.types ?? []).filter(type => !hiddenTypes.has(type)), ...(column.timeUs >= startUs && column.timeUs <= endUs ? shownHeaderTypes : [])]).size : 0;
     const referencePictures = mode === 'references' ? pictures.filter(p => p.references?.state === 'ready') : [];
@@ -399,17 +401,8 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
     options.rendered?.();
   }
   const applyFilter = (button: HTMLButtonElement, solo: boolean) => {
-    if (button.dataset.filter === 'all') hiddenTypes.clear();
-    else {
-      const type = Number(button.dataset.naluType);
-      if (solo) {
-        const types = [...legend.querySelectorAll<HTMLElement>('[data-nalu-type]')].map(entry => Number(entry.dataset.naluType));
-        const alreadySolo = !hiddenTypes.has(type) && types.every(other => other === type || hiddenTypes.has(other));
-        hiddenTypes.clear();
-        if (!alreadySolo) for (const other of types) if (other !== type) hiddenTypes.add(other);
-      } else if (hiddenTypes.has(type)) hiddenTypes.delete(type);
-      else hiddenTypes.add(type);
-    }
+    const types = [...legend.querySelectorAll<HTMLElement>('[data-nalu-type]')].map(entry => Number(entry.dataset.naluType));
+    selectNaluType(options.filter,button.dataset.filter==='all'?null:Number(button.dataset.naluType),solo,types);
     clearHover(); drawSoon(); options?.filterChanged();
   };
   installFilterGestures(legend, signal, (button, solo) => { if (mode !== 'references') applyFilter(button, solo); });
@@ -526,7 +519,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
       element.append(message);
       return { element, exact: false, timeUs: undefined };
     }, refresh(nextMode: BitstreamDiagram, nextSlot?: Slot, primary = true) {
-    if (slot !== nextSlot) { clearHover(); if (slot !== undefined) hiddenTypes.clear(); identity = ''; chosenAu = chosenBucket = undefined; detail.textContent = ''; }
+    if (slot !== nextSlot) { clearHover(); if (slot !== undefined) resetNaluFilter(options.filter); identity = ''; chosenAu = chosenBucket = undefined; detail.textContent = ''; }
     else if (mode !== nextMode) { clearHover(); chosenAu = chosenBucket = undefined; detail.textContent = ''; }
     mode = nextMode; slot = nextSlot; canvas.id = `bitstream-diagram-${mode}${primary ? '' : `-${slot}`}`; canvas.dataset.slot = slot ?? '';
     trackBadge.replaceChildren();
