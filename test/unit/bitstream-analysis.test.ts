@@ -11,7 +11,31 @@ import {
   validateResult,
 } from "../../shared/analysis/bitstream/contract.ts";
 import { AnalysisCache } from "../../shared/analysis/bitstream/cache.ts";
+import { selectNaluType, discoverNaluTypes, resetNaluFilter } from '../../src/ui/analysis/nalu-filter.ts';
 import type { AnalysisResult } from "../../shared/analysis/bitstream/contract.ts";
+test('NALU solo selection survives types discovered after the press and stays track-owned', () => {
+  const a={hiddenTypes:new Set<number>()},b={hiddenTypes:new Set<number>()};
+  selectNaluType(a,8,true,[1,5,7,8]);
+  assert.deepEqual([1,5,7,8].filter(type=>!a.hiddenTypes.has(type)),[8]);
+  discoverNaluTypes(a,[1,5,6,7,8]);
+  assert.deepEqual([1,5,6,7,8].filter(type=>!a.hiddenTypes.has(type)),[8],'late SEI must not leak into a PPS-only filter');
+  assert.equal(b.hiddenTypes.size,0,'another track remains unfiltered');
+  selectNaluType(a,8,true,[1,5,6,7,8]);
+  assert.equal(a.hiddenTypes.size,0,'repeating solo restores all discovered types');
+  selectNaluType(a,7,true,[1,5,6,7,8]);
+  resetNaluFilter(a);discoverNaluTypes(a,[1,5,6,7,8,12]);
+  assert.equal(a.hiddenTypes.size,0,'a replacement source starts with all types');
+});
+
+test('ordinary NALU selection and All end solo mode without changing multi-select semantics', () => {
+  const filter={hiddenTypes:new Set<number>()};
+  selectNaluType(filter,7,true,[1,7,8]);
+  selectNaluType(filter,8,false,[1,7,8]);discoverNaluTypes(filter,[1,6,7,8]);
+  assert.deepEqual([1,6,7,8].filter(type=>!filter.hiddenTypes.has(type)),[6,7,8]);
+  selectNaluType(filter,8,true,[1,6,7,8]);selectNaluType(filter,null,false,[1,6,7,8]);
+  discoverNaluTypes(filter,[1,6,7,8,12]);
+  assert.equal(filter.hiddenTypes.size,0);
+});
 const result = (): AnalysisResult => ({
   schema: 1,
   codec: "h264",

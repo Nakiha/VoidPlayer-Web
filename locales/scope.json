@@ -32,6 +32,7 @@
     "src/ui/analysis/inspection-state.ts",
     "src/ui/analysis/lazy-panel.ts",
     "src/ui/analysis/model.ts",
+    "src/ui/analysis/nalu-filter.ts",
     "src/ui/analysis/panel.ts",
     "src/ui/analysis/picture-overlay/controller.ts",
     "src/ui/analysis/picture-overlay/geometry.ts",
