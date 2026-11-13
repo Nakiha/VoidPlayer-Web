@@ -48,6 +48,7 @@ import pathSeparator from '@phosphor-icons/core/assets/bold/caret-right-bold.svg
 import film from '@phosphor-icons/core/assets/regular/film-strip.svg?raw';
 import fit from '@phosphor-icons/core/assets/regular/arrows-out.svg?raw';
 import marker from '@phosphor-icons/core/assets/regular/diamond.svg?raw';
+import navigationArrow from '@phosphor-icons/core/assets/regular/navigation-arrow.svg?raw';
 
 import grip from '@phosphor-icons/core/assets/regular/dots-six-vertical.svg?raw';
 import copy from '@phosphor-icons/core/assets/regular/copy.svg?raw';
@@ -78,9 +79,11 @@ import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
 // Partitioned source frame: the analysis overlay exposes coding blocks.
 const analysisOverlay = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2" fill="none"/><path fill="none" d="M2 10h20M10 2v20M10 16h12M16 10v12"/><path d="M16 10h6v6h-6z" fill="currentColor" fill-opacity=".22" stroke="none"/></svg>';
 import listBullets from '@phosphor-icons/core/assets/regular/list-bullets.svg?raw';
-// Inward arrows compress the row spacing, distinct from the list-view glyph.
+// Three list rows change spacing to show the next density without arrow clutter.
 const compactRows = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-  <path fill="none" d="M4 10h16M4 14h16M9 4l3 3 3-3M9 20l3-3 3 3"/>
+  <g class="density-upper-row"><path d="M8 8h12"/><circle cx="4" cy="8" r=".8" fill="currentColor" stroke="none"/></g>
+  <path d="M8 12h12"/><circle cx="4" cy="12" r=".8" fill="currentColor" stroke="none"/>
+  <g class="density-lower-row"><path d="M8 16h12"/><circle cx="4" cy="16" r=".8" fill="currentColor" stroke="none"/></g>
 </svg>`;
 import caretUpDown from '@phosphor-icons/core/assets/regular/caret-up-down.svg?raw';
 import libraryVolume from '@phosphor-icons/core/assets/regular/hard-drives.svg?raw';
@@ -90,7 +93,7 @@ const colorDecoding = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
   <rect x="2" y="4" width="20" height="16" rx="2" fill="none"/>
   <path fill="none" d="M6 9v6M9 7v10M12 9v6M16 9l4 3-4 3Z"/>
 </svg>`;
-const icons = { colorDecoding, database, stack, fileText, gauge, save, compactRows, externalLink, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, refreshRegular, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
+const icons = { navigationArrow, colorDecoding, database, stack, fileText, gauge, save, compactRows, externalLink, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, refreshRegular, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

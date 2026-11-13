@@ -21,7 +21,44 @@ await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const engine = process.argv.find(arg => arg === 'webkit' || arg === 'chromium') ?? 'webkit'; const browser = await (engine === 'chromium' ? chromium : webkit).launch({ headless: true });
 try {
+  const pathContext = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
+  const pathPage = await pathContext.newPage();
+  await pathPage.goto(base); await pathPage.waitForFunction(() => window.voidPlayer);
+  await pathPage.locator('#toggle-sources').click();
+  const enterPath = async value => { await pathPage.locator('#library-location').fill(value); await pathPage.locator('#library-location').press('Enter'); };
+  await enterPath('library:archive/实验一/clip-069.mp4');
+  await pathPage.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.name === '实验一/clip-069.mp4' && !window.voidPlayer.getState().busy);
+  assert.equal(await pathPage.locator('#library-location').inputValue(), '实验一', 'file expressions reveal their parent directory');
+  assert.equal(await pathPage.locator('#source-list .source-file .filename').filter({ hasText: /^clip-069\.mp4$/ }).count(), 1, 'file beyond the first page is revealed');
+  await enterPath('library:archive/实验一/clip-069.mp4');
+  await pathPage.waitForFunction(() => document.querySelector('#source-list').getAttribute('aria-busy') === 'false');
+  assert.equal(await pathPage.evaluate(() => window.voidPlayer.getState().tracks.length), 1, 'an existing track is not duplicated');
+  await enterPath('library:archive/sample.mp4');
+  await pathPage.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
+  assert.equal(await pathPage.locator('#library-location').inputValue(), '项目归档', 'root-level file reveals the mount');
+  await pathPage.evaluate(async () => { for (const track of window.voidPlayer.getState().tracks) await window.voidPlayer.removeTrack(track.slot); });
+  let releaseLookup, lookupStarted, lookupFinished;
+  const held = new Promise(resolve => { releaseLookup = resolve; });
+  const started = new Promise(resolve => { lookupStarted = resolve; });
+  const finished = new Promise(resolve => { lookupFinished = resolve; });
+  await pathPage.route('**/api/library/browse?*', async route => {
+    if (new URL(route.request().url()).searchParams.get('search') !== 'clip-069.mp4') { await route.continue(); return; }
+    lookupStarted(); await held;
+    try { await route.continue(); } catch { /* New input cancels the old lookup. */ }
+    lookupFinished();
+  });
+  await enterPath('library:archive/实验一/clip-069.mp4'); await started;
+  await enterPath('library:archive/实验一/nested');
+  await pathPage.waitForFunction(() => document.querySelector('#library-location').value === 'nested' && document.querySelector('#source-list').getAttribute('aria-busy') === 'false');
+  releaseLookup(); await finished;
+  await pathPage.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.equal(await pathPage.locator('#library-location').inputValue(), 'nested');
+  assert.equal(await pathPage.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'late file lookups cannot open media after newer navigation');
+  await pathContext.close();
+  console.log(`PASS ${engine}: file expressions open root/nested files, reveal pagination, avoid duplicates and reject late navigation`);
   const context = await browser.newContext({locale:'zh-CN', viewport: { width: 1280, height: 800 }, colorScheme: 'light' });
+  // These metadata layout checks use detailed rows; path activation above uses the compact default.
+  await context.addInitScript(() => { if (localStorage.getItem('voidplayer.library-compact') == null) localStorage.setItem('voidplayer.library-compact', 'false'); });
   const page = await context.newPage(); const errors = [], legacy = [], protocolSearches = [];
   page.on('request', request => {
     const url = new URL(request.url());
@@ -233,10 +270,10 @@ try {
   await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
   await fileRow.evaluate(el => el.click());
   assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 1, 'repeated row activation never duplicates a loaded source');
-  const workspace = await page.evaluate(() => window.voidPlayer.exportWorkspace());
+  const workspace = await page.evaluate(() => window.voidPlayer.exportState());
   assert.equal(workspace.layout.sources.directory,'实验一'); assert.equal(workspace.layout.sources.query,'clip-069');
   await go('library:archive'); await search('deep');
-  await page.evaluate(value => window.voidPlayer.importWorkspace(value),workspace);
+  await page.evaluate(value => window.voidPlayer.applyState(value),workspace);
   assert.equal(await page.locator('#library-location').inputValue(),'clip-069');
   assert.equal(await pathbar.locator('[aria-current] .library-path-label').textContent(),'实验一');
   await page.waitForFunction(() => document.querySelectorAll('#source-list .source-file').length === 1);
@@ -244,12 +281,12 @@ try {
   await page.locator('#library-recents > summary').click();
   assert.equal(await page.locator('#library-recents .source-row').first().isVisible(), false);
   await page.locator('#library-recents > summary').click();
-  await search('最近搜索'); const old = await page.evaluate(() => window.voidPlayer.exportWorkspace());
+  await search('最近搜索'); const old = await page.evaluate(() => window.voidPlayer.exportState());
   old.layout.sources.tab = 'recent'; old.layout.sources.search = '';
-  await go('library:archive'); await page.evaluate(value => window.voidPlayer.importWorkspace(value),old);
+  await go('library:archive'); await page.evaluate(value => window.voidPlayer.applyState(value),old);
   assert.equal(await page.locator('#library-location').inputValue(),'最近搜索');
   assert.equal(await pathbar.locator('[aria-current] .library-path-label').textContent(),'媒体库');
-  await page.reload(); await page.locator('#start-library-list').getByRole('button',{name:'打开：实验一/clip-069.mp4',exact:true}).waitFor();
+  await page.goto(base); await page.locator('#start-library-list').getByRole('button',{name:'打开：实验一/clip-069.mp4',exact:true}).waitFor();
   await page.locator('#toggle-sources').click(); await go('library:archive'); await search('deep');
   await page.waitForFunction(() => document.querySelector('#source-list').textContent.includes('deep-clip.mp4'));
   await clearSearch(); await go('library:archive');
@@ -263,8 +300,9 @@ try {
   const entry = library.browse().entries.find(e => e.name === 'sample.mp4');
   await call('load_library_item', { slot: 'A', id: entry.id });
   await call('add_review_mark', { slot: 'A', text: 'Version anchor' });
-  const saved = await call('export_workspace');
-  assert.ok(saved.media[0].source.url.includes('?v='));
+  const saved = await call('get_uri_state');
+  assert.equal(saved.tracks[0].version, entry.version);
+  const originalMarks = (await call('get_review_session')).marks;
   // Download URLs and file-location URLs must still work with the version query.
   const download = await page.evaluate(() => document.querySelector('#source-action-A').getAttribute('data-action')); assert.equal(download, 'download');
   const downloaded = page.waitForEvent('download'); await page.locator('#source-action-A').click(); assert.equal((await downloaded).suggestedFilename(), 'sample.mp4');
@@ -275,27 +313,16 @@ try {
   const bytes = await readFile(sample); await new Promise(r => setTimeout(r, 5)); await writeFile(sample, bytes); await utimes(sample, 2000, 2000); await library.refresh();
   assert.notEqual(library.browse().entries.find(e => e.name === 'sample.mp4').version, entry.version);
   assert.notEqual(library.browse().entries.find(e => e.name === 'sample.mp4').lastModified, entry.lastModified, 'the fixture must drift the recorded mtime while keeping the bytes');
-  // A changed version requires explicit relinking even if the replacement has the same size.
-  await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);
-  await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
-  assert.deepEqual((await call('get_review_session')).tracks,[]);
-  await page.locator('.toast-warning').filter({hasText:'已发生变化'}).waitFor();
-  // A real byte change (size differs) still refuses with a field-level message.
+  // A changed version rejects the URI transaction and retains the currently loaded scene and annotations.
+  const rejectState = value => page.evaluate(async value => { try { await window.voidPlayer.applyState(value); return ''; } catch(error) { return error.message; } }, value);
+  assert.match(await rejectState(saved), /版本发生变化/);
+  assert.equal((await call('get_review_session')).tracks.length,1);
   await writeFile(sample, Buffer.concat([bytes, Buffer.from([0])])); await library.refresh();
-  await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);
-  const unavailable = await page.evaluate(() => window.voidPlayer.getState());
-  assert.deepEqual(unavailable.tracks, []);
-  const warning = page.locator('.toast-warning').filter({hasText:'以下片源无法打开，已跳过'}).last();
-  assert.match(await warning.innerText(), /已发生变化/);
-  assert.match(await warning.innerText(), /内容版本/);
-  assert.equal(await warning.locator('.toast-action').count(),0);
-  assert.deepEqual(unavailable.marks, saved.marks);
+  assert.match(await rejectState(saved), /版本发生变化/);
+  assert.deepEqual((await call('get_review_session')).marks,originalMarks);
   await writeFile(sample, bytes); await utimes(sample, 1000, 1000); await library.refresh();
-  assert.deepEqual(unavailable.marks, saved.marks);
-  // Unversioned references never select the latest file implicitly.
-  const legacyWorkspace = structuredClone(saved); for (const media of legacyWorkspace.media) media.source.url = media.source.url.split('?')[0];
-  await page.evaluate(value => window.voidPlayer.importWorkspace(value), legacyWorkspace);
-  assert.deepEqual((await call('get_review_session')).tracks,[]);
+  const unversioned = structuredClone(saved); unversioned.tracks[0].version = '';
+  assert.match(await rejectState(unversioned), /片源引用无效/);
   await page.screenshot({ path: `/tmp/voidplayer-library-light-${engine}.png` });
   await page.locator('#settings-open').click(); await page.locator('[data-theme-choice=dark]').click(); await page.locator('#settings-close').click();
   await page.waitForFunction(() => !document.querySelector('#settings').open); await page.screenshot({ path: `/tmp/voidplayer-library-dark-${engine}.png` });

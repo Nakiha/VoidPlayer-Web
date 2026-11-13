@@ -39,6 +39,41 @@ async function openSamples(page) {
 }
 
 try {
+  // A direct/Agent open has never browsed the media directory. It must still
+  // publish the first frame for B, who is already viewing a missing cover.
+  const readerContext = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
+  const writerContext = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
+  const reader = await readerContext.newPage(), writer = await writerContext.newPage();
+  await openSamples(reader);
+  const direct = library.browse().entries.find(entry => entry.name === 'sample-late.mp4');
+  const recentReader = await readerContext.newPage();
+  await recentReader.addInitScript(entry => localStorage.setItem('voidplayer.sources.v1', JSON.stringify([{
+    name: entry.name, size: entry.size, lastModified: entry.lastModified, version: entry.version,
+    libraryId: entry.id, libraryRootId: entry.rootId, openedAt: Date.now(),
+  }])), direct);
+  await recentReader.goto(base); await recentReader.waitForFunction(() => window.voidPlayer);
+  await recentReader.locator('#toggle-sources').click();
+  await recentReader.waitForFunction(() => document.querySelector('#library-recents')?.textContent.includes('sample-late.mp4'));
+  assert.equal(await recentReader.evaluate(() => !!document.querySelector('#library-recents .source-thumb img[src]')), false);
+  await writer.goto(base); await writer.waitForFunction(() => window.voidPlayer);
+  const uploaded = writer.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/thumbnail'), { timeout: 20000 });
+  await writer.evaluate(id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ slot: 'A', id }), direct.id);
+  assert.equal((await uploaded).status(), 201, 'direct opens warm the upload epoch from their existing metadata request');
+  await reader.bringToFront();
+  await reader.waitForFunction(thumbReady, 'sample-late.mp4', { timeout: 20000 });
+  await recentReader.bringToFront();
+  await recentReader.waitForFunction(thumbReady, 'sample-late.mp4', { timeout: 20000 });
+  assert.equal(await recentReader.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'recent entries discover remote uploads without loading media');
+  assert.equal(await reader.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'reader receives a shared cover without opening media');
+  assert.equal(library.thumbnails.status(direct.id, direct.version, THUMB_RECIPE_VERSION).ready, true);
+  await readerContext.close(); await writerContext.close();
+  library.thumbnails.remove(); // Original generation and cache-clear cases start empty.
+  const uriContext = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
+  const uriPage = await uriContext.newPage();
+  const uriUpload = uriPage.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/thumbnail'), { timeout: 20000 });
+  await uriPage.goto(`${base}/?abi=1&A=${direct.id}@${direct.version}`);
+  assert.equal((await uriUpload).status(), 201, 'cold URI restoration offers its committed origin frame to the shared cache');
+  await uriContext.close(); library.thumbnails.remove();
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   const errors = [];

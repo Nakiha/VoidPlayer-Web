@@ -14,7 +14,6 @@
     "action": "/?open=files",
     "launch_type": "single-client",
     "accept": {
-      "application/x-voidplayer": [".voidplayer"],
       "video/mp4": [".mp4", ".m4v"],
       "video/quicktime": [".mov"],
       "video/x-matroska": [".mkv"],

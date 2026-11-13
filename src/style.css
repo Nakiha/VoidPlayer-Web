@@ -30,6 +30,13 @@ select { max-width: 100%; }
 .icon { width: var(--icon-size); height: var(--icon-size); flex: 0 0 var(--icon-size); fill: currentColor; vertical-align: middle; }
 .mirror { transform: scaleX(-1); }
 .icon-button { width: var(--button-size); height: var(--button-size); min-height: var(--button-size); padding: 0; flex: 0 0 var(--button-size); }
+.state-toggle.state-toggle { color: var(--text); }
+.state-toggle .density-upper-row, .state-toggle .density-lower-row { transition: transform 220ms ease; }
+.state-toggle[data-compact=true] .density-upper-row { transform: translateY(-2px); }
+.state-toggle[data-compact=true] .density-lower-row { transform: translateY(2px); }
+@media (prefers-reduced-motion: reduce) {
+  .state-toggle .icon :is(path, g) { transition: none; }
+}
 .glass { background: var(--glass-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
 .primary { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
 .primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
@@ -113,7 +120,7 @@ button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible {
 .frame-time { flex: 0 0 auto; min-width: calc(var(--frame-position-chars, 9) * 1ch); padding: 0; border: 0; background: transparent; font: var(--text-xs)/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--viewport-muted); white-space: nowrap; }
 .file-button { display: inline-flex; align-items: center; justify-content: center; width: var(--control-small-height); height: var(--control-small-height); color: var(--viewport-muted); cursor: pointer; }
 .file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
-.frame-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.frame-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
 .file-drop-feedback { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; pointer-events: none; background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .file-drop-feedback * { pointer-events: none; }
 .file-drop-bubble { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: var(--control-gap); min-height: var(--control-height); max-width: 100%; padding: var(--tool-inset) var(--control-padding-inline); border-radius: var(--radius-control); background: var(--surface); color: var(--accent); text-align: center; }

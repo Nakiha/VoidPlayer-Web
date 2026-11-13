@@ -17,11 +17,11 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         if (input === 'local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir, 'viewport.mp4'));
         else await call('load_library_item', { slot: 'A', id: library.entries.find(entry => entry.name === 'viewport.mp4').id });
         await stable(); await selectDiagrams(page, 'overview');
-        assert.equal((await call('export_workspace')).layout.analysisView.view.end, 10000000, 'a fresh long source starts with ten seconds');
+        assert.equal((await call('get_uri_state')).layout.analysisView.view.end, 10000000, 'a fresh long source starts with ten seconds');
         const playback = { positionUs: (await call('get_review_session')).positionUs };
         const editWindow = async (start, end) => {
           await openRangeEditor(page);
-          const current = (await call('export_workspace')).layout.analysisView.view;
+          const current = (await call('get_uri_state')).layout.analysisView.view;
           const edges = start * 1000000 < current.end ? [['start', start], ['end', end]] : [['end', end], ['start', start]];
           for (const [edge, seconds] of edges) {
             await page.locator(`#analysis-range-time-${edge}`).press('Enter');
@@ -35,7 +35,7 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
             const state = window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' });
             return state.state === 'ready' && state.stream?.window?.startUs === start * 1000000 && state.stream.window.endUs === end * 1000000;
           }, { start, end }).catch(async error => {
-            console.error('Viewport did not settle', { input, start, end, state: await call('get_bitstream_analysis_state', { slot: 'A' }), view: (await call('export_workspace')).layout.analysisView.view });
+            console.error('Viewport did not settle', { input, start, end, state: await call('get_bitstream_analysis_state', { slot: 'A' }), view: (await call('get_uri_state')).layout.analysisView.view });
             throw error;
           });
           const state = await call('get_bitstream_analysis_state', { slot: 'A' });
@@ -62,7 +62,7 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         await selectDiagrams(page, 'overview');
         // New files only fill empty slots; a fresh scene initializes ten seconds again.
         await page.locator('[data-seg="full"]').click();
-        assert.equal((await call('export_workspace')).layout.analysisView.view, null);
+        assert.equal((await call('get_uri_state')).layout.analysisView.view, null);
         const existingId = (await call('get_review_session')).tracks[0].id;
         if (input === 'local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir, 'viewport-next.mp4'));
         else {
@@ -71,19 +71,19 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         }
         await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(track => track.slot === 'B' && track.name.endsWith('viewport-next.mp4')));
         assert.equal((await call('get_review_session')).tracks.find(track => track.slot === 'A').id, existingId);
-        assert.equal((await call('export_workspace')).layout.analysisView.view, null, 'adding a peer preserves the chosen full-film view');
+        assert.equal((await call('get_uri_state')).layout.analysisView.view, null, 'adding a peer preserves the chosen full-film view');
         await call('remove_review_track', { slot: 'A' }); await call('remove_review_track', { slot: 'B' });
         if (input === 'local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir, 'viewport-next.mp4'));
         else await call('load_library_item', { slot: 'A', id: library.entries.find(entry => entry.name === 'viewport-next.mp4').id });
         await stable();
-        assert.equal((await call('export_workspace')).layout.analysisView.view.end, 10000000, 'a fresh scene never silently switches to full-film analysis');
+        assert.equal((await call('get_uri_state')).layout.analysisView.view.end, 10000000, 'a fresh scene never silently switches to full-film analysis');
         if (input === 'library') {
-          const saved = await call('export_workspace');
+          const saved = await call('get_uri_state');
           saved.layout.analysisView.view = { start: 4000000, end: 5000000 };
-          await call('import_workspace', { document: saved });
-          assert.deepEqual((await call('export_workspace')).layout.analysisView.view, saved.layout.analysisView.view, 'an explicit workspace range takes priority over the default');
+          await call('apply_uri_state', { state: saved });
+          assert.deepEqual((await call('get_uri_state')).layout.analysisView.view, saved.layout.analysisView.view, 'an explicit workspace range takes priority over the default');
           await call('load_library_item', { slot: 'B', id: library.entries.find(entry => entry.name === 'viewport.mp4').id });
-          assert.deepEqual((await call('export_workspace')).layout.analysisView.view, saved.layout.analysisView.view, 'adding a peer preserves the chosen comparison window');
+          assert.deepEqual((await call('get_uri_state')).layout.analysisView.view, saved.layout.analysisView.view, 'adding a peer preserves the chosen comparison window');
           await call('remove_review_track', { slot: 'B' });
         }
         console.log(`PASS ${engine}/${input}: cold GOP coverage, cancellation and ten-second fresh-source range`);
@@ -139,16 +139,16 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         const navigation=page.locator('#analysis-range-axis'),bounds=await navigation.boundingBox();
         const domain=await navigation.evaluate(e=>({start:+e.dataset.domainStart,end:+e.dataset.domainEnd}));
         const target=7_000_000,x=bounds.x+10+(target-domain.start)/(domain.end-domain.start)*(bounds.width-20);
-        const view=(await call('export_workspace')).layout.analysisView.view;
+        const view=(await call('get_uri_state')).layout.analysisView.view;
         await page.mouse.click(x,bounds.y+3);
         await page.waitForFunction(t=>Math.abs(window.voidPlayer.getState().positionUs-t)<100_000,target);
-        assert.deepEqual((await call('export_workspace')).layout.analysisView.view,view,'rail seek keeps the chart viewport');
+        assert.deepEqual((await call('get_uri_state')).layout.analysisView.view,view,'rail seek keeps the chart viewport');
         assert.equal(await page.locator('.analysis-range-playhead').isVisible(),true,'current position remains visible outside the zoomed range');
         const position=(await call('get_review_session')).positionUs;
-        const beforeOutsideZoom=(await call('export_workspace')).layout.analysisView.view;
+        const beforeOutsideZoom=(await call('get_uri_state')).layout.analysisView.view;
         await zoomIn.click();
         await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span/2)<=2;},beforeOutsideZoom.end-beforeOutsideZoom.start);
-        const outsideZoom=(await call('export_workspace')).layout.analysisView.view;
+        const outsideZoom=(await call('get_uri_state')).layout.analysisView.view;
         assert.ok(Math.abs(outsideZoom.start+outsideZoom.end-beforeOutsideZoom.start-beforeOutsideZoom.end)<=2,'zoom uses the viewport centre when the playhead is outside');
         await zoomOut.click();
         await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span)<=2;},beforeOutsideZoom.end-beforeOutsideZoom.start);
@@ -160,7 +160,7 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         await page.mouse.move(box.x+box.width/2+20,box.y+1,{steps:5});await page.mouse.up();
         await page.waitForFunction(s=>+document.querySelector('#analysis-shared-axis').dataset.axisStart!==s,view.start);
         assert.equal((await call('get_review_session')).positionUs,position,'window pan does not seek');
-        const moved=(await call('export_workspace')).layout.analysisView.view;
+        const moved=(await call('get_uri_state')).layout.analysisView.view;
         assert.equal(moved.end-moved.start,view.end-view.start,'window pan preserves zoom');
         await start.hover();assert.equal(await page.locator('#analysis-window-preview').count(),0,'range navigation has no hover time bubble');
         assert.equal(await page.locator('.analysis-range-time').count(),4,'range times include a separate hover readout');
@@ -222,7 +222,7 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         await endInput.fill('00:04.000');
         await endInput.press('Enter');
         await page.waitForFunction(()=>document.querySelector('#analysis-range-trigger span').textContent.includes('00:04.000'));
-        assert.deepEqual((await call('export_workspace')).layout.analysisView.view,{start:2_000_000,end:4_000_000});
+        assert.deepEqual((await call('get_uri_state')).layout.analysisView.view,{start:2_000_000,end:4_000_000});
         assert.equal((await call('get_review_session')).positionUs,seekBeforeEdit,'editing chart range does not seek');
         assert.equal(await page.locator('#analysis-range-editor').evaluate(e=>e.matches(':popover-open')),true,'committing a time keeps the editor open for the next edit');
         assert.match(await page.locator('#analysis-range-trigger').innerText(),/00:02.000.*00:04.000/);

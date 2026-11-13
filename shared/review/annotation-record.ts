@@ -21,11 +21,13 @@ export function parseAnnotationDocument(value: unknown): AnnotationDocument {
  * Local file IDs are deliberately not guessed from filename/size/mtime. */
 export function annotationMediaKey(media: MediaInfo) {
   const version = referenceVersion(media.source?.url);
-  return media.source && version ? JSON.stringify([media.source.id, version]) : `local:${media.id}`;
+  return media.source && version ? JSON.stringify([new URL(media.source.url, 'http://localhost/').origin, media.source.id, version]) : `local:${media.id}`;
 }
 export function annotationAnchor(document: AnnotationDocument) {
   const media = document.media.find(item => item.id === document.mark.mediaId)!;
-  return JSON.stringify([annotationMediaKey(media), document.mark.frame]);
+  const version = referenceVersion(media.source?.url);
+  // The enclosing target validates namespace. Same-service aliases may change the URL Origin.
+  return JSON.stringify([media.source && version ? [media.source.id, version] : ['local', media.id], document.mark.frame]);
 }
 
 /** A regular workspace backup: imported annotations stay local until explicitly published. */

@@ -31,6 +31,7 @@ export function installAnalysisGestures(options: {
   updateInspection(x: number, y: number): void; renderFloat(snapshot: InspectionState | null, x: number | null): void;
   refreshOverlay(): void; publishTestHook(): void; pickAt(x: number, y: number): AnalysisGlyph | null;
   pinInspection(target: DirectTarget | null): void; unpinInspection(focus?: boolean): void;
+  curveTargetAt?(x: number, y: number, snapshot: InspectionState): InspectionState['tracks'][number] | null;
 }) {
   const { signal, canvas, session, act, live, hoverEl, inspection, scene,
     setView, render, renderRubber, positionHover, updateInspection, renderFloat, refreshOverlay,
@@ -172,6 +173,18 @@ export function installAnalysisGestures(options: {
             }
           }, 'analysis.seek', { slot: g.slot, sampleId: peakId });
         }
+      }
+    } else if (!picked) {
+      // Curves have no bar glyph. Resolve through the same reference frame as
+      // the card; the axis timestamp itself may be DTS or lie between frames.
+      const snapshot = inspection.state.pinned ?? inspectAt(Math.round(canvasT(event.clientX)), null);
+      const target = options.curveTargetAt?.(event.clientX, event.clientY, snapshot);
+      if (target?.reference) {
+        const resolved = session.resolveAnalysisSeek(target.slot, { effectivePtsUs: target.reference.sample.effectivePtsUs });
+        if ('sessionPtsUs' in resolved) {
+          inspection.state.kbTrack = target.slot;
+          void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: target.slot, sampleId: target.reference.sample.sampleId });
+        } else live.textContent = t(msg('analysis.seekReason', '轨道 {slot}：{reason}'), { slot: target.slot, reason: resolved.reason });
       }
     }
     // 单击不重绘底图；高亮随 hover 已在覆盖层更新。

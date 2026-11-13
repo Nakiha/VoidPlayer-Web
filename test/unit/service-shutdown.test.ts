@@ -65,19 +65,19 @@ test('shared database waits for external owners; success releases once and uncer
   }
 });
 test('admin cleanup attempts every independent owner even when one close fails',async()=>{
-  for(const failed of ['measurements','analysisInstance','workspaces','annotations']){
-    const calls:string[]=[];const admin=Object.assign(Object.create(AdminController.prototype),Object.fromEntries(['measurements','analysisInstance','workspaces','annotations'].map(name=>[name,{close(){calls.push(name);if(name===failed)throw Error(name);}}]))) as AdminController;
-    const close=admin.close();assert.equal(admin.close(),close);await assert.rejects(close);assert.deepEqual(new Set(calls),new Set(['measurements','analysisInstance','workspaces','annotations']));
+  for(const failed of ['measurements','analysisInstance','users','annotations']){
+    const calls:string[]=[];const admin=Object.assign(Object.create(AdminController.prototype),Object.fromEntries(['measurements','analysisInstance','users','annotations'].map(name=>[name,{close(){calls.push(name);if(name===failed)throw Error(name);}}]))) as AdminController;
+    const close=admin.close();assert.equal(admin.close(),close);await assert.rejects(close);assert.deepEqual(new Set(calls),new Set(['measurements','analysisInstance','users','annotations']));
   }
 });
 test('admin drains settings that create analysis during shutdown before releasing shared ownership',async()=>{
   for(const failed of [false,true]){
     let release!:()=>void;const gate=new Promise<void>(r=>release=r),calls:string[]=[];
-    const admin=Object.assign(Object.create(AdminController.prototype),Object.fromEntries(['measurements','workspaces','annotations'].map(name=>[name,{close(){calls.push(name);}}]))) as any;
+    const admin=Object.assign(Object.create(AdminController.prototype),Object.fromEntries(['measurements','users','annotations'].map(name=>[name,{close(){calls.push(name);}}]))) as any;
     admin.mutation=gate.then(()=>{admin.analysisInstance={close(){calls.push('late analysis');}};if(failed)throw Error('settings failed after creating analysis');});
     let settled=false;const closed=admin.close().then(()=>{settled=true;});
     assert.throws(()=>admin.saveRoots(null),/服务正在关闭/);assert.throws(()=>admin.saveAnalysisSettings(null),/服务正在关闭/);
-    await new Promise(r=>setImmediate(r));assert.equal(settled,false);assert.deepEqual(new Set(calls),new Set(['measurements','workspaces','annotations']));
+    await new Promise(r=>setImmediate(r));assert.equal(settled,false);assert.deepEqual(new Set(calls),new Set(['measurements','users','annotations']));
     release();await closed;assert.equal(settled,true);assert.equal(calls.filter(x=>x==='late analysis').length,1);
   }
 });

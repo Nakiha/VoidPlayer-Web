@@ -185,6 +185,35 @@ test('estimateBaseBucketWidth 含空桶仍稳定', () => {
 });
 
 import { createInspectionController } from '../../src/ui/analysis/inspection-state.ts';
+import { pickLoadCurve } from '../../src/ui/analysis/chart-overlay.ts';
+import type { CanvasModel } from '../../src/ui/analysis/canvas.ts';
+
+test('load-curve clicks select the card reference on the nearest track, including real DTS mapping', () => {
+  const a = makeResult([{ t: 100_000, size: 1000 }, { t: 200_000, size: 1000 }], [{ t: 150_000, mbps: 3 }]);
+  const b = makeResult([{ t: 100_000, size: 2000 }, { t: 200_000, size: 2000 }], [{ t: 150_000, mbps: 8 }]);
+  const controller = createInspectionController(() => ({ axis: 'pts', windowUs: 250_000, stepUs: 100,
+    selected: [{ slot: 'A' }, { slot: 'B' }], results: new Map([['A', a], ['B', b]]),
+    caps: new Map([['A', a.capability], ['B', b.capability]]), domain: { start: 0, end: 2_000_000 } }));
+  const snapshot = controller.inspectAt(150_000, null);
+  const model = { width: 500, height: 108, showTimeAxis: false, showBitrate: true, showSize: false, yMaxBitrate: 10,
+    tracks: [{ slot: 'A' }, { slot: 'B' }], loadMetrics: ['bitrate'] } as CanvasModel;
+  assert.equal(pickLoadCurve(model, snapshot, 200, 24, () => null)?.slot, 'B');
+  const target = pickLoadCurve(model, snapshot, 200, 74, () => null);
+  assert.equal(target?.slot, 'A');
+  assert.equal(target?.reference, snapshot.tracks[0].reference, 'exactly the frame displayed by the card');
+  assert.equal(pickLoadCurve(model, snapshot, 10, 74, () => null), null, 'axis labels are not seek targets');
+  assert.equal(pickLoadCurve(model, snapshot, 200, 109, () => null), null, 'outside the plot is not a seek target');
+  const missing = controller.inspectAt(1_800_000, null);
+  assert.equal(pickLoadCurve(model, missing, 200, 74, () => null), null, 'no reference must not invent a frame');
+  model.loadMetrics = ['qp'];
+  assert.equal(pickLoadCurve(model, snapshot, 200, 24, slot => slot === 'A' ? 40 : 10)?.slot, 'A');
+  const reordered = structuredClone(snapshot);
+  reordered.axis = 'dts';
+  reordered.tracks[0].reference!.axisUs = 50_000;
+  assert.equal(pickLoadCurve(model, reordered, 200, 24, () => 40)?.reference?.sample.effectivePtsUs, 100_000,
+    'DTS axis reference retains its distinct presentation seek time');
+});
+
 test('inspection controller preserves a directly hit duplicate timestamp and frozen identity until invalidated', () => {
   const result = makeResult([{ t: 100_000, size: 10 }, { t: 100_000, size: 20 }, { t: 200_000, size: 30 }]);
   const results = new Map<Slot, AnalysisResult>([['A',result]]);

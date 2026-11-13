@@ -92,20 +92,5 @@ export async function checkPreparationReceipts(browser,f){
 
 export async function checkCandidateWorkspaceRoundtrip(browser,f,annotation){
  const {Viewport}=await import('../../shared/presentation/viewport.ts');
- const {parseWorkspace}=await import('../../shared/review/workspace-file.ts');
- const mark=annotation.document.mark,media=annotation.document.media;
- const tracks=[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0},...mark.comparison.map(c=>({slot:c.slot,mediaId:c.mediaId,offsetUs:0}))];
- const document=parseWorkspace({schema:'voidplayer-workspace',version:3,name:'Candidate roundtrip',generatedAt:new Date().toISOString(),serverUrl:f.base,positionUs:0,tracks,media,marks:[mark],viewport:new Viewport().snapshot()});
- const shared=await f.json('/api/workspaces/share',{name:document.name,document},undefined,{'x-voidplayer-action':'workspace'});
- const first=await f.json('/api/workspaces/'+shared.id);assert.equal(first.document.version,1);assert.equal(first.document.marks.length,0);parseWorkspace(first.document);
- const seeds=await f.json('/api/annotations/spaces/'+first.space);assert.equal(seeds.entries.length,1);assert.ok(seeds.entries[0].document.mark.qualityCandidate);
- const c=await ownedContext(browser,f),p=await c.newPage();
- try{
-  await p.goto(f.base+'/?workspace='+shared.id);
-  await p.waitForFunction(()=>{const s=window.voidPlayer?.getState();if(s?.tracks.some(t=>t.failure))throw Error(JSON.stringify(s.tracks));return s&&!s.busy&&s.tracks.length===2&&s.tracks.every(t=>t.frame)&&s.marks.length===1;});
-  const updated=await p.evaluate(async({id,revision,document})=>{const r=await fetch('/api/workspaces/'+id,{method:'PUT',headers:{'content-type':'application/json','x-voidplayer-action':'workspace','if-match':JSON.stringify(String(revision))},body:JSON.stringify({name:'Updated candidate workspace',document})});return {status:r.status,value:await r.json()};},{id:shared.id,revision:first.revision,document:first.document});
-  assert.equal(updated.status,200,JSON.stringify(updated));parseWorkspace((await f.json('/api/workspaces/'+shared.id)).document);
-  await p.reload();await p.waitForFunction(()=>{const s=window.voidPlayer?.getState();return s&&!s.busy&&s.tracks.length===2&&s.marks.length===1;});
-  return {baseVersion:1,seedRetained:true,realPlayerRestored:true,savedAndReopened:true};
- }finally{await c.close();}
+ throw new Error('This historical candidate-workspace diagnostic was retired with workspace storage; use the URI state suite.');
 }

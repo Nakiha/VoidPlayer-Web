@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { axisOf, panTimeRange, projectToSession, zoomTimeRange } from '../../shared/analysis/metadata/projection.ts';
+import { centerTimeRange, axisOf, panTimeRange, projectToSession, zoomTimeRange } from '../../shared/analysis/metadata/projection.ts';
 import type { AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 
 const sample = (id: string, ordinal: number, pts: number | null, dts: number | null = pts): AnalysisSample => ({
@@ -42,4 +42,14 @@ test('overview zoom anchors to the displayed full-domain time after prior zoom',
   const { zoomOverviewRange } = await import('../../shared/analysis/metadata/projection.ts');
   const next = zoomOverviewRange({ start: 200, end: 400 }, { start: 0, end: 1000 }, 0.75, 0.5, 10);
   assert.deepEqual(next, { start: 700, end: 800 });
+});
+
+
+test('locating a frame preserves span while centering or stopping at a domain edge', () => {
+  const range = { start: 100, end: 301 }, domain = { start: -50, end: 1000 };
+  for (const [center, start] of [[500, 400], [0, -50], [1000, 799]]) {
+    const next = centerTimeRange(range, center, domain);
+    assert.deepEqual(next, { start, end: start + 201 });
+    assert.equal(next.end - next.start, range.end - range.start);
+  }
 });

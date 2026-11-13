@@ -345,6 +345,7 @@ try {
     return item?.querySelector('.st-num:not(:disabled)');
   });
   await page.setViewportSize({ width: 825, height: 800 });
+  await settleAppearance(page);
   const statusBefore = await frameNumber.evaluate(button => ({
     number: button.getBoundingClientRect().width,
     item: button.closest('.st-item').getBoundingClientRect().width,
@@ -388,7 +389,7 @@ try {
   await decodeInput.fill(String(decodeTarget.number)); await decodeInput.press('Enter');
   await page.waitForFunction(expected => window.voidPlayer.getState().tracks.find(track => track.slot === 'B')?.frame?.ptsUs === expected, decodeTarget.target);
   await page.waitForFunction(number => [...document.querySelectorAll('#analysis-status-items .st-item')].find(item => item.querySelector('.st-slot')?.textContent === 'B')?.querySelector('.st-num')?.textContent === '#' + number, decodeTarget.number);
-  const unifiedSnapshot = await page.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'export_workspace').execute({}));
+  const unifiedSnapshot = await page.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_uri_state').execute({}));
   assert.equal(unifiedSnapshot.layout.analysisView.axis, 'dts');
   assert.equal(unifiedSnapshot.layout.analysisView.numAxis, 'dts');
   await page.locator('#analysis-axis [data-axis="pts"]').click();
@@ -563,7 +564,7 @@ try {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
+  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'get_uri_state').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
 
   // 放大到逐样本后，单击指定 B 柱：必须命中 B 的 sampleId 与可信展示 PTS。
   // 固定夹具、固定目标、固定操作；失败保留现场并直接断言，不换目标重试。
@@ -605,14 +606,14 @@ try {
   assert.equal(statePos, clicked.axisUs, `position=${statePos} axis=${clicked.axisUs}`);
 
   await page.locator('#analysis-canvas').dblclick();
-  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({})).layout.analysisView.view === null, undefined, { timeout: 15000 });
+  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'get_uri_state').execute({})).layout.analysisView.view === null, undefined, { timeout: 15000 });
 
   // 滚轮平移：先框选放大，再滚轮，同一像素下的时间变化，且跟随关闭。
   await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
+  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'get_uri_state').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5);
   await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 15000 });
   const t0 = await page.locator('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])').first().textContent();
@@ -764,10 +765,10 @@ try {
   await page.mouse.down();
   await page.mouse.move(box2.x + box2.width * 0.55, box2.y + box2.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
+  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'get_uri_state').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
   await toggleSize(page);
   const exported = await page.evaluate(async () => {
-    const t = window.voidPlayer.tools.find(t => t.name === 'export_workspace');
+    const t = window.voidPlayer.tools.find(t => t.name === 'get_uri_state');
     return await t.execute({});
   });
   assert.ok(exported.layout.analysisView, '导出应含分析面板状态');
@@ -780,7 +781,7 @@ try {
   await page.locator('#analysis-canvas').dblclick();
   await toggleSize(page);
   await page.evaluate(async (doc) => {
-    await window.voidPlayer.tools.find(t => t.name === 'import_workspace').execute({ document: doc });
+    await window.voidPlayer.tools.find(t => t.name === 'apply_uri_state').execute({ state: doc });
   }, exported);
   await page.waitForFunction(() => !document.getElementById('analysis-panel').hidden, undefined, { timeout: 60000 });
   await page.waitForFunction(() => !document.getElementById('analysis-canvas').hidden, undefined, { timeout: 60000 }).catch(async () => {

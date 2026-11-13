@@ -155,7 +155,7 @@ export class MediaLibraryIndex {
     const changes = this.store.db.prepare('SELECT total_changes() AS changes').get()!.changes;
     const external = this.store.db.prepare('PRAGMA data_version').get();
     return `"browse-${createHash('sha256').update(JSON.stringify([this.browseEpoch, revision, changes, external,
-      query.rootId ?? '', directory, query.search ?? '', !!query.recursive, limit, offset, this.thumbnails.epoch, this.status()])).digest('base64url')}"`;
+      query.rootId ?? '', directory, query.search ?? '', !!query.recursive, limit, offset, this.thumbnails.epoch, this.thumbnails.revision, this.status()])).digest('base64url')}"`;
   }
   browse(query: BrowseQuery = {}) {
     const { revision, limit, offset, directory } = this.browseContext(query);
@@ -177,7 +177,7 @@ export class MediaLibraryIndex {
     });
     // Folders have their own page so a large directory cannot bypass the media limit.
     const folders = query.recursive ? [] : this.store.db.prepare(`SELECT d.root_id AS rootId,d.path,d.name FROM directories d JOIN roots r ON r.id=d.root_id WHERE r.active=1 AND d.path!='' AND d.parent=? ${query.rootId ? 'AND d.root_id=?' : ''} ${query.search ? 'AND instr(lower(d.name),lower(?))>0' : ''} ORDER BY d.name COLLATE NOCASE,d.path,d.root_id LIMIT ? OFFSET ?`).all(directory, ...(query.rootId ? [query.rootId] : []), ...(query.search ? [query.search.slice(0, 300)] : []), limit + 1, offset);
-    return { entries, directories: folders.slice(0, limit), moreDirectories: folders.length > limit, total, offset, limit, revision, nextOffset: offset + limit < total || folders.length > limit ? offset + limit : null, thumbnailEpoch: this.thumbnails.epoch, ...this.status() };
+    return { entries, directories: folders.slice(0, limit), moreDirectories: folders.length > limit, total, offset, limit, revision, nextOffset: offset + limit < total || folders.length > limit ? offset + limit : null, thumbnailEpoch: this.thumbnails.epoch, thumbnailRevision: `${this.browseEpoch}:${this.thumbnails.revision}`, ...this.status() };
   }
   async list(force = false): Promise<Library> {
     if (force) await this.refresh();
@@ -511,7 +511,7 @@ export class MediaLibraryIndex {
     try {
       thumbnail = entry.version ? this.thumbnails.status(entry.id, entry.version, THUMB_RECIPE_VERSION).ready : false;
     } catch { /* Thumbnail presence is advisory; metadata must still load. */ }
-    return { ...entry, thumbnail, thumbnailEpoch: this.thumbnails.epoch };
+    return { ...entry, thumbnail, thumbnailEpoch: this.thumbnails.epoch, thumbnailRevision: `${this.browseEpoch}:${this.thumbnails.revision}` };
   }
   fingerprint(id:string,version?:string) {
     const row=this.store.find(id);

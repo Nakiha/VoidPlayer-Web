@@ -5,10 +5,9 @@ import { analysisSettingsShell } from './analysis.ts';
 import { t, th, msg } from '../i18n.ts';
 import { annotationAdminShell } from './annotations.ts';
 import { cacheShell } from './caches.ts';
-import { workspaceAdminShell } from './workspaces.ts';
 import { measurementShell } from './measurement.ts';
 import { icon } from '../ui/icons.ts';
-export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'grid'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'film'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'database'], ['workspaces', t(msg("admin.wsTitle", "工作区")), 'stack'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['logs', t(msg("admin.logsTitle", "日志")), 'fileText'], ['measurements', t(msg("admin.measureTitle", "测速")), 'gauge'], ['preferences', t(msg('admin.preferencesTitle', '首选项')), 'settings']] as const;
+export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'grid'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'film'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'database'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['logs', t(msg("admin.logsTitle", "日志")), 'fileText'], ['measurements', t(msg("admin.measureTitle", "测速")), 'gauge'], ['preferences', t(msg('admin.preferencesTitle', '首选项')), 'settings']] as const;
 export function adminShell() {
   return `<div class="admin-layout">
     <nav class="admin-navigation category-navigation" aria-label="${th(msg("admin.navCategory", "管理分类"))}">
@@ -19,7 +18,7 @@ export function adminShell() {
     <main class="admin-content">
       ${overviewShell()}
       ${cacheShell()}
-      ${workspaceAdminShell()}
+
       ${annotationAdminShell()}
       ${measurementShell()}
       <section id="pane-preferences" hidden><header class="admin-heading"><h1>${th(msg('admin.preferencesTitle', '首选项'))}</h1></header>

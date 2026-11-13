@@ -3,11 +3,14 @@ import { agentErrorBody } from '../agent-errors.ts';
 import { serverLog } from '../logging/logger.ts';
 import { adminErrorBody } from '../admin-error.ts';
 import type { IncomingMessage, ServerResponse } from '../http.ts';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { requestAuthority } from '../http.ts';
+import { encodeUriState, decodeUriState } from '../uri-state.ts';
+import { parseAnnotationDocument } from '../../shared/review/annotation-record.ts';
+import { annotationDocumentTarget } from '../../shared/review/annotation-target.ts';
 import { AdminError, adminWriteAllowed, readAdminJson } from '../admin.ts';
 import type { AdminController } from '../admin.ts';
 import { ANNOTATION_BYTES } from '../annotations.ts';
-import { WORKSPACE_BYTES } from '../workspaces.ts';
 import { sendJson } from '../http-utils.ts';
 import { sendSnapshot } from '../conditional.ts';
 import { guestActor, identityCookie } from '../identity.ts';
@@ -21,13 +24,28 @@ function logStateFailure(ctx: RouteContext, req: IncomingMessage, url: URL, erro
     clientIp: clientIp(req), method: req.method, url: url.pathname });
 }
 
-/** Identity, annotations, shares, workspaces and admin endpoints. Returns true when handled. */
+/** Identity, media annotations, URI codec and admin endpoints. Returns true when handled. */
 export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
   const { options, library } = ctx;
   const agentFailure = (status: number, code: string, message: string) => sendJson(res, status, agentErrorBody(new AdminError(status, message, code), ctx.requestId));
+  if (url.pathname === '/api/uri/encode' || url.pathname === '/api/uri/decode') {
+    try {
+      if (url.pathname.endsWith('/encode') && req.method === 'POST') {
+        if (!adminWriteAllowed(req, 'uri')) throw new AdminError(403, '生成分享链接需要同源请求。');
+        const body = await readAdminJson(req, 65536) as { state?: unknown };
+        const token = encodeUriState(body?.state);
+        sendJson(res, 200, { abi: 1, token, url: '/?s=' + token });
+      } else if (url.pathname.endsWith('/decode') && req.method === 'GET') {
+        sendJson(res, 200, { abi: 1, state: decodeUriState(url.searchParams.get('s') ?? '') });
+      } else throw new AdminError(405, '不支持的 URI 操作。');
+    } catch (error) {
+      sendJson(res, error instanceof AdminError ? error.status : 400, agentErrorBody(error, ctx.requestId));
+    }
+    return true;
+  }
   if (url.pathname === '/api/users' && req.method === 'GET') {
     if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return true; }
-    sendJson(res, 200, { users: options.admin.workspaces.users() });
+    sendJson(res, 200, { users: options.admin.users.users() });
     return true;
   }
   if (url.pathname === '/api/identity' && req.method === 'POST') {
@@ -40,19 +58,19 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         if (ctx.actor && ctx.actor.kind !== 'guest') throw new AdminError(409, '已命名用户不能切换为匿名身份。');
         ctx.actor = ctx.actor?.kind === 'guest' ? ctx.actor : guestActor(`guest-${randomUUID()}`)!;
       } else if (body && typeof body.id === 'string' && body.name === undefined) {
-        const selected = options.admin.workspaces.user(body.id);
+        const selected = options.admin.users.user(body.id);
         if (!selected) throw new AdminError(404, '该用户已不存在，请刷新用户列表。');
         if (ctx.actor && ctx.actor.kind !== 'guest' && selected.kind === 'guest') throw new AdminError(409, '已命名用户不能切换为匿名身份。');
         ctx.actor = selected;
       } else {
         if (!body || typeof body.name !== 'string' || body.id !== undefined) throw new AdminError(400, '请填写用户名。');
-        ctx.actor = options.admin.workspaces.identify(ctx.actor?.id, body.name, body.mode as 'rename' | 'create' | undefined);
+        ctx.actor = options.admin.users.identify(ctx.actor?.id, body.name, body.mode as 'rename' | 'create' | undefined);
       }
       res.setHeader('set-cookie', identityCookie(ctx.actor, encryptedRequest(req))); sendJson(res, 200, { actor: ctx.actor });
     } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, agentErrorBody(error, ctx.requestId)); }
     return true;
   }
-  if (url.pathname === '/api/annotations/spaces' || url.pathname.startsWith('/api/annotations/spaces/') || url.pathname.startsWith('/api/annotations/events/')) {
+  if (url.pathname === '/api/annotations/media' || url.pathname.startsWith('/api/annotations/media/') || url.pathname.startsWith('/api/annotations/events/')) {
     if (!options.admin) { agentFailure(503, 'storage-unavailable', '当前服务未提供标注存储。'); return true; }
     if (req.method !== 'GET' && !adminWriteAllowed(req, 'annotation')) { agentFailure(403, 'origin-required', '保存标注需要匹配的 Origin 与 X-VoidPlayer-Action: annotation。'); return true; }
     if (!ctx.actor && req.method !== 'GET') { agentFailure(409, 'identity-required', '请先选择用户或以访客继续。'); return true; }
@@ -61,20 +79,33 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
     try {
       const events = /^\/api\/annotations\/events\/([a-zA-Z0-9_-]{1,200})$/.exec(url.pathname);
       if (events && req.method === 'GET') {
+        if (!/^media-[0-9a-f]{64}$/.test(events[1])) throw new AdminError(400, '标注目标必须是片源版本。');
         const after = url.searchParams.get('after');
         if (after !== null && !/^\d+$/.test(after)) throw new AdminError(400, '操作同步位置无效。', 'invalid-event-cursor');
         sendJson(res, 200, store.events(events[1], after === null ? undefined : Number(after))); return true;
       }
-      if (url.pathname === '/api/annotations/spaces') {
+      if (url.pathname === '/api/annotations/media') {
         if (req.method === 'GET') { sendJson(res, 200, store.spaces()); return true; }
-        if (req.method === 'POST') { sendJson(res, 201, store.createSpace((await readAdminJson(req) as { name: unknown }).name)); return true; }
+
       }
-      const match = /^\/api\/annotations\/spaces\/([a-zA-Z0-9_-]{1,200})(?:\/([a-zA-Z0-9_-]{1,200}))?(?:\/(preview))?$/.exec(url.pathname);
+      const match = /^\/api\/annotations\/media\/([a-zA-Z0-9_-]{1,200})(?:\/([a-zA-Z0-9_-]{1,200}))?(?:\/(preview))?$/.exec(url.pathname);
       if (match) {
         const [, space, id, preview] = match;
+        if (!/^media-[0-9a-f]{64}$/.test(space)) throw new AdminError(400, '标注目标必须是片源版本。');
+
         if (!id && req.method === 'GET') { sendJson(res, 200, url.searchParams.has('list') ? store.list(space, url.searchParams.get('search') ?? '', url.searchParams.get('deleted') === '1', Number(url.searchParams.get('before') ?? Number.MAX_SAFE_INTEGER)) : { ...store.changes(space, Number(url.searchParams.get('after') ?? 0)), previewEpoch: store.previewEpoch }); return true; }
         if (!id && req.method === 'POST') {
-          sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), ctx.actor!, ctx.requestId)); return true;
+          const operation = await readAdminJson(req, ANNOTATION_BYTES) as { document?: unknown; action?: unknown };
+          if (operation.action === 'put') {
+            const base = (encryptedRequest(req) ? 'https://' : 'http://') + requestAuthority(req) + '/';
+            let document;
+            try { document = parseAnnotationDocument(operation.document); } catch (error) { throw new AdminError(400, (error as Error).message); }
+            operation.document = document;
+            let target: string;
+            try { target = await annotationDocumentTarget(document, base); } catch (error) { throw new AdminError(400, (error as Error).message); }
+            if (target !== space) throw new AdminError(409, '标注片源版本与目标不一致。', 'annotation-target-conflict');
+          }
+          sendJson(res, 200, store.mutate(space, operation, ctx.actor!, ctx.requestId)); return true;
         }
         if (id === 'previews' && req.method === 'DELETE') { sendJson(res, 200, store.clearPreviews(space)); return true; }
         if (id && preview) {
@@ -94,45 +125,6 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       }
       agentFailure(405, 'method-not-allowed', '不支持的标注操作。'); return true;
     } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, agentErrorBody(error, ctx.requestId)); return true; }
-  }
-  function seedWorkspace(id: string) {
-    const {record, seeds} = options.admin!.workspaces.sharedWorkspace(id);
-    if (!record.space) return;
-    const annotations = options.admin!.annotations;
-    annotations.ensureSpace(record.space, record.name);
-    for (const mark of seeds?.document.marks ?? []) {
-      const ids = new Set([mark.mediaId, ...mark.comparison.map(item => item.mediaId)]);
-      annotations.mutate(record.space, { operationId: `seed-${createHash('sha256').update(id + '/' + mark.id).digest('hex')}`, id: mark.id, revision: 0, action: 'put', document: { mark, media: seeds!.document.media.filter(media => ids.has(media.id)) } }, seeds!.actor);
-    }
-  }
-  if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
-    if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供工作区存储。' }); return true; }
-    if (req.method !== 'GET' && !adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, { error: '请从同源页面保存工作区。' }); return true; }
-    if (!ctx.actor && req.method !== 'GET') { sendJson(res, 409, { error: '请先选择用户或以访客继续。' }); return true; }
-    const workspaceActor = ctx.actor ?? { id: 'unselected', name: '访客' };
-    if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== workspaceActor.id) { sendJson(res, 409, { error: '用户已切换，请刷新工作区列表后重试。' }); return true; }
-    const store = options.admin.workspaces;
-    const id = /^\/api\/workspaces\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
-    try {
-      if (url.pathname === '/api/workspaces/share' && req.method === 'POST') {
-        const input=await readAdminJson(req,WORKSPACE_BYTES + 4096) as {id?: string};
-        const result=store.shareWorkspace(input?.id ?? randomUUID(),input,typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined,workspaceActor);
-        seedWorkspace(result.record.id);sendJson(res,201,result.record);return true;
-      }
-      if (url.pathname === '/api/workspaces') {
-        if (req.method === 'GET') {
-          sendJson(res, 200, store.list(workspaceActor, url.searchParams.get('all') === '1', url.searchParams.get('before') ?? '', url.searchParams.get('search') ?? '')); return true;
-        }
-        if (req.method === 'POST') { sendJson(res, 201, store.create(await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return true; }
-      }
-      if (id) {
-        if (req.method === 'GET') { const value = store.read(id, workspaceActor); res.setHeader('etag', `"${value.revision}"`); sendJson(res, 200, value); return true; }
-        const revision = typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined;
-        if (req.method === 'PUT') { sendJson(res, 200, store.update(id, revision, await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return true; }
-        if (req.method === 'DELETE') { sendJson(res, 200, store.remove(id, revision, workspaceActor)); return true; }
-      }
-      sendJson(res, 405, { error: '不支持的工作区操作。' }); return true;
-    } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); return true; }
   }
   if (url.pathname.startsWith('/api/admin/')) {
     if (!/^\/api\/admin\/(?:caches(?:\/[a-z-]+)?|measurements(?:\/[a-f0-9-]{36}(?:\/(?:transfer|finish))?)?|status|requests|analysis|roots|logs(?:\/[^/]+)?)$/.test(url.pathname)) return false;

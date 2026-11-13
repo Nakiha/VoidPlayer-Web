@@ -2,7 +2,7 @@
   "name": "voidplayer-web",
   "private": true,
   "license": "LGPL-2.1-or-later",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.ts",
@@ -91,7 +91,8 @@
     "check:boundaries": "node scripts/testing/module-boundaries.mjs",
     "check:shared": "tsc -p tsconfig.shared.json",
     "format:check": "node scripts/tools/development/format.mjs",
-    "check:environments": "tsc -p tsconfig.browser.json && tsc -p tsconfig.server.json"
+    "check:environments": "tsc -p tsconfig.browser.json && tsc -p tsconfig.server.json",
+    "test:uri:browser": "node scripts/run-tests.mjs --alias test:uri:browser"
   },
   "dependencies": {
     "@messageformat/runtime": "3.0.3",

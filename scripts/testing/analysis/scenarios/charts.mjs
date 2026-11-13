@@ -68,7 +68,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       assert.equal(warmWorkers.length, 0, 'covered navigation starts no local analysis worker');
       assert.equal(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).length, 0, 'covered navigation starts no remote analysis task');
       if (input === 'library') {
-        const workspace = await call('export_workspace');
+        const workspace = await call('get_uri_state');
         const freshContext = await context.browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 900 } });
         let fresh, statuses, freshEvidence;
         try {
@@ -82,7 +82,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
           await fresh.goto(context.url);
           await fresh.waitForFunction(() => !!window.voidPlayer?.tools);
           if (await fresh.locator('#identity-welcome').isVisible()) await fresh.locator('#identity-welcome button[type=submit]').click();
-          await fresh.evaluate(document => window.voidPlayer.importWorkspace(document), workspace);
+          await fresh.evaluate(document => window.voidPlayer.applyState(document), workspace);
           await fresh.waitForFunction(() => {
             const state = window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' });
             return state.state === 'ready' && state.stream?.pictures === 300;
@@ -176,7 +176,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
         assert.deepEqual(await axis(target), compared, 'all diagrams use exactly the same session-time viewport in both directions');
         if (input === 'library') await page.screenshot({ path: artifact(`overview-shared-${mode}.png`) });
       }
-      const saved = await call('export_workspace');
+      const saved = await call('get_uri_state');
       assert.deepEqual(saved.layout.analysisView.view, compared, 'shared viewport is saved with the workspace');
       await page.locator('[data-seg="full"]').click();
       await page.waitForFunction(() => { const c = document.querySelector('#analysis-canvas'); return +c.dataset.axisStart < 0 && +c.dataset.axisEnd === 10_000_000; });
@@ -274,7 +274,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       });
       await page.waitForFunction(before => +document.getElementById('bitstream-diagram-references').dataset.nodeRadius > before + 1, compactReferenceRadius);
       await page.getByRole('separator', { name: '调整码流分析高度', exact: true }).press('End');
-      const multiple = await call('export_workspace');
+      const multiple = await call('get_uri_state');
       const sharedAxis = page.locator('#analysis-shared-axis');
       // Stream identity, viewport wiring and workspace restoration run for
       // both inputs. Pointer/keyboard, theme and layout use the same DOM/model;
@@ -705,7 +705,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
         const shared = document.querySelector('#analysis-shared-axis').dataset;
         return [...document.querySelectorAll('#analysis-canvas, .bitstream-diagrams canvas')].every(c => c.dataset.axisStart === shared.viewStart && c.dataset.axisEnd === shared.viewEnd);
       });
-      const axisZoom = (await call('export_workspace')).layout.analysisView.view;
+      const axisZoom = (await call('get_uri_state')).layout.analysisView.view;
       assert.ok(Math.abs(axisZoom.end - axisZoom.start - (+sharedAxisGeometry.end - +sharedAxisGeometry.start) / 2) <= 2, 'pinching the shared axis zooms all plots together');
       assert.equal((await call('get_review_session')).positionUs, inspectionPosition, 'shared axis navigation does not seek playback');
       const navigator = page.locator('#analysis-range-axis');
@@ -719,10 +719,10 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       const navBox = await navigator.boundingBox();
       const targetTime = Math.round((axisDomains.full[1]-Math.max(0,axisDomains.full[0]))*.7);
       const targetX = navBox.x + 10 + (targetTime-axisDomains.full[0])/(axisDomains.full[1]-axisDomains.full[0])*(navBox.width-20);
-      const viewBeforeSeek = (await call('export_workspace')).layout.analysisView.view;
+      const viewBeforeSeek = (await call('get_uri_state')).layout.analysisView.view;
       await page.mouse.click(targetX, navBox.y+3);
       await page.waitForFunction(t => Math.abs(window.voidPlayer.getState().positionUs-t)<100_000,targetTime);
-      assert.deepEqual((await call('export_workspace')).layout.analysisView.view,viewBeforeSeek,'clicking the full-clip rail seeks without changing the chart window');
+      assert.deepEqual((await call('get_uri_state')).layout.analysisView.view,viewBeforeSeek,'clicking the full-clip rail seeks without changing the chart window');
       await page.waitForFunction(() => +document.querySelector('.analysis-range-playhead').dataset.positionUs===window.voidPlayer.getState().positionUs);
       const band = await page.locator('.analysis-window-band').boundingBox();
       assert.equal(await page.evaluate(({ x, y }) => document.elementFromPoint(x,y)?.classList.contains('analysis-window-band'),{x:band.x+band.width/2,y:band.y+1}),true,'the middle of a narrow selection remains available for panning');
@@ -735,7 +735,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       // The band drag above intentionally panned the charts: re-baseline here so
       // the wheel check below tests vertical scrolling, not the earlier pan.
       // (axisZoom predates the pan since 68031e7 and can never match again.)
-      multiple.layout.analysisView.view = (await call('export_workspace')).layout.analysisView.view;
+      multiple.layout.analysisView.view = (await call('get_uri_state')).layout.analysisView.view;
       if (input === 'library') await page.screenshot({ path: artifact('multiple-compact-charts.png') });
       // At the minimum panel height, readable minima take priority over fitting.
       await page.getByRole('separator', { name: '调整码流分析高度', exact: true }).press('Home');
@@ -767,7 +767,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       await page.mouse.move(scrollBox.x + scrollBox.width / 2, (visibleTop + visibleBottom) / 2);
       await page.mouse.wheel(0, 160);
       await phase('analysis-vertical-scroll', () => page.waitForFunction(before => document.querySelector('.analysis-charts').scrollTop > before, startScroll));
-      assert.deepEqual((await call('export_workspace')).layout.analysisView.view, multiple.layout.analysisView.view, 'vertical scrolling does not pan time');
+      assert.deepEqual((await call('get_uri_state')).layout.analysisView.view, multiple.layout.analysisView.view, 'vertical scrolling does not pan time');
       assert.deepEqual(await sharedAxis.boundingBox(), fixedAxis, 'shared axis stays visible while charts scroll');
       const previousViewport = page.viewportSize();
       await page.setViewportSize({ width: 821, height: 786 });
@@ -795,7 +795,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       // Restore the comparison viewport before testing workspace persistence.
       await page.locator('#bitstream-diagram-nalu-size').evaluate(c => { const r = c.getBoundingClientRect(); c.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -280 * Math.log(20), clientX: r.left + r.width / 2, bubbles: true, cancelable: true })); });
       // Save the resulting range rather than assuming the zoom anchor did not move.
-      multiple.layout.analysisView.view = (await call('export_workspace')).layout.analysisView.view;
+      multiple.layout.analysisView.view = (await call('get_uri_state')).layout.analysisView.view;
       await page.locator('#analysis-diagrams [data-value="bitrate"]').press('Enter');
       assert.equal(await page.locator('#analysis-diagrams [data-value="bitrate"]').getAttribute('aria-pressed'), 'false', 'Enter toggles a view off directly');
       await page.locator('#analysis-diagrams [data-value="bitrate"]').press('Enter');
@@ -809,18 +809,11 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       assert.equal(await page.locator('.analysis-no-charts').isVisible(), true);
       assert.equal(await page.locator('.analysis-linked-card:visible').count(), 0, 'empty selection hides the shared card');
       assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'chart selections and hover do not launch whole-source analysis');
-      if (input === 'local-file') {
-        const info = multiple.media.find(media => media.name === 'incremental.mp4' && !media.source);
-        const bytes = await readFile(path.join(limitsDir, 'incremental.mp4'));
-        await page.evaluate(async ({ document, info, bytes }) => {
-          const file = new File([Uint8Array.from(atob(bytes), c => c.charCodeAt(0))], info.name, { lastModified: info.lastModified });
-          await window.voidPlayer.importWorkspace(document, [file]);
-        }, { document: multiple, info, bytes: bytes.toString('base64') });
-      } else await call('import_workspace', { document: multiple });
+      await call('apply_uri_state', { state: multiple });
       assert.equal(await page.locator('.workspace-relink').count(), 0, 'workspace inputs restore without a relink dialog');
       await page.waitForFunction(() => document.querySelectorAll('.bitstream-diagrams canvas').length === 3);
-      assert.deepEqual((await call('export_workspace')).layout.analysisView.diagrams, choices);
-      assert.deepEqual((await call('export_workspace')).layout.analysisView.view, multiple.layout.analysisView.view);
+      assert.deepEqual((await call('get_uri_state')).layout.analysisView.diagrams, choices);
+      assert.deepEqual((await call('get_uri_state')).layout.analysisView.view, multiple.layout.analysisView.view);
       await selectDiagrams(page, 'overview');
       await page.waitForFunction(() => document.querySelector('#analysis-canvas').dataset.timeAxis === 'false');
       assert.equal(await sharedAxis.isVisible(), true, 'overview alone retains the fixed panel axis');

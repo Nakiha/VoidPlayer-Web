@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { WorkspaceStore } from '../../server/workspaces.ts';
+import { UserStore } from '../../server/users.ts';
 import { openIndexDatabase } from '../../server/sqlite.ts';
 import { loadConfig } from '../../server/config.ts';
 import { startService } from '../../server/runtime.ts';
@@ -33,7 +33,7 @@ test('shared observer identity confirmation fences old reads, restores unchanged
 });
 
 test('user IDs survive rename, existing names switch without merging, normalized names stay unique', () => {
-  const store = new WorkspaceStore(':memory:');
+  const store = new UserStore(':memory:');
   try {
     const a = store.identify(undefined, '甲'), b = store.identify(undefined, '乙');
     assert.notEqual(a.id, b.id); assert.notEqual(a.name, b.name);
@@ -50,7 +50,7 @@ test('user IDs survive rename, existing names switch without merging, normalized
 });
 
 test('explicit rename and create never switch or rename another identity', () => {
-  const store = new WorkspaceStore(':memory:');
+  const store = new UserStore(':memory:');
   try {
     const a = store.identify(undefined, '甲'), b = store.identify(undefined, '乙');
     assert.throws(() => store.identify(a.id, '乙', 'rename'), /已被使用/);
@@ -63,20 +63,15 @@ test('explicit rename and create never switch or rename another identity', () =>
   } finally { store.close(); }
 });
 
-test('legacy owners migrate without changing IDs and new identities survive restart', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-users-'));
-  const file = path.join(root, 'workspaces.sqlite');
+test('user-only storage survives restart without creating a workspace table', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-users-')), file = path.join(root, 'users.sqlite');
   try {
-    let store = new WorkspaceStore(file); store.close();
+    let store = new UserStore(file); const actor = store.identify(undefined, '用户'); store.close();
+    store = new UserStore(file); assert.deepEqual(store.user(actor.id), actor); store.close();
     const db = openIndexDatabase(file);
-    db.exec("ALTER TABLE workspaces DROP COLUMN space; ALTER TABLE workspaces DROP COLUMN share_hash; ALTER TABLE workspaces DROP COLUMN share_seeds; DROP TABLE users; PRAGMA user_version=1; INSERT INTO workspaces VALUES('legacy','review','local','now','now','local',1,2,0,0,'{}')"); db.close();
-    store = new WorkspaceStore(file);
-    assert.deepEqual(store.user('local'), { id: 'local', name: 'local' });
-    const named = store.identify('local', '原来的用户'); const other = store.identify(undefined, '另一用户'); store.close();
-    store = new WorkspaceStore(file);
-    assert.deepEqual(store.user(named.id), named); assert.deepEqual(store.user(other.id), other);
-    assert.equal(store.list(named, false).entries[0].owner, 'local'); store.close();
-  } finally { await rm(root, { recursive: true, force: true }); }
+    assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row=>row.name), ['users']);
+    db.exec('PRAGMA user_version=99'); db.close(); assert.throws(()=>new UserStore(file), /更新/);
+  } finally { await rm(root,{recursive:true,force:true}); }
 });
 
 test('intranet HTTP explicitly chooses cookie identity, lists users and atomically resolves competing name claims', async () => {
@@ -91,7 +86,7 @@ test('intranet HTTP explicitly chooses cookie identity, lists users and atomical
       const response = await fetch(base + '/api/health');
       assert.equal((await response.json()).actor, null); assert.equal(response.headers.get('set-cookie'), null);
     }
-    for (const route of ['/api/workspaces', '/api/annotations/spaces', '/api/admin/status']) {
+    for (const route of ['/api/annotations/media', '/api/admin/status']) {
       const response = await fetch(base+route); assert.equal(response.status,200); assert.equal(response.headers.get('set-cookie'),null);
     }
     assert.deepEqual((await (await fetch(base+'/api/users')).json()).users,[]);
@@ -116,20 +111,7 @@ test('intranet HTTP explicitly chooses cookie identity, lists users and atomical
     assert.equal(byId.status, 200); assert.equal((await byId.json()).actor.name, '小明');
     assert.equal((await identify(cookie, '')).status, 400);
     assert.equal((await identify(cookie, 'bad', 'https://other.test')).status, 403);
-    assert.equal((await fetch(base + '/api/workspaces', { headers: { cookie, 'x-voidplayer-actor': next.id } })).status, 409);
+    assert.equal((await fetch(base + '/api/annotations/media', { headers: { cookie, 'x-voidplayer-actor': next.id } })).status, 409);
     assert.equal((await fetch(base + '/api/library/browse?recursive=1&limit=200')).status, 200);
   } finally { await service.close(); await rm(root, { recursive: true, force: true }); }
-});
-
-test('legacy generated users become visitors without deleting attribution; guest cookies never create rows', async()=>{
-  const root=await mkdtemp(path.join(os.tmpdir(),'vp-legacy-identity-')),file=path.join(root,'workspaces.sqlite');
-  try {
-    const db=openIndexDatabase(file);
-    db.exec("CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE); INSERT INTO users VALUES('old','用户-1234abcd'); PRAGMA user_version=2;"); db.close();
-    let store=new WorkspaceStore(file);
-    assert.deepEqual(store.users(),[]); assert.deepEqual(store.user('old'),{id:'old',name:'访客',kind:'guest'});
-    assert.throws(()=>store.identify(),/填写用户名/);
-    const named=store.identify('old','明确命名'); assert.equal(named.id,'old'); assert.deepEqual(store.users(),[named]);
-    store.close();store=new WorkspaceStore(file);assert.deepEqual(store.users(),[named]);store.close();
-  } finally {await rm(root,{recursive:true,force:true});}
 });

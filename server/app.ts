@@ -94,7 +94,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
     traffic.activeRequests++;
     const ctx: RouteContext = {
       options, library, requestId, reports, currentFrontend: releases && (() => releases.currentBuildId()),
-      actor: guestActor(browserUserId(req)) ?? options.admin?.workspaces.user(browserUserId(req)) ?? null,
+      actor: guestActor(browserUserId(req)) ?? options.admin?.users.user(browserUserId(req)) ?? null,
       adminExtra: { traffic, sockets, recentRequests },
     };
     const finish = () => {

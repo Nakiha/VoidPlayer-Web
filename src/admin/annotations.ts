@@ -2,7 +2,6 @@ import { recordBackButton, installRecordNavigation } from './presentation.ts';
 import { requestError } from './diagnostics.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
 import { formatDate, t, th, msg } from '../i18n.ts';
-import { annotationWorkspace } from '../../shared/review/annotation-record.ts';
 import { AnnotationClient } from '../review/annotation-client.ts';
 import type { AnnotationRecord } from '../../shared/review/annotation-record.ts';
 import { formatTime } from '../../shared/review/model.ts';
@@ -14,7 +13,7 @@ export function annotationAdminShell() {
   return `<section id="pane-annotations" hidden>
     <header class="admin-heading"><h1>${th(msg("admin.marksTab", "标注"))}</h1><button id="admin-annotations-refresh" class="icon-button" aria-label="${th(msg("admin.refreshMarks", "刷新标注"))}">${icon('refreshRegular')}</button></header>
     <div class="admin-records"><div class="admin-record-list">
-      <div class="admin-section-title"><h2>${th(msg("admin.reviewSpace", "评审空间"))}</h2><button id="admin-annotation-space" class="choice-trigger" aria-label="${th(msg("admin.reviewSpace", "评审空间"))}"></button></div>
+      <div class="admin-section-title"><h2>${th(msg('uriState.mediaVersion', '片源版本'))}</h2><button id="admin-annotation-space" class="choice-trigger" aria-label="${th(msg('uriState.mediaVersion', '片源版本'))}"></button></div>
       <div class="admin-panel admin-list-panel">
         <div class="admin-annotation-tabs" role="group" aria-label="${th(msg("admin.marksTab", "标注"))}"><button id="admin-annotations-active" aria-pressed="true">${th(msg("admin.marksTab", "标注"))}</button><button id="admin-annotations-trash" aria-pressed="false">${th(msg("admin.trashTab", "回收站"))}</button><span id="admin-annotation-count" class="muted"></span></div>
         <div class="admin-annotation-tools"><input id="admin-annotation-search" type="search" aria-label="${th(msg("admin.searchMarks", "搜索标注"))}" placeholder="${th(msg("admin.searchMarksPh", "搜索媒体、标注或作者"))}"><button id="admin-annotation-search-button">${th(msg("admin.search", "搜索"))}</button></div>
@@ -31,7 +30,7 @@ export function annotationAdminShell() {
 export function installAnnotationAdmin(signal: AbortSignal, notice: (message: LocalizedValue) => void) {
  const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`admin-annotation${id}`) as T;
  const spaceNames=new Map<string,string>();
- const client=new AnnotationClient(signal);let space='default',deleted=false,search='',next:number|null=null,selected:AnnotationRecord|null=null,busy=false;
+ const client=new AnnotationClient(signal);let space='',deleted=false,search='',next:number|null=null,selected:AnnotationRecord|null=null,busy=false;
  let renderedList='';
  const panel=document.getElementById('pane-annotations')!;
  panel.addEventListener('click',event=>{
@@ -63,13 +62,14 @@ export function installAnnotationAdmin(signal: AbortSignal, notice: (message: Lo
   const {mark,media}=record.document,source=media.find(media=>media.id===mark.mediaId)!;
   localizedText($('-title'), () => `${source.name} · ${formatTime(mark.frame.ptsUs)}`);localizedText($('-text'), () => mark.text);
   localizedText($('-author'), () => t(msg("admin.annotationMeta", "{author} · 版本 {revision} · {date}"), {author:mark.author?.name ?? t(msg('marks.anonymous', '未署名')),revision:record.revision,date:formatDate(record.updatedAt)}));
-  const image=$<HTMLImageElement>('-image');image.hidden=false;$('-no-preview').hidden=true;image.onerror=()=>{image.hidden=true;$('-no-preview').hidden=false;};image.src=`/api/annotations/spaces/${space}/${record.id}/preview?revision=${record.revision}`;
-  const link=$<HTMLAnchorElement>('-open');link.href=`/?annotation=${record.id}&space=${space}`;link.hidden=record.deleted || !source.source;
+  const image=$<HTMLImageElement>('-image');image.hidden=false;$('-no-preview').hidden=true;image.onerror=()=>{image.hidden=true;$('-no-preview').hidden=false;};image.src=`/api/annotations/media/${space}/${record.id}/preview?revision=${record.revision}`;
+  const link=$<HTMLAnchorElement>('-open');const sourceUrl=source.source?new URL(source.source.url,location.origin):null;link.href=sourceUrl?`/?abi=1&${mark.slot}=${encodeURIComponent((sourceUrl.origin!==location.origin?sourceUrl.origin+'/':'')+source.source!.id+'@'+sourceUrl.searchParams.get('v'))}&mark=${record.id}`:'#';link.hidden=record.deleted || !source.source;
   $('-delete').hidden=record.deleted;$('-restore').hidden=!record.deleted;
  }
  type Page={entries:AnnotationRecord[];next:number|null;count:number;previewBytes:number};
  async function load(more=false){
-  const page=await client.request<Page>(`/api/annotations/spaces/${space}?list=1&deleted=${Number(deleted)}&search=${encodeURIComponent(search)}${more&&next?`&before=${next}`:''}`);
+  if(!space){const empty=document.createElement('p');empty.className='admin-caption';localizedText(empty,()=>t(msg('admin.noMarksAdmin','暂无标注')));$('-list').replaceChildren(empty);$('s-next').hidden=true;localizedText($('-count'),()=>t(msg('admin.itemsCount','{n, plural, other {# 条}}'),{n:0}));select(null);return;}
+  const page=await client.request<Page>(`/api/annotations/media/${space}?list=1&deleted=${Number(deleted)}&search=${encodeURIComponent(search)}${more&&next?`&before=${next}`:''}`);
   next=page.next;$('s-next').hidden=!next;localizedText($('-count'), () => t(msg("admin.itemsCount", "{n, plural, other {# 条}}"), { n: page.count }));
   const snapshot=JSON.stringify([space,deleted,search,page]);
   if(!more&&renderedList===snapshot)return;
@@ -91,7 +91,14 @@ export function installAnnotationAdmin(signal: AbortSignal, notice: (message: Lo
  $('-search-button').onclick=()=>{search=$<HTMLInputElement>('-search').value.trim();void act(()=>load());};$('-search').onkeydown=event=>{if(event.key==='Enter')$('-search-button').click();};
  for(const [suffix,value]of [['active',false],['trash',true]] as const)$(`s-${suffix}`).onclick=()=>{deleted=value;$('s-active').setAttribute('aria-pressed',String(!deleted));$('s-trash').setAttribute('aria-pressed',String(deleted));void act(()=>load());};
  $('-delete').onclick=()=>{$('-confirm').hidden=false;};$('-cancel').onclick=()=>{$('-confirm').hidden=true;};$('-confirm-delete').onclick=()=>void act(()=>mutate('delete'));$('-restore').onclick=()=>void act(()=>mutate('restore'));
- $('-export').onclick=()=>{if(!selected)return;const url=URL.createObjectURL(new Blob([JSON.stringify(annotationWorkspace([selected.document],location.origin+'/'),null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`VoidPlayer-annotation-${selected.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ $('-export').onclick=()=>{if(!selected)return;const url=URL.createObjectURL(new Blob([JSON.stringify({schema:'voidplayer-annotation',abi:1,record:selected},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`VoidPlayer-annotation-${selected.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 
- return {activate(){void act(async()=>{const spaces=await client.spaces();for(const space of spaces)spaceNames.set(space.id,space.name);choice.setOptions(spaces.map(space=>({value:space.id,label:space.name})));choice.sync(space,spaces.find(item=>item.id===space)?.name??space,true);await load();});}};
+ return {activate(){void act(async()=>{
+  const spaces=await client.spaces();spaceNames.clear();
+  for(const item of spaces)spaceNames.set(item.id,item.name+(item.source?' · '+item.source.version.slice(0,8):''));
+  choice.setOptions(spaces.map(item=>({value:item.id,label:spaceNames.get(item.id)!})));
+  if(!spaces.some(item=>item.id===space))space=spaces[0]?.id??'';
+  choice.sync(space,spaceNames.get(space)??t(msg('admin.noMarksAdmin','暂无标注')),!!space);
+  await load();
+ });}};
 }

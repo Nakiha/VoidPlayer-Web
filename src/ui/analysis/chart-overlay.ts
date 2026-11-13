@@ -3,6 +3,29 @@ import { computeLayout, drawHitRect, drawHitPoint } from './canvas.ts';
 import type { CanvasModel } from './canvas.ts';
 import type { AnalysisGlyph, SampleGlyph, BucketGlyph } from './geometry.ts';
 
+/** Use the card's reference frame, selecting the curve nearest the pointer in
+ * multi-track plots. Empty coverage and axis/margin clicks have no target. */
+export function pickLoadCurve(model: CanvasModel, snapshot: InspectionState, x: number, y: number,
+  qpAt: (slot: import('../../../shared/review/model.ts').Slot, time: number) => number | null) {
+  const geometry = computeLayout(model), row = geometry.bitrate;
+  if (!row || x < geometry.gutter || x > geometry.gutter + geometry.plotW || y < row.y || y >= row.y + row.h) return null;
+  let nearest: InspectionState['tracks'][number] | null = null, distance = Infinity;
+  for (const track of snapshot.tracks) {
+    if (!track.reference || !model.tracks.some(entry => entry.slot === track.slot)) continue;
+    const values = [
+      ...(!model.loadMetrics || model.loadMetrics.includes('bitrate') ? [[track.bitrate.value, model.yMaxBitrate]] : []),
+      ...(model.loadMetrics?.includes('qp') ? [[qpAt(track.slot, snapshot.inspectionTimeUs), model.qpMax ?? 51]] : []),
+    ];
+    for (const [value, maximum] of values) {
+      if (value == null || maximum == null || maximum <= 0) continue;
+      const yy = row.y + row.h - 4 - Math.min(value, maximum) / maximum * (row.h - 8);
+      const delta = Math.abs(y - yy);
+      if (delta < distance) { nearest = track; distance = delta; }
+    }
+  }
+  return nearest;
+}
+
 export function drawAnalysisOverlay(overlayCtx: CanvasRenderingContext2D | null, lastModel: CanvasModel | null,
   lastGlyphs: readonly AnalysisGlyph[], active: InspectionState | null, hoverUs: number | null,
   devicePixelRatio: number) {

@@ -62,7 +62,7 @@ try {
     for (const selector of ['#workspace-share', '.connection-control', '#start-identity', '#copy-path-A', '#source-action-A'])
       assert.equal(await page.locator(selector).isVisible(), false, selector + ' is absent from the local flow');
     const tools = await page.evaluate(() => window.voidPlayer.tools.map(tool => tool.name));
-    for (const name of ['share_workspace', 'list_library', 'load_library_item', 'list_frame_indexes', 'clear_frame_indexes'])
+    for (const name of ['share_state', 'list_library', 'load_library_item', 'list_frame_indexes', 'clear_frame_indexes'])
       assert.ok(!tools.includes(name), name + ' is not exposed');
     await page.locator('#settings-open').click();
     assert.equal(await page.locator('#settings-tab-identity').count(), 0);
@@ -98,52 +98,25 @@ try {
     assert.equal(await page.locator('#local-add').isVisible(), true);
     await page.locator('#settings-open').click();
     await page.locator('#settings-tab-workspace').click();
-    await page.locator('#local-workspace-name').fill('Sites review');
-    const downloadEvent = page.waitForEvent('download');
-    await page.locator('#local-workspace-export').click();
-    const download = await downloadEvent;
-    const workspace = JSON.parse(await readFile(await download.path(), 'utf8'));
-    assert.equal(workspace.name, 'Sites review');
-    assert.equal(workspace.marks[0].id, markId);
-    assert.equal(workspace.layout.sources.search, 'ci_h264');
-    await page.evaluate(() => window.voidPlayer.seek(0));
-    await page.waitForFunction(() => { window.dispatchEvent(new Event('focus')); return document.querySelector('#checkpoint-history-list').textContent.includes('Sites review'); });
-    await page.screenshot({ path: path.join(evidence, isolated ? 'isolated.png' : 'static.png') });
+    assert.equal(await page.locator('#local-workspace-export, #checkpoint-history-list, #saved-workspace-save').count(), 0);
+    const state = await page.evaluate(() => window.voidPlayer.exportState());
+    assert.equal(state.abi, 1); assert.equal(state.tracks[0].local.name, first.name);
+    assert.equal(state.layout.sources.search, 'ci_h264');
     await page.locator('#settings-close').click();
-    // A new page reopens through the combined picker or the existing drop flow.
-    const reopened = await context.newPage();
-    await reopened.goto(base);
-    await reopened.waitForFunction(() => window.voidPlayer);
-    if (!isolated) {
-      await reopened.locator('#settings-open').click();
-      await reopened.locator('#settings-tab-workspace').click();
-      const choosing = reopened.waitForEvent('filechooser');
-      await reopened.locator('#local-workspace-import').click();
-      const chooser = await choosing;
-      assert.equal(chooser.isMultiple(), true, 'workspace picker accepts the document and original videos together');
-      const exportedFile = path.join(evidence, 'picker-workspace.voidplayer');
-      await writeFile(exportedFile, JSON.stringify(workspace));
-      await chooser.setFiles([exportedFile, video]);
-    } else {
-      const bytes = await readFile(video), metadata = await stat(video);
-      await reopened.evaluate(({ workspace, bytes, lastModified }) => {
-        const transfer = new DataTransfer();
-        transfer.items.add(new File([JSON.stringify(workspace)], 'review.voidplayer', { type: 'application/json' }));
-        transfer.items.add(new File([Uint8Array.from(bytes)], 'ci_h264_smoke.mp4', { type: 'video/mp4', lastModified }));
-        document.querySelector('#stage-A').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
-      }, { workspace, bytes: [...bytes], lastModified: metadata.mtimeMs });
-    }
-    await reopened.waitForFunction(id => window.voidPlayer.getState().tracks.length === 1 && window.voidPlayer.getState().marks.some(mark => mark.id === id), markId);
-    await reopened.waitForFunction(() => window.voidPlayer.exportWorkspace().name === 'Sites review');
-    const remote = await reopened.evaluate(async workspace => {
-      const doc = structuredClone(workspace);
-      doc.media = doc.media.map(media => ({ ...media, source: { kind: 'library', id: 'remote', url: 'https://unavailable.invalid/api/media/remote' } }));
-      await window.voidPlayer.importWorkspace(doc);
-      return { tracks: window.voidPlayer.getState().tracks.length, marks: window.voidPlayer.getState().marks.map(mark => mark.id) };
-    }, workspace);
-    assert.equal(remote.tracks, 0, 'remote sources are skipped without contacting their service');
-    assert.ok(remote.marks.includes(markId), 'remote source unavailability retains annotations');
-    await reopened.close();
+    await page.evaluate(() => window.voidPlayer.setViewport({ channel: 'y', zoom: 2 }));
+    await page.evaluate(state => window.voidPlayer.applyState(state), state);
+    assert.equal(await page.evaluate(() => window.voidPlayer.getViewport().channel), state.viewport.channel);
+    assert.ok(await page.evaluate(id => window.voidPlayer.getState().marks.some(mark => mark.id === id), markId));
+    await page.waitForFunction(() => new URL(location.href).searchParams.has('A'));
+    await page.screenshot({ path: path.join(evidence, isolated ? 'isolated.png' : 'static.png') });
+    const remote = await page.evaluate(async state => {
+      try {
+        await window.voidPlayer.applyState({ ...state, tracks: [{ slot: 'A', id: 'a'.repeat(24), version: 'b'.repeat(24), offsetUs: 0, visible: true }] });
+        return { rejected: false };
+      } catch { return { rejected: true, marks: window.voidPlayer.getState().marks.map(mark => mark.id) }; }
+    }, state);
+    assert.equal(remote.rejected, true, 'the build profile rejects remote URI sources before any request');
+    assert.ok(remote.marks.includes(markId));
     // Real packet WASM and the FFmpeg container/FileReaderSync path both work without isolation.
     const decoders = [];
     for (const file of [software, avi]) {
@@ -160,7 +133,7 @@ try {
     await page.waitForTimeout(1200); // One local sync tick must also stay off the network.
     assert.deepEqual(apiRequests, [], 'no startup, UI, restore or background task calls /api/');
     assert.deepEqual(failures, [], 'no browser exceptions');
-    rows.push({ isolated, decoders, workspace: true, annotation: true, apiRequests: 0 });
+    rows.push({ isolated, decoders, uriState: true, annotation: true, apiRequests: 0 });
     await context.close();
     console.log('PASS Sites ' + engine + ' isolated=' + isolated);
   }

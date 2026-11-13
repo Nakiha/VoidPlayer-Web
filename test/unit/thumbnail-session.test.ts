@@ -6,6 +6,7 @@ import type { DecodedFrame, MediaSource } from '../../src/media/contract.ts';
 import { thumbnailState } from '../../src/thumbnails/state.ts';
 import { prefetchThumbnailStatus, prefetchThumbnailStatuses } from '../../src/thumbnails/client.ts';
 import { serverCacheKey } from '../../shared/thumbnails/contract.ts';
+import { Viewport } from '../../shared/presentation/viewport.ts';
 
 test('browse thumbnail facts replace per-item probes and a late old epoch cannot overwrite them', async () => {
   const originalFetch = globalThis.fetch;
@@ -89,4 +90,36 @@ test('joining at a non-zero position stays missing without seeking back', async 
   while (thumbnailState.inFlight.size) await new Promise(resolve => setTimeout(resolve, 1));
   assert.equal(b.frameAts(), 1);
   await session.dispose();
+});
+
+test('URI scene restoration offers only committed origin frames without additional decode', async () => {
+  for (const positionUs of [0, 40000]) {
+    thumbnailState.reset();
+    const session = new ReviewSession(() => {}), media = sampleMedia(`restore-${positionUs}`);
+    await session.restoreWorkspace({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(),
+      serverUrl: 'http://localhost/', positionUs, tracks: [{ slot: 'A', mediaId: media.source.info.id, offsetUs: 0 }],
+      media: [media.source.info], marks: [], viewport: new Viewport().snapshot() }, async () => media.source);
+    assert.equal(thumbnailState.accepted, positionUs === 0 ? 1 : 0);
+    assert.equal(media.frameAts(), 1, 'restoration uses its existing decoded frame');
+    while (thumbnailState.inFlight.size) await new Promise(resolve => setTimeout(resolve, 1));
+    assert.equal(media.frameAts(), 1, 'no delayed source reopen or origin seek');
+    await session.dispose();
+  }
+});
+
+test('a foreign URI source cannot populate this service thumbnail cache', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'http://local.test/', origin: 'http://local.test' } });
+  thumbnailState.reset();
+  const session = new ReviewSession(() => {}), media = sampleMedia('foreign');
+  media.source.info.source = { kind: 'library', id: 'a'.repeat(24), url: `http://foreign.test/api/media/${'a'.repeat(24)}/content?v=${'b'.repeat(24)}` };
+  try {
+    await session.load('A', async () => media.source);
+    assert.equal(thumbnailState.accepted, 0);
+    assert.equal(thumbnailState.skipped['unsupported:foreign-library'], 1);
+    assert.equal(media.frameAts(), 1);
+  } finally {
+    await session.dispose();
+    if (previous) Object.defineProperty(globalThis, 'location', previous); else Reflect.deleteProperty(globalThis, 'location');
+  }
 });

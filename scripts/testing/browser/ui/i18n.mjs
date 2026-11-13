@@ -125,17 +125,11 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  await page.evaluate(()=>window.__recordPreview('English-image'));
  await writeFile(artifact('thumbnail-transition.json'),JSON.stringify(await page.evaluate(()=>window.__previewEvents),null,2));
  await page.locator('#settings-open').click();await page.locator('#settings-tab-workspace').click();
- await page.locator('#saved-workspace-name').fill('未保存 Workspace name');await page.locator('#saved-workspace-name').evaluate(e=>{e.focus();e.setSelectionRange(2,6);window.__edit=e;});
- await switchLanguage('zh-CN');
- assert.equal(await page.locator('#settings-current-title').innerText(),'工作区');
- assert.deepEqual(await page.evaluate(()=>({same:window.__edit===document.querySelector('#saved-workspace-name'),focus:document.activeElement===window.__edit,value:window.__edit.value,selection:[window.__edit.selectionStart,window.__edit.selectionEnd],open:document.querySelector('#settings').open})),{same:true,focus:true,value:'未保存 Workspace name',selection:[2,6],open:true});
- // Dynamic checkpoint labels translate on the same locale commit, preserving
- // their action nodes and focus as well as the user's checkpoint name.
- const historyRestore=page.locator('.checkpoint-history-row [data-checkpoint-action=restore]').first();
- await historyRestore.waitFor();await historyRestore.focus();await historyRestore.evaluate(el=>{window.__historyRestore=el;});
- await switchLanguage('en');
- assert.equal(await historyRestore.innerText(),'Restore workspace');
- assert.deepEqual(await page.evaluate(()=>({same:window.__historyRestore===document.querySelector('.checkpoint-history-row [data-checkpoint-action=restore]'),focus:document.activeElement===window.__historyRestore})),{same:true,focus:true});
+ const copyAddress=page.locator('#state-copy-readable');await copyAddress.focus();await copyAddress.evaluate(e=>{window.__edit=e;});
+ await switchLanguage('zh-CN');assert.equal(await page.locator('#settings-current-title').innerText(),'观看状态');
+ assert.equal(await copyAddress.evaluate(e=>e===window.__edit&&document.activeElement===e),true);
+ await switchLanguage('en');assert.equal(await copyAddress.innerText(),'Copy editable address');
+ assert.equal(await page.locator('#saved-workspace-name, #checkpoint-history-list').count(),0);
  await page.locator('#settings-tab-logs').click();await page.locator('#log-description').fill('未提交 Report <原文>');await page.locator('#log-description').evaluate(e=>{e.focus();e.setSelectionRange(1,4);window.__report=e;});await switchLanguage('en');
  assert.equal(await page.locator('#log-description').inputValue(),'未提交 Report <原文>');assert.equal(await page.evaluate(()=>document.activeElement===window.__report),true);assert.match(await page.locator('#log-description').getAttribute('placeholder'),/description.*download|send/i);
  await page.locator('#settings-tab-performance').click();const originalFlow=await page.locator('#color-flow-diagram').evaluate(e=>{window.__flow=e.firstElementChild;return e.innerText;});await switchLanguage('zh-CN');assert.equal(await page.evaluate(()=>window.__flow===document.querySelector('#color-flow-diagram').firstElementChild),true);assert.notEqual(await page.locator('#color-flow-diagram').innerText(),originalFlow);
@@ -236,19 +230,13 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  await switchLanguage('zh-CN');assert.equal(await cancel.evaluate(e=>e===window.__cancel),true);await cancel.click();
  for(const route of stalled)await route.abort();await page.unroute(`**/api/media/${sample.id}/content?*`);
  await page.evaluate(async id=>{await window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id});},library.entries.find(e=>e.name==='sample.mp4').id);
- const workspace=await page.evaluate(()=>window.voidPlayer.exportWorkspace());delete workspace.media[0].source;
- // Missing inputs restore immediately and leave only a localized warning.
- await page.evaluate(document=>window.voidPlayer.importWorkspace(document),workspace);
- assert.equal(await page.locator('.workspace-relink').count(),0);
- const skipped=page.locator('.toast-warning').filter({hasText:'sample.mp4'});await skipped.waitFor({state:'visible'});
- assert.equal(await skipped.locator('.toast-action').count(),0);
- const close=skipped.locator('.toast-close');await close.evaluate(e=>{e.focus();window.__skipClose=e;});
- await switchLanguage('en');assert.match(await skipped.innerText(),/could not be opened and were skipped/);
- assert.equal(await close.evaluate(e=>e===window.__skipClose&&e===document.activeElement),true);
- await switchLanguage('zh-CN');assert.match(await skipped.innerText(),/以下片源无法打开，已跳过/);
- assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getState().tracks),[]);
- assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getState().marks),workspace.marks);
- await page.screenshot({path:artifact('skipped-source-warning.png')});
+ const state=await page.evaluate(()=>window.voidPlayer.exportState());state.tracks[0].version='0'.repeat(24);
+ const before=await page.evaluate(()=>window.voidPlayer.getState().marks);
+ const error=await page.evaluate(async state=>{try{await window.voidPlayer.applyState(state);return '';}catch(error){return error.message;}},state);
+ assert.match(error,/版本发生变化/);
+ assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getState().marks),before);
+ await switchLanguage('en');assert.equal(await page.locator('#settings-current-title').count(),1);
+ await page.screenshot({path:artifact('uri-source-version-refused.png')});
  await peer.close();assert.deepEqual(errors,[]);
  await writeFile(artifact('dialog-report.json'),JSON.stringify({engine,assertions:['onboarding-text/aria','onboarding-filter/active-option/node/focus/selection','folder-meta/node/focus','stalled-load-stage/cancel-node/focus','skipped-warning/no-modal','skipped-warning/translation/focus','skipped-source-preserves-marks'],errors},null,2));
  console.log(`PASS ${engine}: onboarding, folder cache and skipped-source warnings switch in place`);

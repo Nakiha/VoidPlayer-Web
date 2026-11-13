@@ -72,7 +72,7 @@ test('overview omits request history and the independent request snapshot suppor
   const snapshot = await first.json(); assert.ok(snapshot.recentRequests.length > 0);
   const unchanged = await fetch(base + '/api/admin/requests', { headers: { 'if-none-match': `W/${etag}` } });
   assert.equal(unchanged.status, 304); assert.equal(await unchanged.text(), '');
-  const actor = admin.workspaces.identify(undefined, 'snapshot-other');
+  const actor = admin.users.identify(undefined, 'snapshot-other');
   const foreign = await fetch(base + '/api/admin/requests', { headers: { cookie: `voidplayer-user=${actor.id}`, 'if-none-match': etag } });
   assert.equal(foreign.status, 200); assert.notEqual(foreign.headers.get('etag'), etag, 'a new actor cannot validate the previous actor snapshot');
   assert.deepEqual(await foreign.json(), snapshot, 'the scope check is independent of a body change');
@@ -121,7 +121,7 @@ test('admin trusts all users while requiring same-origin mutations', async () =>
     assert.equal((await fetch(base + '/api/library/scan', { method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: '{}' })).status, 403);
   });
   await fixture(async ({ base, admin }) => {
-    const actor = admin.workspaces.identify(undefined, 'not-allowlisted');
+    const actor = admin.users.identify(undefined, 'not-allowlisted');
     const headers = { host: 'intranet.test', cookie: `voidplayer-user=${actor.id}` };
     assert.equal((await fetch(base + '/api/admin/status', { headers: { host: 'intranet.test' } })).status, 200);
     const response = await fetch(base + '/api/admin/status', { headers });

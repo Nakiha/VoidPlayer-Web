@@ -12,8 +12,8 @@ import {PAGE_TOOLS} from '../shared/service/page-bridge.ts';
 
 type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean; untrustedContentHint: boolean }; execute: (input: unknown) => unknown };
 type Registry = { registerTool: (tool: Tool, options: { signal: AbortSignal }) => unknown };
-type WorkspaceActions = { exportWorkspace(): unknown; shareWorkspace?(): Promise<unknown>; importWorkspace(value: unknown): Promise<unknown> };
-export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions): Tool[] {
+type UriActions = { exportState(): unknown; shareState?(): Promise<unknown>; applyState(value: unknown): Promise<unknown> };
+export function reviewTools(session: ReviewSession, uri?: UriActions): Tool[] {
   const tool = (name: string, description: string, properties: Record<string, ToolInputSchema>, required: string[], readOnly: boolean, action: (p: Record<string, unknown>) => unknown): Tool => {
     const inputSchema: ToolInputSchema = { type: 'object', properties, required, additionalProperties: false };
     return {
@@ -42,10 +42,10 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
     tool('pause_bitstream_analysis','Pause one track analysis and retain its cached results without changing playback.',{slot:{enum:SLOTS}},['slot'],false,p=>session.pauseBitstreamAnalysis(slotValue(p.slot))),
     tool('resume_bitstream_analysis','Resume a paused track analysis in its previous window with retained coverage; decoding may replay the reference prefix.',{slot:{enum:SLOTS}},['slot'],false,p=>session.resumeBitstreamAnalysis(slotValue(p.slot))),
     tool('get_bitstream_analysis_state','Read one track deep analysis status; omitted slot reads the most recently requested track. Does not start work.',{slot:{enum:SLOTS}},[],true,p=>session.getBitstreamAnalysisState(p.slot === undefined ? undefined : slotValue(p.slot))),
-    ...(workspace ? [
-      ...(workspace.shareWorkspace ? [tool('share_workspace', 'Save the current writable workspace and copy a link restoring its sources, position and layout. Recipients can edit and save the same workspace; annotations remain live. Requires library sources, no video upload.', {}, [], false, () => workspace.shareWorkspace!())] : []),
-      tool('export_workspace', 'Export the current workspace, including absolute media service URLs, source references, marks, time and layout. No upload.', {}, [], true, () => workspace.exportWorkspace()),
-      tool('import_workspace', 'Restore a workspace atomically using the same source resolution as the UI. Local sources may require the user to reselect files.', { document: { type: 'object' } }, ['document'], false, p => workspace.importWorkspace(p.document)),
+    ...(uri ? [
+      ...(uri.shareState ? [tool('share_state', 'Encode the current URI state into a self-contained ABI share link. Annotations are independently stored by media version; no video upload.', {}, [], false, () => uri.shareState!())] : []),
+      tool('get_uri_state', 'Read ABI 1 source references, time, comparison conditions and view state, without annotation bodies.', {}, [], true, () => uri.exportState()),
+      tool('apply_uri_state', 'Restore an ABI 1 URI state using the same source resolution as the UI.', { state: { type: 'object' } }, ['state'], false, p => uri.applyState(p.state)),
     ] : []),
     tool('benchmark_review', 'Play currently loaded tracks from the start and measure actual canvas presentation, real playback speed, synchronization and pause stability in this page. Leaves playback paused. Background pages fail validation.', { durationMs: { type: 'integer', minimum: 1000, maximum: 30000 } }, [], false, p => benchmarkPlayback(session, p.durationMs as number | undefined)),
     pageTool('get_review_session', () => session.getState()),
@@ -95,11 +95,11 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
       }),
   ].filter(entry => !localOnly || !['list_library', 'load_library_item'].includes(entry.name));
 }
-export function registerReviewTools(session: ReviewSession, workspace?: WorkspaceActions) {
+export function registerReviewTools(session: ReviewSession, uri?: UriActions) {
   const context = (document as unknown as { modelContext?: Registry }).modelContext ?? (navigator as unknown as { modelContext?: Registry }).modelContext;
   const lifecycle = new AbortController();
   if (context?.registerTool) {
-    for (const tool of reviewTools(session, workspace)) {
+    for (const tool of reviewTools(session, uri)) {
       try { void Promise.resolve(context.registerTool(tool, { signal: lifecycle.signal })).catch(console.warn); }
       catch (error) { console.warn('WebMCP registration failed', error); }
     }

@@ -1281,6 +1281,12 @@ export class ReviewSession {
           }
           this.marks = document.marks; this.measurements = null; this.pruneCatalog(); committed = true;
           this.mediaLoad = null;
+          // URI restoration commits the same verified first frame as an open.
+          // Offer before drawAt releases it; no extra decode or seek for covers.
+          for (const [slot, track] of next) {
+            const frame = selected.get(slot);
+            if (frame) this.offerThumbnail(slot, track.source, frame, Math.max(0, document.positionUs - track.offsetUs));
+          }
         }, selected, undefined, signal);
       } catch (error) {
         if (progressive) throw error; // Successfully presented peers remain usable after cancellation.

@@ -39,7 +39,7 @@
     "params": {}
   },
   "activity.empty": {
-    "source": "此评审空间暂无操作记录",
+    "source": "此片源版本暂无操作记录",
     "params": {}
   },
   "activity.expandDetails": {
@@ -78,7 +78,7 @@
     "params": {}
   },
   "activity.recent": {
-    "source": "共享评审空间的最近操作；不会改变当前播放",
+    "source": "片源版本的最近标注操作；不会改变当前播放",
     "params": {}
   },
   "activity.restored": {
@@ -173,10 +173,6 @@
   },
   "admin.anonymous": {
     "source": "匿名",
-    "params": {}
-  },
-  "admin.backToLatest": {
-    "source": "返回最新",
     "params": {}
   },
   "admin.backToList": {
@@ -309,18 +305,6 @@
     "source": "删除选中日志",
     "params": {}
   },
-  "admin.deleteSelectedWorkspace": {
-    "source": "删除选中工作区",
-    "params": {}
-  },
-  "admin.deleteWorkspace": {
-    "source": "删除工作区",
-    "params": {}
-  },
-  "admin.deleteWsConfirm": {
-    "source": "删除服务器工作区？不删除视频或已打开的会话",
-    "params": {}
-  },
   "admin.detailFrames": {
     "source": "{root} · {format} · {frames, plural, other {# 帧}}",
     "params": {
@@ -444,12 +428,6 @@
     "source": "跳转",
     "params": {}
   },
-  "admin.guestId": {
-    "source": "访客 · {id}",
-    "params": {
-      "id": "string | number"
-    }
-  },
   "admin.historyLogLine": {
     "source": "历史日志 · {size}",
     "params": {
@@ -523,10 +501,6 @@
   },
   "admin.listHeadUpdated": {
     "source": "更新时间",
-    "params": {}
-  },
-  "admin.loadLatest": {
-    "source": "载入最新版本",
     "params": {}
   },
   "admin.loadMore": {
@@ -670,10 +644,6 @@
     "source": "移入回收站",
     "params": {}
   },
-  "admin.nameSaved": {
-    "source": "名称已保存",
-    "params": {}
-  },
   "admin.navCategory": {
     "source": "管理分类",
     "params": {}
@@ -708,10 +678,6 @@
     "source": "没有匹配的标注",
     "params": {}
   },
-  "admin.noMatchWs": {
-    "source": "没有找到匹配的工作区",
-    "params": {}
-  },
   "admin.noReadErrors": {
     "source": "本次扫描没有读取错误",
     "params": {}
@@ -726,10 +692,6 @@
   },
   "admin.noUploadedLogs": {
     "source": "暂无上传日志",
-    "params": {}
-  },
-  "admin.noWsYet": {
-    "source": "还没有保存的工作区",
     "params": {}
   },
   "admin.notStarted": {
@@ -829,10 +791,6 @@
     "source": "进程负载",
     "params": {}
   },
-  "admin.rawData": {
-    "source": "原始工作区数据",
-    "params": {}
-  },
   "admin.readMedia": {
     "source": "读取的媒体",
     "params": {}
@@ -885,10 +843,6 @@
   },
   "admin.refreshMarks": {
     "source": "刷新标注",
-    "params": {}
-  },
-  "admin.refreshWorkspaces": {
-    "source": "刷新工作区",
     "params": {}
   },
   "admin.removeDir": {
@@ -967,10 +921,6 @@
     "source": "还原修改",
     "params": {}
   },
-  "admin.reviewSpace": {
-    "source": "评审空间",
-    "params": {}
-  },
   "admin.rootCli": {
     "source": "当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件",
     "params": {}
@@ -1018,24 +968,8 @@
     "source": "运行日志",
     "params": {}
   },
-  "admin.saveCopy": {
-    "source": "将当前版本另存副本",
-    "params": {}
-  },
   "admin.saveDirs": {
     "source": "保存目录",
-    "params": {}
-  },
-  "admin.saveName": {
-    "source": "保存名称",
-    "params": {}
-  },
-  "admin.savedAsCopy": {
-    "source": "已另存为当前用户的副本",
-    "params": {}
-  },
-  "admin.savedWorkspaces": {
-    "source": "已保存的工作区",
     "params": {}
   },
   "admin.saving": {
@@ -1114,10 +1048,6 @@
     "source": "搜索",
     "params": {}
   },
-  "admin.searchAllWorkspaces": {
-    "source": "搜索全部工作区",
-    "params": {}
-  },
   "admin.searchCaches": {
     "source": "搜索缓存",
     "params": {}
@@ -1144,14 +1074,6 @@
   },
   "admin.selectLog": {
     "source": "选择一份日志查看内容",
-    "params": {}
-  },
-  "admin.selectToView": {
-    "source": "选择一个工作区查看详情",
-    "params": {}
-  },
-  "admin.serverChanged": {
-    "source": "服务器内容已改变，未覆盖任何修改",
     "params": {}
   },
   "admin.serverPath": {
@@ -1276,10 +1198,6 @@
     "source": "换个关键词试试",
     "params": {}
   },
-  "admin.tryOtherNames": {
-    "source": "试试其他名称，或清空搜索",
-    "params": {}
-  },
   "admin.unknownUser": {
     "source": "未知",
     "params": {}
@@ -1333,66 +1251,8 @@
       "partial": "string | number"
     }
   },
-  "admin.workspaceCopyName": {
-    "source": "{name} 副本",
-    "params": {
-      "name": "string | number"
-    }
-  },
-  "admin.workspaceDetails": {
-    "source": "工作区详情",
-    "params": {}
-  },
-  "admin.workspaceRow": {
-    "source": "{owner} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}",
-    "params": {
-      "marks": "number",
-      "owner": "string | number",
-      "tracks": "number"
-    }
-  },
-  "admin.wsCreator": {
-    "source": "创建者",
-    "params": {}
-  },
-  "admin.wsDeleted": {
-    "source": "已删除服务器工作区",
-    "params": {}
-  },
-  "admin.wsEmptyHint": {
-    "source": "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理",
-    "params": {}
-  },
-  "admin.wsJson": {
-    "source": "工作区 JSON",
-    "params": {}
-  },
-  "admin.wsLastEdit": {
-    "source": "最后编辑",
-    "params": {}
-  },
-  "admin.wsMetaLine": {
-    "source": "版本 {rev} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}",
-    "params": {
-      "marks": "number",
-      "rev": "string | number",
-      "tracks": "number"
-    }
-  },
   "admin.wsName": {
     "source": "名称",
-    "params": {}
-  },
-  "admin.wsNoVideos": {
-    "source": "无视频",
-    "params": {}
-  },
-  "admin.wsTitle": {
-    "source": "工作区",
-    "params": {}
-  },
-  "admin.wsVideos": {
-    "source": "视频",
     "params": {}
   },
   "adminLibrary.columnView": {
@@ -1583,6 +1443,14 @@
       "slot": "string | number"
     }
   },
+  "analysis.follow": {
+    "source": "跟随",
+    "params": {}
+  },
+  "analysis.followFrame": {
+    "source": "跟随当前帧",
+    "params": {}
+  },
   "analysis.frameNumberMustBeNonNegativeInteger": {
     "source": "帧号必须是非负整数",
     "params": {}
@@ -1704,6 +1572,10 @@
   },
   "analysis.loadMetrics": {
     "source": "负载率指标",
+    "params": {}
+  },
+  "analysis.locateFrame": {
+    "source": "定位当前帧",
     "params": {}
   },
   "analysis.meanNaluSize": {
@@ -2361,7 +2233,7 @@
     "params": {}
   },
   "colorFlow.managedColor": {
-    "source": "自有色彩",
+    "source": "默认色彩",
     "params": {}
   },
   "colorFlow.memory": {
@@ -2437,7 +2309,7 @@
     "params": {}
   },
   "colorOutput.browserPreview": {
-    "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR",
+    "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换默认色彩输出 HDR",
     "params": {}
   },
   "colorOutput.displayTarget": {
@@ -2710,7 +2582,7 @@
     "params": {}
   },
   "error.referenceFormat": {
-    "source": "自有色彩不支持此像素格式或颜色信息，请切换为浏览器色彩后重试",
+    "source": "默认色彩不支持此像素格式或颜色信息，请切换为浏览器色彩后重试",
     "params": {}
   },
   "error.referenceHdr": {
@@ -2934,12 +2806,6 @@
       "name": "string | number"
     }
   },
-  "input.workspace": {
-    "source": "「{name}」不是可读取的 VoidPlayer 工作区文件，请选择视频或已导出的工作区",
-    "params": {
-      "name": "string | number"
-    }
-  },
   "language.label": {
     "source": "语言 / Language",
     "params": {}
@@ -2953,7 +2819,15 @@
     "params": {}
   },
   "libraryBrowser.compactList": {
-    "source": "紧凑列表",
+    "source": "切换为紧凑列表",
+    "params": {}
+  },
+  "libraryBrowser.expandList": {
+    "source": "切换为详细列表",
+    "params": {}
+  },
+  "libraryBrowser.fileUnavailable": {
+    "source": "片源尚未就绪或已不可用",
     "params": {}
   },
   "libraryBrowser.goBack": {
@@ -3590,10 +3464,6 @@
     "source": " · 索引失败",
     "params": {}
   },
-  "player.invalidAnnotationAddress": {
-    "source": "标注地址无效",
-    "params": {}
-  },
   "player.lastSeekMs": {
     "source": "最近定位 {p0} ms",
     "params": {
@@ -3614,10 +3484,6 @@
   },
   "player.openColorSettings": {
     "source": "前往色彩设置",
-    "params": {}
-  },
-  "player.openOneWorkspaceFileAtATime": {
-    "source": "每次请打开一个工作区文件",
     "params": {}
   },
   "player.pause": {
@@ -3672,11 +3538,7 @@
     "params": {}
   },
   "player.switchToManagedColorInColorDecoding": {
-    "source": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道",
-    "params": {}
-  },
-  "player.thisAnnotationIsInTheRecycleBin": {
-    "source": "这条标注已在回收站",
+    "source": "请先在“色彩与解码”中切换为“默认色彩”，再选择 YUV 通道",
     "params": {}
   },
   "player.toggleFramePosition": {
@@ -3760,7 +3622,7 @@
     "params": {}
   },
   "player.yuvChannelsSwitchToManagedColorFirst": {
-    "source": "YUV 通道：请先切换为自有色彩",
+    "source": "YUV 通道：请先切换为默认色彩",
     "params": {}
   },
   "progress.decode": {
@@ -3835,91 +3697,8 @@
     "source": "Web 应用",
     "params": {}
   },
-  "recovery.capacityReached": {
-    "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录，当前工作区可手动导出或保存到服务器",
-    "params": {}
-  },
-  "recovery.deleteHistory": {
-    "source": "删除这份本机恢复记录？",
-    "params": {}
-  },
-  "recovery.export": {
-    "source": "导出备份",
-    "params": {}
-  },
-  "recovery.history": {
-    "source": "本机恢复记录",
-    "params": {}
-  },
-  "recovery.historyChanged": {
-    "source": "恢复记录已改变，请刷新列表后重试",
-    "params": {}
-  },
-  "recovery.historyCounts": {
-    "source": "{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}}",
-    "params": {
-      "marks": "number",
-      "tracks": "number"
-    }
-  },
-  "recovery.noHistory": {
-    "source": "暂无本机恢复记录",
-    "params": {}
-  },
-  "recovery.readFailed": {
-    "source": "无法读取本机工作区恢复记录，请检查浏览器存储",
-    "params": {}
-  },
-  "recovery.recordCount": {
-    "source": "恢复记录数量",
-    "params": {}
-  },
-  "recovery.restore": {
-    "source": "恢复工作区",
-    "params": {}
-  },
-  "recovery.restored": {
-    "source": "工作区已恢复",
-    "params": {}
-  },
-  "recovery.saveFailed": {
-    "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器",
-    "params": {}
-  },
-  "recovery.savingResumed": {
-    "source": "工作区本机自动恢复已恢复保存",
-    "params": {}
-  },
-  "recovery.storageEstimate": {
-    "source": "估算占用空间",
-    "params": {}
-  },
-  "recovery.summary": {
-    "source": "{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}} · {time}",
-    "params": {
-      "marks": "number",
-      "time": "string | number",
-      "tracks": "number"
-    }
-  },
   "resize.releaseToCollapse": {
     "source": "松开收起面板",
-    "params": {}
-  },
-  "savedWorkspaces.backToLatest": {
-    "source": "返回最新",
-    "params": {}
-  },
-  "savedWorkspaces.clearSearch": {
-    "source": "清除搜索",
-    "params": {}
-  },
-  "savedWorkspaces.currentWorkspace": {
-    "source": "当前工作区",
-    "params": {}
-  },
-  "savedWorkspaces.emptySaveHint": {
-    "source": "保存当前工作区后，可在这里打开或复制链接",
     "params": {}
   },
   "savedWorkspaces.guest": {
@@ -3928,46 +3707,6 @@
   },
   "savedWorkspaces.nextPage": {
     "source": "下一页",
-    "params": {}
-  },
-  "savedWorkspaces.noMatchingWorkspaces": {
-    "source": "没有匹配的工作区",
-    "params": {}
-  },
-  "savedWorkspaces.noWorkspacesYet": {
-    "source": "暂无工作区",
-    "params": {}
-  },
-  "savedWorkspaces.reopen": {
-    "source": "重新打开",
-    "params": {}
-  },
-  "savedWorkspaces.savedWorkspaces": {
-    "source": "已保存的工作区",
-    "params": {}
-  },
-  "savedWorkspaces.searchWorkspaceOrUserName": {
-    "source": "搜索工作区名或用户名",
-    "params": {}
-  },
-  "savedWorkspaces.tryAnotherSearch": {
-    "source": "试试其他工作区名或用户名",
-    "params": {}
-  },
-  "savedWorkspaces.untitledWorkspace": {
-    "source": "未命名工作区",
-    "params": {}
-  },
-  "savedWorkspaces.updatedReopen": {
-    "source": "工作区已被更新，请重新打开后继续",
-    "params": {}
-  },
-  "savedWorkspaces.workspaceName": {
-    "source": "工作区名称",
-    "params": {}
-  },
-  "savedWorkspaces.workspaceServiceUnavailable": {
-    "source": "工作区服务不可用",
     "params": {}
   },
   "settings.analysisConcurrencyCount": {
@@ -4222,22 +3961,6 @@
   },
   "sharing.addVideo": {
     "source": "请先添加视频再分享",
-    "params": {}
-  },
-  "sharing.copyLink": {
-    "source": "复制链接",
-    "params": {}
-  },
-  "sharing.editableCopied": {
-    "source": "工作区链接已复制，接收者可编辑和保存",
-    "params": {}
-  },
-  "sharing.link": {
-    "source": "链接",
-    "params": {}
-  },
-  "sharing.saving": {
-    "source": "正在保存",
     "params": {}
   },
   "shell.aboutVoidplayer": {
@@ -4642,18 +4365,6 @@
     "source": "画面缩放",
     "params": {}
   },
-  "sites.exportWorkspace": {
-    "source": "导出工作区",
-    "params": {}
-  },
-  "sites.importWorkspace": {
-    "source": "导入工作区",
-    "params": {}
-  },
-  "sites.localHelp": {
-    "source": "视频和标注在此浏览器内处理，不上传。工作区不含视频；重新打开时，可在导入窗口同时选择工作区和原视频。",
-    "params": {}
-  },
   "sites.remoteUnavailable": {
     "source": "此版本仅支持本地文件，请使用完整版访问媒体服务",
     "params": {}
@@ -4970,19 +4681,13 @@
     "source": "连接中断 · 本机草稿保留",
     "params": {}
   },
-  "sync.draftsUnsaved": {
-    "source": "本机标注尚未保存，请等待自动保存完成",
-    "params": {}
-  },
   "sync.frameMark": {
     "source": "画面标注",
     "params": {}
   },
-  "sync.localSaveFailed": {
-    "source": "本机保存失败：{error}",
-    "params": {
-      "error": "string | number"
-    }
+  "sync.keepCopy": {
+    "source": "保留为新标注",
+    "params": {}
   },
   "sync.pendingCount": {
     "source": "{n, plural, other {# 条标注需要处理}}",
@@ -4998,10 +4703,6 @@
     "source": "已存本机 · 等待同步",
     "params": {}
   },
-  "sync.savingDrafts": {
-    "source": "本机草稿正在保存，请稍后重试",
-    "params": {}
-  },
   "sync.savingLocal": {
     "source": "正在保存到本机…",
     "params": {}
@@ -5010,8 +4711,8 @@
     "source": "已同步",
     "params": {}
   },
-  "sync.waitForDrafts": {
-    "source": "请先结束标注并等待本机草稿保存完成",
+  "sync.useServer": {
+    "source": "采用服务器版本",
     "params": {}
   },
   "theme.baseColor": {
@@ -5398,26 +5099,6 @@
     "source": "视频时间基",
     "params": {}
   },
-  "transfer.importing": {
-    "source": "工作区正在导入，请等待完成",
-    "params": {}
-  },
-  "transfer.legacyConditions": {
-    "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置",
-    "params": {}
-  },
-  "transfer.mtimeWarning": {
-    "source": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注",
-    "params": {
-      "name": "string | number"
-    }
-  },
-  "transfer.sourcesSkipped": {
-    "source": "以下片源无法打开，已跳过：{details}",
-    "params": {
-      "details": "string | number"
-    }
-  },
   "ui.pixelWidth": {
     "source": "{width} 像素",
     "params": {
@@ -5432,20 +5113,6 @@
     "source": "后端已发布新版，可以继续当前评审，或刷新到新版。",
     "params": {}
   },
-  "update.bound": {
-    "source": "当前工作区已连接到服务器。请保存工作区后重新打开，当前窗口可以继续使用。",
-    "params": {}
-  },
-  "update.changed": {
-    "source": "工作区正在变化，请稍后再刷新。",
-    "params": {}
-  },
-  "update.localFile": {
-    "source": "刷新后无法重新读取「{name}」。请继续使用当前窗口，或先导出工作区。",
-    "params": {
-      "name": "string | number"
-    }
-  },
   "update.preparing": {
     "source": "新版离线资源尚未准备好，请稍后再刷新。",
     "params": {}
@@ -5454,12 +5121,71 @@
     "source": "保存现场并刷新",
     "params": {}
   },
-  "update.retry": {
-    "source": "目标版本已变化或服务暂不可用，请稍后再刷新。",
-    "params": {}
-  },
   "update.wait": {
     "source": "请先暂停播放，完成标注并等载入和保存结束，再刷新。",
+    "params": {}
+  },
+  "uriState.address": {
+    "source": "当前状态地址",
+    "params": {}
+  },
+  "uriState.annotations": {
+    "source": "片源标注同步",
+    "params": {}
+  },
+  "uriState.copied": {
+    "source": "状态链接已复制",
+    "params": {}
+  },
+  "uriState.copyAddress": {
+    "source": "复制可编辑地址",
+    "params": {}
+  },
+  "uriState.copyFallback": {
+    "source": "请在设置中的状态链接上手动复制",
+    "params": {}
+  },
+  "uriState.help": {
+    "source": "片源、时间、比较条件和布局由地址栏保存；标注独立保存到片源版本。",
+    "params": {}
+  },
+  "uriState.loading": {
+    "source": "正在恢复观看状态…",
+    "params": {}
+  },
+  "uriState.localShare": {
+    "source": "本地文件不能分享，请先放入媒体库。",
+    "params": {}
+  },
+  "uriState.localUnavailable": {
+    "source": "刷新后无法读取本地片源，请继续使用当前窗口。",
+    "params": {}
+  },
+  "uriState.markUnavailable": {
+    "source": "当前片源版本中找不到这条标注。",
+    "params": {}
+  },
+  "uriState.mediaVersion": {
+    "source": "片源版本",
+    "params": {}
+  },
+  "uriState.sourceChanged": {
+    "source": "片源已不可用或内容版本发生变化。",
+    "params": {}
+  },
+  "uriState.sourceReadFailed": {
+    "source": "无法读取片源 {id}（HTTP {status}）。",
+    "params": {
+      "id": "string | number",
+      "status": "string | number"
+    }
+  },
+  "uriState.title": {
+    "source": "观看状态",
+    "params": {}
+  },
+  "uriState.wait": {
+    "source": "请等待状态载入或分享完成",
     "params": {}
   },
   "viewportTrace.download": {
@@ -5516,35 +5242,5 @@
     "params": {
       "p0": "string | number"
     }
-  },
-  "workspace.actorChanged": {
-    "source": "用户已切换，请在当前工作区重新分享",
-    "params": {}
-  },
-  "workspace.changed": {
-    "source": "当前工作区已切换，请在新工作区重新分享",
-    "params": {}
-  },
-  "workspace.closed": {
-    "source": "工作区页面已关闭",
-    "params": {}
-  },
-  "workspace.columns": {
-    "source": "名称 / 用户 · 最近更新 ↓",
-    "params": {}
-  },
-  "workspace.conflict": {
-    "source": "工作区已被更新，请重新打开后继续",
-    "params": {}
-  },
-  "workspace.copyNamed": {
-    "source": "复制工作区链接：{name}",
-    "params": {
-      "name": "string | number"
-    }
-  },
-  "workspace.saving": {
-    "source": "工作区正在保存，请稍后再分享",
-    "params": {}
   }
 }

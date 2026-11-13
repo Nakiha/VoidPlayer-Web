@@ -13,8 +13,6 @@
     "src/admin/overview.ts",
     "src/admin/presentation.ts",
     "src/admin/shell.ts",
-    "src/admin/workspace-copy-name.ts",
-    "src/admin/workspaces.ts",
     "src/agent/page-bridge.ts",
     "src/main.ts",
     "src/ui/about-banner.ts",
@@ -64,7 +62,6 @@
     "src/ui/brand-scenes/prism.ts",
     "src/ui/brand-scenes/timing.ts",
     "src/ui/chart-hover-style.ts",
-    "src/ui/checkpoint-history.ts",
     "src/ui/choice-menu.ts",
     "src/ui/color-flow.ts",
     "src/ui/color-menu.ts",
@@ -113,7 +110,7 @@
     "src/ui/playback-icon.ts",
     "src/ui/progress-ring.ts",
     "src/ui/resize-gesture.ts",
-    "src/ui/saved-workspaces.ts",
+    "src/ui/uri-state-settings.ts",
     "src/ui/seek-preview.ts",
     "src/ui/settings-shell.ts",
     "src/ui/settings.ts",
@@ -146,17 +143,10 @@
     "src/ui/workbench/shared.ts",
     "src/ui/workbench/sources.ts",
     "src/ui/workbench/tracks.ts",
-    "src/ui/workspace-recovery.ts",
-    "src/ui/workspace-sharing.ts",
     "src/ui/workspace-state.ts",
-    "src/ui/workspace-transfer.ts"
+    "src/ui/uri-state.ts"
   ],
   "exceptions": [
-    {
-      "file": "src/ui/saved-workspaces.ts",
-      "literal": "未命名工作区",
-      "reason": "Stable persisted fallback workspace title; never localized user data."
-    },
     {
       "file": "src/ui/analysis/gestures.ts",
       "literal": "定位已被更新的请求取代。",

@@ -14,7 +14,7 @@ serve the APIs. The remote player requires HTTPS for browser decoding.
 - [Runtime capabilities](/api/agent): implemented, enabled and ready are separate.
 - [Task catalog](/api/agent/tasks): fetch one task, then one operation at a time.
 - [Find media, inspect cached metadata and query indexes](${AGENT_TASKS.library})
-- [Identity and editable workspaces](${AGENT_TASKS.workspaces})
+- [Identity and ABI URI state](${AGENT_TASKS.state})
 - [Write annotations and follow operations](${AGENT_TASKS.annotations})
 - [Live browser session](${AGENT_TASKS.liveSession})
 - [Errors and recovery](${AGENT_TASKS.errors})
@@ -28,7 +28,7 @@ const introduction = `# HTTP agent entry
 2. Read only the relevant task guide linked by that response.
 3. Use explicit source IDs/versions, annotation space/ID and expected revision.
 4. For writes, explicitly select an identity and retain the cookie. Follow the
-   Origin and action-header requirements in [workspaces](${AGENT_TASKS.workspaces}).
+   Origin and action-header requirements in [URI state](${AGENT_TASKS.state}).
 5. A successful annotation response means the server committed the change.
    Observe operations using the event cursor; GUI consumption is independent.
 
@@ -39,7 +39,7 @@ focus, open a tab or load a track in someone else's player.
 This service uses trusted intranet identity declarations, not authentication.
 Use the deployment's access policy (for example a reverse proxy) where needed.
 Only configured media roots are exposed. Local file bytes are never uploaded by
-an annotation or workspace write. Explicit Markdown and JSON URLs need no
+an annotation write. Explicit Markdown and JSON URLs need no
 JavaScript or User-Agent sniffing and work without frontend assets.
 
 Tasks: ${Object.entries(AGENT_TASKS).map(([key, url]) => `[${key}](${url})`).join(' · ')}
@@ -138,49 +138,34 @@ Version/ETag is a file-change identifier, not a content checksum.
 See [errors](${AGENT_TASKS.errors}).
 `;
 
-const workspaces = `# Identity and editable workspaces
+const state = `# Identity and ABI URI state
 
-GET /api/health reads actor:null without creating a user. GET /api/users lists
-named users. Explicitly POST /api/identity with {"id":"existing-id"},
-{"name":"review-bot"}, or {"guest":true}. Retain its Set-Cookie in a cookie jar.
-Names and client labels declare attribution; neither is an authentication credential.
+GET /api/health does not create an identity. GET /api/users lists named identities.
+POST /api/identity accepts {name}, {id}, or {guest:true}; use matching Origin,
+Content-Type: application/json and X-VoidPlayer-Action: identity. Keep the cookie.
+Identity attributes writes; it is not authentication.
 
-All writes require Content-Type: application/json, Origin equal to this service's
-scheme + host + port, and X-VoidPlayer-Action. Use identity for identity selection,
-workspace for workspaces/shares and annotation for annotation writes. HTTP clients
-send these headers directly; opening the GUI is unnecessary. A reverse proxy must
-preserve the intended origin policy; do not bypass a 403. X-VoidPlayer-Actor may
-additionally pin the cookie's actor ID to detect a switch.
-
-Example (BASE is the origin without a trailing slash):
-
-    curl -c cookies.txt -H "Origin: $BASE" -H 'X-VoidPlayer-Action: identity' -H 'Content-Type: application/json' --data '{"name":"review-bot"}' "$BASE/api/identity"
-
-GET /api/workspaces?all=1 lists visible workspaces. GET /api/workspaces/ID returns
-the record, revision, document, space and ETag. The document contains media snapshots
-and marks. POST /api/workspaces accepts {name,document}. PUT /api/workspaces/ID
-accepts {name,document} with If-Match: "REVISION". On 409 read the latest revision
-and reconcile; do not blindly overwrite. Deletion also uses If-Match.
-
-POST /api/workspaces/share accepts {id?,name,document}; supply If-Match for an
-existing workspace. It creates or updates a live, editable workspace with a shared
-annotation space. Share links use /?workspace=ID. Removed share/review HTTP aliases no longer resolve.
-These workspaces remain editable. Sharing never uploads local media.
-The explicit sharing command seeds annotations; reads and discovery do not seed objects.
-
-Use record.space for [annotations](${AGENT_TASKS.annotations}); do not infer the
-space from a filename or a window's slot. For an independent review, POST
-/api/annotations/spaces with {"name":"Review run"} creates an explicit space.
+There is no stored workspace CRUD. The page is controlled by ABI 1 URI parameters:
+/?abi=1&A=ASSET@VERSION&t=12.5&view=split&channel=y
+A-H select ordered sources, offset.A is seconds, visible.A=0 hides a track.
+zoom/x/y/split/arrange/pixel, comparison and layout specify view conditions.
+POST /api/uri/encode with {state} and X-VoidPlayer-Action: uri returns {abi,token,url}.
+GET /api/uri/decode?s=TOKEN returns {abi,state}. Links are self-contained, with no
+server-side workspace or link mapping. Explicit query parameters override payload
+values. Unknown ABI/codec and invalid or oversized states are rejected.
 `;
 
 const annotations = `# Headless annotations and operation events
 
-GET /api/annotations/spaces lists spaces. GET /api/annotations/spaces/SPACE?after=0
-returns latest records (including tombstones), cursor and more. Follow cursor
-while more=true. This is a coalesced state feed, not operation history.
-GET /api/annotations/spaces/SPACE/ID returns one record.
+GET /api/annotations/media lists media-version targets, never workspaces.
+TARGET = "media-" + hex(SHA-256(UTF8(JSON.stringify([namespace, assetId, version])))).
+namespace is empty for this service's sources, or the external library's Origin.
+Asset and version are the exact 24-hex values in a version-pinned content reference.
+GET /api/annotations/media/TARGET?after=0 returns latest records (including
+tombstones), cursor and more. Follow cursor while more=true. This is a coalesced
+state feed, not operation history. GET /api/annotations/media/TARGET/ID reads one.
 
-POST /api/annotations/spaces/SPACE with the identity cookie, matching Origin,
+POST /api/annotations/media/TARGET with the identity cookie, matching Origin,
 X-VoidPlayer-Action: annotation and Content-Type: application/json:
 
     {"operationId":"unique-request-id","id":"mark-id","revision":0,"action":"put",
@@ -191,16 +176,14 @@ X-VoidPlayer-Action: annotation and Content-Type: application/json:
        "frame":{"ptsUs":0,"sourcePtsUs":0,"durationUs":40000},
        "comparison":[],"region":null}}}
 
-MEDIA_SNAPSHOT is a known description, e.g. document.media from a workspace or
-an independently probed source: id, name, size, lastModified, codec, decoder
+MEDIA_SNAPSHOT is a known description, from an independently probed source: id, name, size, lastModified, codec, decoder
 (legacy provenance: webcodecs or ffmpeg-wasm), width, height, durationUs, firstPtsUs,
 and source:{kind:"library",id:LIBRARY_ID,url:VERSION_PINNED_MEDIA_URL}.
-Do not guess these facts. This legacy snapshot format will gain a source-first
-metadata contract in #120. Accepting an annotation does not decode or verify frame
+Do not guess these facts. Accepting an annotation does not decode or verify frame
 contents.
 
 mark.mediaId references the snapshot ID, not the library ID. Cross-session library
-identity is source.id plus URL query v; always pin v. slot is a legacy display hint
+identity is namespace, source.id and URL query v; always pin v. slot is a legacy display hint
 A–H, not a requirement to load that track. ptsUs is source-relative time after
 subtracting firstPtsUs; sourcePtsUs is the original timestamp and may be negative.
 All times are integer microseconds. region is null or {left,top,width,height} in
@@ -220,26 +203,26 @@ New content or another actor needs a new operationId. On a version conflict, rea
 reconcile and create a new operationId. Success means a committed server write;
 GUI visibility may lag and is never part of the success condition.
 
-GET /api/annotations/events/SPACE returns the latest 50 retained operations.
+GET /api/annotations/events/TARGET returns the latest 50 retained operations.
 Add ?after=CURSOR to resume in ascending sequence (100 per page). Events include
 version, sequence, operationId, requestId when available, actor, declared client,
-space/id/revision, action, state=committed, occurredAt and target. They commit
+media-target/id/revision, action, state=committed, occurredAt and target. They commit
 atomically with the record and idempotency receipt. This feed covers confirmed
 annotation mutations; jobs, rejected requests and workspace changes are not yet
 a general activity history.
 
 Store page.cursor after processing the whole page, drain more=true, then poll.
-Deduplicate by sequence. Gaps are normal: spaces share a server clock. The latest
-10000 operations across spaces are retained; slow consumers never block writers.
+Deduplicate by sequence. Gaps are normal: media targets share a server clock. The latest
+10000 operations across targets are retained; slow consumers never block writers.
 If resetRequired=true, clear the activity cache, capture that response's cursor,
 replace confirmed annotation state by following snapshotUrl and its pages, then
 resume events from the captured cursor. Preserve pending drafts and reconcile
 them using expected revisions. A cursor ahead of a restored database also requests
 resynchronization. Repeated delivery must be applied idempotently.
 
-The player's workspace settings show recent activity even for unloaded media.
-Only an explicit open action navigates to a mark; polling never changes playback,
-focus or tracks. Local-only review has no server activity stream.
+The player discovers targets from loaded media versions and synchronizes each
+independently. Polling never changes playback, focus or tracks. Settings expose
+sync status and retained conflicts. Local-only annotations never call the service.
 `;
 
 const liveSession = `# Live view commands
@@ -326,7 +309,7 @@ logs. Names/client labels remain attribution, not access credentials.
 
 export const AGENT_DOCUMENTS: Readonly<Record<string, string>> = {
   '/llms.txt': AGENT_GUIDE, '/agent.md': introduction,
-  [AGENT_TASKS.library]: library, [AGENT_TASKS.workspaces]: workspaces,
+  [AGENT_TASKS.library]: library, [AGENT_TASKS.state]: state,
   [AGENT_TASKS.annotations]: annotations,
   [AGENT_TASKS.liveSession]: liveSession, [AGENT_TASKS.errors]: errors,
   ...Object.fromEntries(AGENT_OPERATIONS.map(operation => [`/agent/operations/${operation.id}.md`,

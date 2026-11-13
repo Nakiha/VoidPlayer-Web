@@ -4,7 +4,7 @@ export const AGENT_OPERATIONS_VERSION = 1;
 export const AGENT_TASK_CATALOG = '/api/agent/tasks';
 export const AGENT_OPERATION_PATH = '/api/agent/operations/';
 export const AGENT_WORKFLOWS = [
-  { id: 'identity', title: 'Select an intranet identity', guide: '/agent/workspaces.md' },
+  { id: 'identity', title: 'Select an intranet identity', guide: '/agent/state.md' },
   { id: 'library', title: 'Browse and describe media sources', guide: '/agent/library.md' },
 ] as const;
 export type AgentTaskId = typeof AGENT_WORKFLOWS[number]['id'];

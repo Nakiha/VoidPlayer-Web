@@ -1,3 +1,4 @@
+import { referenceVersion } from '../shared/media/io/media-reference.ts';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -8,7 +9,7 @@ import type { Actor } from './identity.ts';
 import { AnnotationCommandError, applyAnnotationOperation, parseAnnotationOperation } from '../shared/review/annotation-command.ts';
 import { annotationEvent } from '../shared/review/annotation-events.ts';
 import type { AnnotationEvent, AnnotationEventPage } from '../shared/review/annotation-events.ts';
-import type { AnnotationRecord, AnnotationPage } from '../shared/review/annotation-record.ts';
+import type { AnnotationRecord, AnnotationPage, AnnotationDocument } from '../shared/review/annotation-record.ts';
 
 const validId = (id: unknown): id is string => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,200}$/.test(id);
 export const ANNOTATION_BYTES = 512 * 1024;
@@ -22,7 +23,6 @@ export class AnnotationStore {
     if (version > 5) { db.close(); throw new Error('标注数据库来自更新的程序。'); }
     db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=1000;
       CREATE TABLE IF NOT EXISTS spaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,created_at TEXT NOT NULL);
-      INSERT OR IGNORE INTO spaces VALUES('default','共享评审',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
       CREATE TABLE IF NOT EXISTS annotations(space TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,sequence INTEGER NOT NULL,deleted INTEGER NOT NULL,updated_at TEXT NOT NULL,updated_by TEXT NOT NULL,document TEXT NOT NULL,PRIMARY KEY(space,id));
       CREATE INDEX IF NOT EXISTS annotation_sequence ON annotations(space,sequence);
       CREATE TABLE IF NOT EXISTS annotation_clock(id INTEGER PRIMARY KEY,sequence INTEGER NOT NULL);
@@ -46,7 +46,14 @@ export class AnnotationStore {
       ||!!this.db.prepare('SELECT 1 FROM annotation_operations WHERE result LIKE ? LIMIT 1').get(pattern)
       ||!!this.db.prepare('SELECT 1 FROM annotation_events WHERE event LIKE ? LIMIT 1').get(pattern);
   }
-  spaces() { return this.db.prepare('SELECT id,name FROM spaces ORDER BY created_at,id').all(); }
+  spaces() {
+    const rows = this.db.prepare("SELECT id,name,(SELECT document FROM annotations WHERE space=spaces.id ORDER BY sequence DESC LIMIT 1) AS document FROM spaces WHERE id GLOB 'media-*' ORDER BY created_at,id").all();
+    return rows.map(row => {
+      const document = row.document ? JSON.parse(String(row.document)) as AnnotationDocument : undefined;
+      const media = document?.media.find(media => media.id === document.mark.mediaId);
+      return { id: String(row.id), name: media?.name ?? String(row.name), ...(media?.source ? { source: { ...media.source, version: referenceVersion(media.source.url) } } : {}) };
+    });
+  }
   createSpace(name: unknown) {
     if (typeof name !== 'string' || !name.trim() || name.length > 120) throw new AdminError(400, '请填写评审空间名称。');
     const id = randomUUID(); this.db.prepare('INSERT INTO spaces VALUES(?,?,?)').run(id, name.trim(), new Date().toISOString()); return { id, name: name.trim() };
@@ -55,7 +62,7 @@ export class AnnotationStore {
     if (!validId(id) || !name.trim() || name.length > 200) throw new AdminError(400, '评审名称无效。');
     this.db.prepare('INSERT OR IGNORE INTO spaces VALUES(?,?,?)').run(id, name, new Date().toISOString());
   }
-  private space(id: string) { if (!validId(id) || !this.db.prepare('SELECT 1 FROM spaces WHERE id=?').get(id)) throw new AdminError(404, '评审空间不存在。', 'annotation-space-not-found'); }
+  private space(id: string) { if (!validId(id) || (!/^media-[0-9a-f]{64}$/.test(id) && !this.db.prepare('SELECT 1 FROM spaces WHERE id=?').get(id))) throw new AdminError(404, '评审空间不存在。', 'annotation-space-not-found'); }
   read(space: string, id: string): AnnotationRecord | null {
     this.space(space);
     const row = this.db.prepare('SELECT * FROM annotations WHERE space=? AND id=?').get(space, id);
@@ -84,7 +91,7 @@ export class AnnotationStore {
       const more = rows.length > events.length;
       const page: AnnotationEventPage = { schema: 'voidplayer-annotation-events', version: 1, space, events,
         cursor: more ? events.at(-1)!.sequence : head, head, more, resetRequired: !!reason,
-        ...(reason ? { reason } : {}), snapshotUrl: `/api/annotations/spaces/${space}?after=0` };
+        ...(reason ? { reason } : {}), snapshotUrl: `/api/annotations/media/${space}?after=0` };
       this.db.exec('COMMIT'); return page;
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
@@ -104,6 +111,8 @@ export class AnnotationStore {
       const document = applyAnnotationOperation(operation, current, actor, now);
       const json = JSON.stringify(document);
       if (Buffer.byteLength(json) > ANNOTATION_BYTES) throw new AdminError(413, '单条标注内容过大。', 'annotation-too-large');
+      const primary = document.media.find(media => media.id === document.mark.mediaId)!;
+      if (/^media-[0-9a-f]{64}$/.test(space)) this.db.prepare('INSERT INTO spaces(id,name,created_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name').run(space, primary.name, now);
       this.db.exec('UPDATE annotation_clock SET sequence=sequence+1 WHERE id=1');
       const sequence = Number(this.db.prepare('SELECT sequence FROM annotation_clock WHERE id=1').get()!.sequence);
       const record: AnnotationRecord = { space, id: operation.id, revision: (current?.revision ?? 0) + 1, sequence, deleted: operation.action === 'delete', updatedAt: now, updatedBy: actor.id, document };
@@ -157,7 +166,7 @@ export class AnnotationStore {
       FROM annotation_previews p JOIN annotations a ON a.space=p.space AND a.id=p.id JOIN spaces s ON s.id=p.space
       WHERE instr(lower(coalesce(text,'') || ' ' || coalesce(media_name,'') || ' ' || s.name),lower(?))>0
       ORDER BY a.updated_at DESC,p.space,p.id LIMIT 51 OFFSET ?`).all(search,offset);
-    const entries: CacheEntry[] = rows.slice(0,50).map(row=>({id:String(row.id),scope:String(row.space),version:String(row.revision),name:String(row.media_name ?? '画面标注'),...(row.media_name == null ? {nameCode:'frame-annotation' as const} : {}),detailData:{kind:'annotation' as const,space:String(row.space_name),text:String(row.text || '').slice(0,160)},detail:`${row.space_name} · ${String(row.text || '画面标注').slice(0,160)}`,bytes:Number(row.bytes),updatedAt:Date.parse(String(row.updated_at)),previewUrl:`/api/annotations/spaces/${row.space}/${row.id}/preview?revision=${row.revision}`}));
+    const entries: CacheEntry[] = rows.slice(0,50).map(row=>({id:String(row.id),scope:String(row.space),version:String(row.revision),name:String(row.media_name ?? '画面标注'),...(row.media_name == null ? {nameCode:'frame-annotation' as const} : {}),detailData:{kind:'annotation' as const,space:String(row.space_name),text:String(row.text || '').slice(0,160)},detail:`${row.space_name} · ${String(row.text || '画面标注').slice(0,160)}`,bytes:Number(row.bytes),updatedAt:Date.parse(String(row.updated_at)),previewUrl:`/api/annotations/media/${row.space}/${row.id}/preview?revision=${row.revision}`}));
     return {entries,nextOffset:rows.length>50?offset+50:null,count:Number(total.count),bytes:Number(total.bytes),limitBytes:256*1024*1024,epoch:this.previewEpoch};
   }
   removePreview(space: string, id: string, revision: number) {

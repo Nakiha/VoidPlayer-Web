@@ -43,7 +43,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
   let confirmTimer: ReturnType<typeof setTimeout> | undefined;
   let sourceLoadError: { key: string; message: string } | null = null;
   let recentRevision = -1;
-  let recentRootsState = '', recentRetry = false;
+  let recentRootsState = '', recentThumbnails = '', recentRetry = false;
   let recentRequest = 0;
   // History keeps local-file metadata only: after reload the live File is gone
   // and the row cannot load until the user re-picks the file. Remember which
@@ -71,14 +71,15 @@ export function createSourcesPane(shared: WorkbenchShared) {
 
   const libraryElements = {list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),visible:() => !$('sources-panel').hidden,manage:true,trailing:$('local-add')};
   const libraryBrowser = localOnly ? installLocalSourceBrowser(libraryElements, () => renderSources(), lifecyle.signal) : installLibraryBrowser({list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),
-    visible:() => !$('sources-panel').hidden, manage:true}, page => {
+    visible:() => !$('sources-panel').hidden, manage:true, openFile: entry => addToView({ ...entry, key: sourceKey(entry, entry.id, entry.version), libraryId: entry.id, libraryRootId: entry.rootId, library: entry })}, page => {
     const rootsChanged = page ? catalog.setLibraryRoots(page.roots.map(root => root.id)) : false;
     catalog.setLibrary(page?.entries ?? []);
     // Warm thumbnail presence/epochs beside listing; never blocks opening.
     if (page) prefetchThumbnailStatuses(page.entries, 60, page.thumbnailEpoch);
     const rootsState = JSON.stringify(page?.roots.map(root => [root.id, root.state]));
-    if (page && (rootsChanged || recentRevision !== page.revision || rootsState !== recentRootsState || recentRetry)) {
-      recentRevision = page.revision; recentRootsState = rootsState; void refreshRecent();
+    const thumbnailRevision = `${page?.thumbnailEpoch}:${page?.thumbnailRevision}`;
+    if (page && (rootsChanged || recentRevision !== page.revision || rootsState !== recentRootsState || thumbnailRevision !== recentThumbnails || recentRetry)) {
+      recentRevision = page.revision; recentRootsState = rootsState; recentThumbnails = thumbnailRevision; void refreshRecent();
     }
     renderSources();
   }, lifecyle.signal, home => {

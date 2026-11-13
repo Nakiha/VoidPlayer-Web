@@ -26,7 +26,6 @@ import '../style.css';
 import './style.css';
 import { observeTheme } from '../ui/theme.ts';
 import { icon } from '../ui/icons.ts';
-import { installWorkspaceAdmin } from './workspaces.ts';
 import { installMeasurements } from './measurement.ts';
 import { adminShell, PANES } from './shell.ts';
 import type {RootConfiguration as RootConfig,LogPage,LogDocument,LibraryScanStatus,RequestPage} from '../../shared/service/admin.ts';
@@ -400,7 +399,6 @@ async function goLogPage(target: number, pageSize = (logsMode === 'requests' ? l
 const analysisSettings = installAnalysisSettings(life.signal, api, notice);
 const caches = installCaches(life.signal, notice);
 const annotationAdmin = installAnnotationAdmin(life.signal, notice);
-const savedWorkspaces = installWorkspaceAdmin(life.signal, notice);
 const measurements = installMeasurements(life.signal, notice);
 const libraryBrowser = installAdminLibraryBrowser(life.signal, message => notice(message));
 const disposeTooltips=installTooltips(app);
@@ -419,7 +417,6 @@ for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pan
   if (id === 'preferences') {void analysisSettings.load();}
   if (id === 'library') void act(async () => { if (!rootConfig || !rootDirty) await loadRoots(); await loadScan(); });
   if (id === 'caches') caches.activate();
-  if (id === 'workspaces') savedWorkspaces.activate();
   if (id === 'annotations') annotationAdmin.activate();
   if (id === 'logs') void act(logsMode === 'requests' ? () => poll(true) : loadLogs);
 };

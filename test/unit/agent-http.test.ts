@@ -1,3 +1,5 @@
+import { applyUriParameters } from '../../shared/review/uri-state.ts';
+import { annotationTarget } from '../../shared/review/annotation-target.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
@@ -73,14 +75,15 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     const readonly = await fetch(base + '/api/agent', { method: 'POST' });
     assert.equal(readonly.status, 405); assert.equal((await readonly.json()).code, 'method-not-allowed');
 
-    const endpoint = base + '/api/annotations/spaces/default';
+    const entry = (await (await fetch(base + '/api/library/browse?recursive=1')).json()).entries[0];
+    const target = await annotationTarget({source:{id:entry.id,url:`${base}/api/media/${entry.id}/content?v=${entry.version}`}} as never,base);
+    const endpoint = base + '/api/annotations/media/' + target;
     const noIdentity = await fetch(endpoint, { method: 'POST', headers: writeHeaders, body: '{}' });
     assert.equal(noIdentity.status, 409); assert.equal((await noIdentity.json()).code, 'identity-required');
     const identity = await fetch(base + '/api/identity', { method: 'POST', headers: { ...writeHeaders, 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ name: 'HTTP reviewer' }) });
     assert.equal(identity.status, 200);
     const actor = (await identity.json()).actor, cookie = identity.headers.get('set-cookie')!.split(';')[0];
     const headers = { ...writeHeaders, cookie, 'x-voidplayer-actor': actor.id };
-    const entry = (await (await fetch(base + '/api/library/browse?recursive=1')).json()).entries[0];
     const operation: AnnotationOperation = { operationId: 'http-create', id: 'events', revision: 0, action: 'put', client: { kind: 'agent', id: 'headless-test' }, document: {
       media: [{ id: 'snapshot-B', name: entry.name, size: entry.size, lastModified: entry.lastModified, codec: 'fixture-description', decoder: 'webcodecs', width: 320, height: 180, durationUs: 1000000, firstPtsUs: 0, source: { kind: 'library', id: entry.id, url: `${base}/api/media/${entry.id}/content?v=${entry.version}` } }],
       mark: { id: 'events', text: 'Headless review', severity: 3, origin: 'agent', createdAt: '2026-10-23T00:00:00Z', slot: 'H', mediaId: 'snapshot-B', frame: { ptsUs: 0, sourcePtsUs: 0, durationUs: 40000 }, comparison: [], region: null },
@@ -93,6 +96,14 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     assert.equal((await fetch(base + diagnostic.links.help)).status, 200);
     const missingOrigin = await submit(operation, { origin: '' }); assert.equal(missingOrigin.status, 403);
     assert.equal((await submit(operation, { 'x-voidplayer-actor': 'different-user' })).status, 409);
+    const uriState = applyUriParameters(new URL(`${base}/?abi=1&A=${entry.id}@${entry.version}&t=0.25&view=split`));
+    const encoded = await fetch(base + '/api/uri/encode', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'uri' }, body: JSON.stringify({ state: uriState }) });
+    assert.equal(encoded.status, 200); assert.equal(encoded.headers.get('set-cookie'), null);
+    const shared = await encoded.json();
+    assert.deepEqual((await (await fetch(base + '/api/uri/decode?s=' + shared.token)).json()).state, uriState);
+    assert.equal((await fetch(base + '/api/workspaces')).status, 404);
+    assert.equal((await fetch(base + '/api/annotations/spaces')).status, 404);
+    assert.equal((await submit({ ...operation, document: { ...operation.document, media: operation.document!.media.map(media => ({ ...media, source: { ...media.source!, url: media.source!.url.replace(entry.version, '0'.repeat(24)) } })) } })).status, 409);
     const committed = await submit(operation), requestId = committed.headers.get('x-request-id');
     assert.equal(committed.status, 200); const record = await committed.json();
     assert.equal(record.revision, 1); assert.equal(record.document.mark.author.id, actor.id);
@@ -101,20 +112,21 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     const changed = { ...operation, document: { ...operation.document!, mark: { ...operation.document!.mark, text: 'other content' } } };
     assert.equal((await (await submit(changed)).json()).code, 'operation-id-reused');
     assert.equal((await (await submit({ ...changed, operationId: 'stale' })).json()).code, 'annotation-revision-conflict');
-    const events = await (await fetch(base + '/api/annotations/events/default?after=0')).json();
+    const events = await (await fetch(base + '/api/annotations/events/' + target + '?after=0')).json();
     assert.equal(events.events.length, 1); assert.equal(events.events[0].requestId, requestId);
     assert.deepEqual(events.events[0].client, operation.client);
     assert.deepEqual(events.events[0].target.source, { id: entry.id, version: entry.version });
     for (const cursor of ['-1', 'NaN', '1.5', '9007199254740992', '']) {
-      const invalid = await fetch(base + '/api/annotations/events/default?after=' + cursor);
+      const invalid = await fetch(base + '/api/annotations/events/' + target + '?after=' + cursor);
       assert.equal(invalid.status, 400); assert.equal((await invalid.json()).code, 'invalid-event-cursor');
     }
     const ready = await (await fetch(base + '/api/agent', { headers: { cookie } })).json();
     assert.equal(ready.capabilities.find((c: { id: string }) => c.id === 'annotations.write').readiness, 'ready');
     config.port = (service.server.address() as { port: number }).port;
     await service.close(); service = await startService(config, false);
+    assert.deepEqual((await (await fetch(base + '/api/uri/decode?s=' + shared.token)).json()).state, uriState);
     assert.deepEqual(await (await submit(operation)).json(), record);
-    assert.equal((await (await fetch(base + '/api/annotations/events/default?after=0')).json()).events.length, 1);
+    assert.equal((await (await fetch(base + '/api/annotations/events/' + target + '?after=0')).json()).events.length, 1);
   } finally { await service.close(); await rm(dir, { recursive: true, force: true }); }
 });
 

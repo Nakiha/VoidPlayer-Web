@@ -4,12 +4,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AnnotationStore } from '../../server/annotations.ts';
+function fixtureStore(file: string) { const store = new AnnotationStore(file); store.ensureSpace('default', '共享评审'); return store; }
 import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
 const alice = { id: 'alice', name: 'Alice' }, bob = { id: 'bob', name: 'Bob' };
 const document = (id='mark'): AnnotationDocument => ({ media: [{id:'media',name:'a.mp4',size:10,lastModified:1,codec:'avc1',decoder:'webcodecs',width:320,height:180,durationUs:1000000,firstPtsUs:0,source:{kind:'library',id:'library',url:'http://localhost/api/media/library/content?v=one'}}], mark:{id,text:'original',severity:3,origin:'human',createdAt:'2026-09-08',slot:'A',mediaId:'media',frame:{ptsUs:0,sourcePtsUs:0,durationUs:40000},comparison:[],region:null,drawings:[]} });
 test('annotation writes are versioned, idempotent and never resurrect tombstones', () => {
  const dir=mkdtempSync(path.join(os.tmpdir(),'vp-annotations-')),file=path.join(dir,'annotations.sqlite');
- const a=new AnnotationStore(file),b=new AnnotationStore(file);
+ const a=fixtureStore(file),b=fixtureStore(file);
  try {
   const create={operationId:'create',id:'mark',revision:0,action:'put' as const,document:document()};
   const first=a.mutate('default',create,alice); assert.equal(first.revision,1); assert.equal(first.document.mark.author?.id,'alice');
@@ -31,10 +32,10 @@ test('annotation writes are versioned, idempotent and never resurrect tombstones
   assert.ok(a.preview('default','mark',4)); assert.equal(a.clearPreviews('default').removed,1); assert.equal(a.read('default','mark')?.document.mark.text,'edited');
   assert.throws(()=>a.putPreview('default','mark',3,jpeg),/更新/);
  } finally {a.close();b.close();}
- const reopened=new AnnotationStore(file); try {assert.equal(reopened.read('default','mark')?.revision,4);} finally {reopened.close();rmSync(dir,{recursive:true,force:true});}
+ const reopened=fixtureStore(file); try {assert.equal(reopened.read('default','mark')?.revision,4);} finally {reopened.close();rmSync(dir,{recursive:true,force:true});}
 });
 test('annotation spaces isolate data and changes paginate without losing deletions',()=>{
- const store=new AnnotationStore(':memory:');
+ const store=fixtureStore(':memory:');
  try {
   const space=store.createSpace('second'); assert.equal(store.changes(space.id).entries.length,0);
   for(let i=0;i<205;i++)store.mutate('default',{operationId:`create-${i}`,id:`m-${i}`,revision:0,action:'put',document:document(`m-${i}`)},alice);
@@ -45,7 +46,7 @@ test('annotation spaces isolate data and changes paginate without losing deletio
 });
 
 test('preview browsing is bounded, revision-aware and cannot undo cache clearing',()=>{
- const store=new AnnotationStore(':memory:'),jpeg=new Uint8Array([255,216,1,2,255,217]);
+ const store=fixtureStore(':memory:'),jpeg=new Uint8Array([255,216,1,2,255,217]);
  try {
   for(let i=0;i<52;i++){const id=`p-${i}`;store.mutate('default',{operationId:id,id,revision:0,action:'put',document:document(id)},alice);store.putPreview('default',id,1,jpeg);}
   const page=store.previewList();assert.equal(page.entries.length,50);assert.equal(page.nextOffset,50);assert.equal(page.bytes,52*jpeg.byteLength);assert.equal(store.previewList(50).entries.length,2);assert.equal(store.previewList(0,'no such name').entries.length,0);

@@ -11,7 +11,7 @@
 像素布局、默认颜色或 presenter 的上屏/capture 所有权。
 
 首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
-应用保留“自有色彩”和“浏览器色彩”（软件回退近似匹配）两个选项，未保存偏好时默认浏览器色彩。转换归属与 SDR/HDR 显示目标独立设置，UI/Agent 共用 session 事务。自有色彩支持标签明确的高位深 PQ/HLG 平面；支持的 WebGPU/HDR 环境可使用浮点扩展输出，其余环境明确使用 SDR 预览。请求目标与每轨实际输出分开报告，不承诺物理亮度校准或跨设备逐像素一致。
+应用保留“默认色彩”和“浏览器色彩”（软件回退近似匹配）两个选项，未保存偏好时默认浏览器色彩。转换归属与 SDR/HDR 显示目标独立设置，UI/Agent 共用 session 事务。默认色彩支持标签明确的高位深 PQ/HLG 平面；支持的 WebGPU/HDR 环境可使用浮点扩展输出，其余环境明确使用 SDR 预览。请求目标与每轨实际输出分开报告，不承诺物理亮度校准或跨设备逐像素一致。
 
 视频上屏只使用 WebGPU，不再提供 WebGL 或 Canvas 2D 视频呈现后端。启动在开放载入与工作区恢复入口前等待 WebGPU 初始化；无 API、adapter、device 或画布上下文时明确提示视频显示不可用，不能把隐藏源画布或旧截图当作成功上屏。`colorPipeline=legacy` 已移除，带此参数启动会明确拒绝；其他诊断 profile 与统一平面入口保留。
 
@@ -223,7 +223,7 @@ HDR 显示要求 `dynamic-range: high`、WebGPU 可用且 `rgba16float` / `toneM
 
 `MediaInfo.presentation` 单独记录 requestedTarget、actualTarget、captureTarget、executor、contract；`output` 仍是实际解码资源，不冒充显示画布。actualTarget=hdr 表示浮点 extended 输出契约，不能证明物理屏幕已测得 nits。无相应能力使用 SDR，保留请求目标，UI 说明降级。显示能力变化在会话空闲暂停后重建，启动 GPU 就绪后也重新呈现早期回退帧。
 
-浏览器原生 HDR 仅准入 `browser-hdr-bridge.mjs` 的浮点转换。显式检查真实 2D context 的 Display-P3、float16、无限 `globalHDRHeadroom`；只设置浮点 backing store 仍会在 drawImage 时进行 SDR 映射。此接口在当前 Chromium 为实验性能力，应用不会修改浏览器启动参数或系统设置。未开放时报告 `browser-hdr-headroom-unavailable`，可切换自有色彩取得 HDR。浏览器决定原生 HLG OOTF、PQ 参考白及 HDR 转换，应用的 hdrWhiteNits/预览峰值只用于自有平面和软件回退，不用于二次校正 browser RGB。色域外负通道仍钳制到 0，正高亮保留。
+浏览器原生 HDR 仅准入 `browser-hdr-bridge.mjs` 的浮点转换。显式检查真实 2D context 的 Display-P3、float16、无限 `globalHDRHeadroom`；只设置浮点 backing store 仍会在 drawImage 时进行 SDR 映射。此接口在当前 Chromium 为实验性能力，应用不会修改浏览器启动参数或系统设置。未开放时报告 `browser-hdr-headroom-unavailable`，可切换默认色彩取得 HDR。浏览器决定原生 HLG OOTF、PQ 参考白及 HDR 转换，应用的 hdrWhiteNits/预览峰值只用于自有平面和软件回退，不用于二次校正 browser RGB。色域外负通道仍钳制到 0，正高亮保留。
 
 直接 external HDR 导入的 Chrome 154 实验未得到符合约定的扩展显示光，但灰阶仍能区分，所以不能仅凭最高值 ≤1 宣称硬截断。当前 Chromium 源码的高位深非 RGBAF16 路径使用 N32 中间资源；`copyExternalImageToTexture(VideoFrame)` 复用同一个 external helper，直接复制到浮点目的纹理也不能解决。浮点 2D 入口绕开这个 helper。若源是 HDR 而原生资源已变为 SDR 标签，尚未验证该资源是否保留扩展显示光，使用 SDR 预览并报告 `native-hdr-resource-unverified`，不覆盖资源标签或把普通 SDR 纹理放到扩展画布后冒充 HDR 保留。每轨诊断报告 `displayHdr`、`outputColorSpace`、`outputFormat`、`toneMapping`、请求/实际目标、executor 和 fallbackReason；`webgpu-browser-hdr-float` 表示浏览器浮点中转，不表示零拷贝或自有数学认证。真实 HEVC PQ/HLG 灰阶、彩色块和浮点 GPU 读回证据见 [HDR 支持](hdr-support.md)。
 

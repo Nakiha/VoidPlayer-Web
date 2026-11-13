@@ -34,12 +34,12 @@ test('messages use compiled ICU, escape user content, preserve ASCII timecode an
   ['player.tracks','{p0, plural, other {# 条轨道}}','1 track','2 tracks'],
  ] as const){assert.equal(t(msg(id,source),{p0:1}),single);assert.equal(t(msg(id,source),{p0:2}),multiple);}
  assert.equal(t(msg('sync.pendingCount','{n, plural, other {# 条标注需要处理}}'),{n:1}),'1 mark needs attention');
- assert.match(t(msg('transfer.sourcesSkipped','以下片源无法打开，已跳过：{details}'),{details:'clip.mp4: offline'}),/clip.mp4: offline/);
+ assert.match(t(msg('uriState.sourceReadFailed','无法读取片源 {id}（HTTP {status}）。'),{id:'clip.mp4',status:404}),/clip.mp4/);
  assert.match(t(msg('shell.trackActions','轨道 {p0} 操作'),{p0:'A'}),/A/);
  assert.ok(th(msg('shell.trackActions','轨道 {p0} 操作'),{p0:'<用户 & "name">'}).includes('&lt;'));
  const error=new MediaOpenError('decode','原始理由','reference-hdr-unsupported');
  const wrapped=new AggregateError([new Error('secondary'),error],'original');assert.equal(mediaDiagnostic(wrapped)?.code,'reference-hdr-unsupported');
- const label=diagnosticMessage('原始理由',mediaDiagnostic(error));assert.match(label,/Managed color/);assert.match(label,/reference-hdr-unsupported \/ decode/);assert.match(label,/原始理由/);
+ const label=diagnosticMessage('原始理由',mediaDiagnostic(error));assert.match(label,/Default color/);assert.match(label,/reference-hdr-unsupported \/ decode/);assert.match(label,/原始理由/);
  assert.equal(diagnosticMessage('请先打开视频。'),'Open a video first.');
  assert.equal(diagnosticMessage('该片源已在视图中，不能重复添加。'),'This source is already in the view and cannot be added again.');
  assert.equal(diagnosticMessage('未知底层错误'),'未知底层错误');

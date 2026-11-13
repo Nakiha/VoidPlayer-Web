@@ -103,7 +103,11 @@ test('media thumbnails: status, upload, first-wins, epoch races and version bind
     assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: uploadHeaders(), body: new Blob([Uint8Array.from([1, 2, 3])]) })).status, 400);
     assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: uploadHeaders('https://evil.invalid'), body: new Blob([image]) })).status, 403);
     // First valid submission wins.
+    const missingRevision = library.browse().thumbnailRevision;
     assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: uploadHeaders(), body: new Blob([image]) })).status, 201);
+    const readyRevision = library.browse().thumbnailRevision;
+    assert.notEqual(readyRevision, missingRevision, 'new shared covers invalidate presence independently of media changes');
+    assert.equal(library.browse().thumbnailEpoch, 0, 'new uploads do not invalidate other in-flight uploads');
     const status = await (await fetch(statusUrl)).json();
     assert.equal(status.state, 'ready');
     assert.equal(status.width, 320); assert.equal(status.height, 240);
@@ -124,6 +128,7 @@ test('media thumbnails: status, upload, first-wins, epoch races and version bind
     assert.equal(dupe.status, 200);
     assert.deepEqual((await dupe.json()).deduped, true);
     assert.deepEqual([...Buffer.from(await (await fetch(imageUrl)).arrayBuffer())], [...image]);
+    assert.equal(library.browse().thumbnailRevision, readyRevision, 'image reads and duplicate uploads do not cause presence churn');
     // Admin overview/list and single-item clear with epoch advance.
     const overview = await (await fetch(`${base}/api/admin/caches`)).json();
     const thumbs = overview.types.find((t: { kind: string }) => t.kind === 'media-thumbnails');
@@ -134,6 +139,7 @@ test('media thumbnails: status, upload, first-wins, epoch races and version bind
     assert.ok(listed.entries[0].previewUrl.includes('/thumbnail?'));
     const cleared = await fetch(`${base}/api/admin/caches/media-thumbnails`, { method: 'DELETE', headers: adminHeaders, body: JSON.stringify({ id: entry.id, version: entry.version }) });
     assert.deepEqual(await cleared.json(), { removed: 1 });
+    assert.notEqual(library.browse().thumbnailRevision, readyRevision);
     assert.equal((await fetch(imageUrl)).status, 404);
     assert.equal((await fetch(imageUrl, { headers: { 'if-none-match': imageTag } })).status, 404, 'cleared data cannot be validated from an old tag');
     // The in-flight upload accepted before the clear cannot backfill.

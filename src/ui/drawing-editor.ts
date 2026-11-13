@@ -168,6 +168,14 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     div.focus(); const selection = window.getSelection(); selection?.selectAllChildren(div); selection?.collapseToEnd(); controls();
   }
   function choose(next: Tool) { finishText(); tool = next; redraw(); }
+  function cancelGesture() {
+    if (!gesture) return;
+    const before = gesture.before;
+    gesture = undefined; selectedId = undefined; lastTap = undefined;
+    drafts.clear();
+    for (const [slot, draft] of before) drafts.set(slot, draft);
+    redraw();
+  }
   function close() {
     if (!active || closing) return;
     closing = true; finishText(); clearTimeout(thumbTimer); refreshThumbnails(); active = false; gesture = undefined; drafts.clear(); undo.length = redo.length = 0; selectedId = undefined;
@@ -300,7 +308,8 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
       history(gesture.before); gesture = undefined; svg.releasePointerCapture(e.pointerId); persist(); redraw();
       if (resumeText && selected()?.tool === 'text') startText(slot, selected()!);
     };
-    svg.onpointercancel = () => { if (!gesture) return; drafts.clear(); for (const [s, draft] of gesture.before) drafts.set(s, draft); gesture = undefined; redraw(); };
+    svg.onpointercancel = cancelGesture;
+    svg.onlostpointercapture = cancelGesture;
     svg.ondblclick = e => { e.preventDefault(); e.stopPropagation(); const id = (e.target as Element).closest<SVGElement>('[data-shape-id]')?.dataset.shapeId; const d = find(slot, id); if (d?.tool === 'text') startText(slot, d); };
   }
   const grip = $('drawing-grip');
@@ -352,6 +361,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
   }
   return {
     active: () => active,
+    cancelGesture,
     beginRectangle(slot: Slot, event: PointerEvent, current: PointerEvent) {
       this.open(slot); choose('rect');
       layer(slot).onpointerdown?.call(layer(slot), event);

@@ -23,7 +23,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
         await page.waitForFunction(() => Number(document.querySelector('#analysis-canvas')?.dataset.plotRight) > 0);
         assert.equal(await page.locator('#analysis-load-metrics [data-metric="qp"]').getAttribute('aria-pressed'), 'false', 'QP is opt-in');
-        assert.deepEqual((await call('export_workspace')).layout.analysisView.loadMetrics, ['bitrate']);
+        assert.deepEqual((await call('get_uri_state')).layout.analysisView.loadMetrics, ['bitrate']);
         assert.ok(!requests.slice(beforeOverview).some(r => /voidplayer-analysis|local-worker|bitstream-analysis/.test(r.url)), 'opening the lightweight overview starts no deep analysis');
         for (const slot of ['A', 'B']) assert.equal((await call('get_bitstream_analysis_state', {slot})).state, 'idle');
         for (const slot of ['A', 'B']) {
@@ -53,7 +53,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.equal(await page.locator('#analysis-load-metrics [data-metric="bitrate"]').getAttribute('aria-pressed'),'false');
         await qpButton.click({button:'right'});
         assert.equal(await page.locator('#analysis-load-metrics [data-metric="bitrate"]').getAttribute('aria-pressed'),'true');
-        assert.deepEqual((await call('export_workspace')).layout.analysisView.loadMetrics.sort(),['bitrate','qp']);
+        assert.deepEqual((await call('get_uri_state')).layout.analysisView.loadMetrics.sort(),['bitrate','qp']);
         await qpButton.click();
         await selectDiagrams(page, 'nalu-size');
         await page.waitForFunction(async () => (await Promise.all(['A','B'].map(slot => window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot})))).every(result=>result.state==='ready' && result.stream?.pictures===120), undefined, {timeout:30000});
@@ -277,7 +277,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         const trackB = page.locator('#analysis-status-items .analysis-chip[data-slot="B"]');
         const expectTracks = async slots => {
           await page.waitForFunction(slots => [...document.querySelectorAll('#analysis-status-items .analysis-chip')].every(e => e.getAttribute('aria-pressed') === String(slots.includes(e.dataset.slot))), slots);
-          const state = (await call('export_workspace')).layout.analysisView;
+          const state = (await call('get_uri_state')).layout.analysisView;
           assert.deepEqual([...state.selected].sort(), [...slots].sort(), 'track selection and workspace state agree');
           assert.equal(await page.locator('#analysis-status .st-num').count(), 2, 'soloing a chart track retains both presented frame numbers');
         };
@@ -300,7 +300,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         const diagramButton = (mode, empty = false) => page.locator(`#${empty ? 'analysis-empty-diagrams' : 'analysis-diagrams'} [data-value="${mode}"]`);
         const expectDiagrams = async selected => {
           await page.waitForFunction(selected => [...document.querySelectorAll('.analysis-diagram-toggles button')].every(button => button.getAttribute('aria-pressed') === String(selected.includes(button.dataset.value))), selected);
-          assert.deepEqual([...(await call('export_workspace')).layout.analysisView.diagrams].sort(), [...selected].sort(), 'both diagram button groups and workspace selection agree');
+          assert.deepEqual([...(await call('get_uri_state')).layout.analysisView.diagrams].sort(), [...selected].sort(), 'both diagram button groups and workspace selection agree');
         };
         const original = ['bitrate','size','nalu-size'];
         await selectDiagrams(page, original);

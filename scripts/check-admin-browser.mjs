@@ -30,6 +30,8 @@ try {
   const log = await uploaded.json(); assert.equal(uploaded.status, 201);
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1200, height: 820 }, reducedMotion: 'reduce', colorScheme: 'light' });
+  // Preserve the detailed-row geometry setup; viewport-interactions covers the compact default.
+  await context.addInitScript(() => { if (localStorage.getItem('voidplayer.library-compact') == null) localStorage.setItem('voidplayer.library-compact', 'false'); });
   const player = await context.newPage(); const errors = [],clockTrace=[];let clockPhase='real-ui';
   // A cached cover exercises browser image dragging without decoding an extra video.
   const cover=await player.evaluate(() => {
@@ -284,10 +286,10 @@ try {
   assert.equal(await embedded.locator('#library-location').inputValue(),'leaf');
   assert.equal(await active.locator('.source-file .filename').innerText(),'nested.mp4');
   const compactButton=embedded.locator('#library-compact');
-  assert.equal(await compactButton.getAttribute('aria-pressed'),'false');
+  assert.equal(await compactButton.getAttribute('data-compact'),'false');
   await managed.evaluate(() => {window.compactRow=document.querySelector('#source-list .library-list-view .source-file');});
   await compactButton.click();
-  await player.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('aria-pressed')==='true');
+  await player.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('data-compact')==='true');
   const playerCompact=await player.locator('#source-list .library-mount[data-root-id=local]').evaluate(row => ({height:row.getBoundingClientRect().height,
     metadata:getComputedStyle(row.querySelector('.source-meta')).display,thumb:row.querySelector('.source-thumb').getBoundingClientRect().width}));
   assert.deepEqual(playerCompact,{height:28,metadata:'none',thumb:20},'player and admin share compact styling and preferences');
@@ -299,15 +301,15 @@ try {
   await managed.waitForFunction(() => document.querySelector('#source-list').getAttribute('aria-busy')==='false');
   await chooseView('columns');
   await active.locator('.library-column').last().locator('.source-file').waitFor();
-  assert.equal(await compactButton.getAttribute('aria-pressed'),'true','compact density is independent of list/column mode');
+  assert.equal(await compactButton.getAttribute('data-compact'),'true','compact density is independent of list/column mode');
   await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-admin-compact-${browserName}.png`});
   await compactButton.click();
   assert.equal(await embedded.locator('#library-location').inputValue(),'nested','view changes retain the directory search');
-  await player.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('aria-pressed')==='false');
+  await player.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('data-compact')==='false');
   await player.locator('#library-compact').click();
-  await managed.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('aria-pressed')==='true');
+  await managed.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('data-compact')==='true');
   await player.locator('#library-compact').click();
-  await managed.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('aria-pressed')==='false');
+  await managed.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('data-compact')==='false');
   await embedded.locator('.crumbs-back').click();
   await managed.waitForFunction(() => document.querySelector('#library-location').value==='z-branch');
   await embedded.locator('.crumbs-forward').click();
@@ -586,7 +588,7 @@ try {
   await chooseView('list'); await compactButton.click(); await managed.reload();
   await managed.waitForFunction(() => document.querySelector('#admin-library-browser')?.dataset.libraryView==='list');
   await active.locator('.library-mount[data-root-id=local]').waitFor();
-  assert.equal(await compactButton.getAttribute('aria-pressed'),'true','density survives reload');
+  assert.equal(await compactButton.getAttribute('data-compact'),'true','density survives reload');
   await compactButton.click();
   await chooseView('columns');
   assert.deepEqual(await widths(),[320],'column preferences survive reload');
@@ -897,7 +899,7 @@ try {
   await page.unroute('**/api/admin/measurements/*/transfer');
   for (const width of [1512, 1280, 720, 390]) {
     await page.setViewportSize({ width, height: 820 });
-    for (const name of ['概览', '媒体库', '缓存', '标注', '工作区', '日志', '测速', '首选项']) {
+    for (const name of ['概览', '媒体库', '缓存', '标注', '日志', '测速', '首选项']) {
       await page.getByRole('button', { name, exact: true }).click();
       const fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.admin-content > section:not([hidden])')].every(e => e.scrollWidth <= e.clientWidth + 1));
       assert.equal(fits, true, `${name} overflows at ${width}px`);
@@ -989,7 +991,7 @@ try {
   assert.ok(await page.locator('#request-list .admin-request-row').count() > 0, 'the revalidated snapshot stays rendered');
   await page.locator('#request-list .admin-request-row > span:first-child').filter({ hasText: '127.0.0.1' }).first().waitFor();
   assert.equal(overviewReads.length, 0, 'request history does not poll the hidden overview');
-  await page.locator('[data-pane=workspaces]').click(); await page.waitForLoadState('networkidle');
+  await page.locator('[data-pane=annotations]').click(); await page.waitForLoadState('networkidle');
   const readsAfterHide = requestReads.length;
   await page.waitForTimeout(4000);
   assert.equal(requestReads.length, readsAfterHide, 'hidden request history stops observing');

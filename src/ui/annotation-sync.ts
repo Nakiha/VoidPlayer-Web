@@ -1,285 +1,293 @@
-import { mergeAnnotationEvents } from '../../shared/review/annotation-events.ts';
-import { localOnly } from '../services/build-profile.ts';
-import type { AnnotationEvent } from '../../shared/review/annotation-events.ts';
 import { installAnnotationActivity } from './annotation-activity.ts';
+import { mergeAnnotationEvents } from '../../shared/review/annotation-events.ts';
+import type { AnnotationEvent } from '../../shared/review/annotation-events.ts';
+import { localOnly } from '../services/build-profile.ts';
 import { t, msg, onLanguageChange } from '../i18n.ts';
 import type { ReviewSession } from '../session.ts';
 import { AnnotationStorage } from '../review/annotation-storage.ts';
 import type { AnnotationDraft } from '../review/annotation-storage.ts';
 import { AnnotationClient } from '../review/annotation-client.ts';
-import type { AnnotationDocument, AnnotationRecord } from '../../shared/review/annotation-record.ts';
-import { annotationMediaKey } from '../../shared/review/annotation-record.ts';
+import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
+import { annotationDocumentTarget, annotationTarget } from '../../shared/review/annotation-target.ts';
 import { currentActor, identityHealth } from '../services/identity.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
 import { AnnotationPendingQueue } from '../review/annotation-pending.ts';
-import type { PendingEdit } from '../review/annotation-pending.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
 import { publishMarkPreview } from './mark-preview-publish.ts';
 import { PollingCadence } from '../services/polling-cadence.ts';
 
+/** Each media version owns an independent cursor and draft queue. Layout changes never select an annotation collection. */
 export function installAnnotationSync(session: ReviewSession, editing: () => boolean) {
   const storage = new AnnotationStorage(), life = new AbortController(), client = new AnnotationClient(life.signal);
-  const activity = installAnnotationActivity(life.signal);
-  const cadence = new PollingCadence(3000);
-  let pollRevision = 0;
-  const resetPolling = () => { pollRevision++; cadence.reset(); };
-  let eventCursor: number | undefined, recentEvents: AnnotationEvent[] = [];
-  let previewEpoch = 0, editGeneration=0, localFailure: string | (() => string) = '';
-  // REVIEW-01：待保存队列按 key 串行、重试不产生新编辑版本。
-  // stage() 只在用户新编辑时调用并递增 seq；sync() 重试复用快照 pending，
-  // 两次核对身份后才落盘，过期直接跳过，不覆盖更新的 B-new/删除。
-  const pendingQueue = new AnnotationPendingQueue();
-  let scope = 'local', available = false, working = false, cursor = 0, generation = 0, error: string | (() => string) = '', saving = 0;
-  let syncIdle: Promise<void> = Promise.resolve();
-  let drafts: AnnotationDraft[] = [];
-  const versions = new Map<string, number>(), managed = new Set<string>();
+  const activity = installAnnotationActivity(life.signal), eventsByTarget = new Map<string, AnnotationEvent[]>(), origins = new Map<string, string>();
+  const pending = new AnnotationPendingQueue(), cadence = new PollingCadence(3000);
+  const targets = new Map<string, { cursor: number; eventCursor?: number; epoch: number; initialized: boolean }>();
+  const targetMedia = new Map<string, import('../../shared/media/types.ts').MediaInfo>();
+  const assignments = new Map<string, string>(), versions = new Map<string, number>(), managed = new Set<string>();
+  let actor = currentActor()?.id ?? 'local', available = false, working = false, saving = 0, generation = 0;
+  let activityFailed = false, renderedConflicts = '';
+  let idle: Promise<void> = Promise.resolve();
+  let localFailure = false;
+  let failure = '', drafts: AnnotationDraft[] = [], editTail: Promise<void> = Promise.resolve();
   let owner = randomUUID();
-  try { if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) owner = sessionStorage.getItem('voidplayer.annotation-window') || owner; sessionStorage.setItem('voidplayer.annotation-window', owner); if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) scope=sessionStorage.getItem('voidplayer.annotation-space')||'local'; } catch {}
-  if (localOnly) scope = 'local';
-  let actor = currentActor()?.id ?? 'local';
-  try { if (!localOnly) actor=currentActor()?.id ?? JSON.parse(localStorage.getItem('voidplayer.identity') ?? 'null')?.id ?? 'local'; } catch {}
-  const currentDrafts = () => drafts.filter(draft=>draft.space===scope && draft.actor===actor && draft.key.startsWith(`${actor}/${scope}/${owner}/`));
-  function state() {
-    const pending=currentDrafts(), conflicts=pending.filter(draft=>draft.conflict);
-    const failure=localFailure || error;
-    const message=(typeof failure === 'function' ? failure() : failure) || (saving ? t(msg("sync.savingLocal", "正在保存到本机…")) : conflicts.length ? t(msg("sync.pendingCount", "{n, plural, other {# 条标注需要处理}}"), { n: conflicts.length }) : pending.length ? available && scope!=='local' ? t(msg("sync.savedPendingSync", "已存本机 · 等待同步")) : t(msg("sync.savedLocal", "已存本机")) : available && scope!=='local' ? t(msg("sync.synced", "已同步")) : t(msg("sync.savedLocal", "已存本机")));
-    const saveState=localFailure || error || conflicts.length?'error':saving || (pending.length && scope!=='local')?'pending':'saved';
-    window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { space: scope, message, state: saveState } }));
+  try {
+    if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload'))
+      owner = sessionStorage.getItem('voidplayer.annotation-window') || owner;
+    sessionStorage.setItem('voidplayer.annotation-window', owner);
+  } catch {}
+  const own = (draft: AnnotationDraft) => draft.actor === actor && draft.key.startsWith(`${actor}/${draft.space}/${owner}/`);
+  function status() {
+    const conflicts = drafts.filter(draft => own(draft) && draft.conflict);
+    const queued = drafts.filter(draft => own(draft) && !draft.space.startsWith('local-'));
+    const remote = available && (queued.length > 0 || session.getState().tracks.some(track => !!track.source));
+    const message = failure || (saving || pending.size ? t(msg('sync.savingLocal', '正在保存到本机…'))
+      : conflicts.length ? t(msg('sync.pendingCount', '{n, plural, other {# 条标注需要处理}}'), { n: conflicts.length })
+      : queued.length && remote ? t(msg('sync.savedPendingSync', '已存本机 · 等待同步'))
+      : remote ? t(msg('sync.synced', '已同步')) : t(msg('sync.savedLocal', '已存本机')));
+    const output = document.getElementById?.('annotation-status');
+    if (output) output.textContent = message;
+    window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { message,
+      state: failure || conflicts.length ? 'error' : saving || pending.size || (remote && queued.length) ? 'pending' : 'saved' } }));
+    const list = document.getElementById?.('annotation-conflicts');
+    if (!list) return;
+    const signature = JSON.stringify(conflicts.map(draft => [draft.key, draft.generation, draft.conflict]));
+    if (signature === renderedConflicts) return;
+    renderedConflicts = signature;
+    list.replaceChildren();
+    for (const draft of conflicts) {
+      const row = document.createElement('div'), label = document.createElement('p');
+      label.textContent = `${draft.desired?.mark.text || draft.id}：${draft.conflict}`;
+      const discard = document.createElement('button');
+      discard.textContent = t(msg('sync.useServer', '采用服务器版本'));
+      discard.onclick = () => void resolve(draft, false);
+      row.append(label, discard);
+      if (draft.desired) {
+        const copy = document.createElement('button'); copy.textContent = t(msg('sync.keepCopy', '保留为新标注'));
+        copy.onclick = () => void resolve(draft, true); row.append(copy);
+      }
+      list.append(row);
+    }
   }
   async function refreshDrafts() {
-    const captured = generation;
-    try { const next = await storage.drafts(scope, actor); if (captured === generation) { drafts = next; state(); } }
-    catch(e) { if (captured === generation) { error=(e as Error).message;state(); } }
+    const captured = actor, collected: AnnotationDraft[] = [];
+    for (const target of targets.keys()) collected.push(...await storage.drafts(target, captured));
+    if (captured === actor && !life.signal.aborted) drafts = collected.filter(own);
   }
-  async function enqueue(id: string, document: AnnotationDocument | null, base = versions.get(id) ?? 0, destination={space:scope,actorId:actor}) {
-    if(document)document={mark:structuredClone(document.mark),media:document.media.map(media=>({...media,...(media.source?{source:{...media.source,url:new URL(media.source.url,location.href).href}}:{})}))};
-    const {space,actorId}=destination,key=`${actorId}/${space}/${owner}/${id}`;
-    // 用户新编辑：产生新的 seq 与 editGeneration，重试不得走这条路径。
-    const pending=pendingQueue.stage(key,{id,document,base,space,actorId});editGeneration++;
-    resetPolling();
-    if(space===scope && actorId===actor)managed.add(id);saving++;state();
+  async function resolve(draft: AnnotationDraft, copy: boolean) {
+    if (!own(draft)) return;
     try {
-      await pendingQueue.runIfCurrent(key,pending,async()=>{
-        await storage.change(key,previous=>({key,space,actor:actorId,id,base:previous?.base ?? base,desired:document,generation:(previous?.generation ?? 0)+1,...(previous?.attempt?{attempt:previous.attempt,sentGeneration:previous.sentGeneration}:{}),...(previous?.conflict?{conflict:previous.conflict}:{})}));
-        pendingQueue.removeIfCurrent(key,pending);if(!pendingQueue.size)localFailure='';
-      });
-    } catch(e) {localFailure=()=>t(msg("sync.localSaveFailed", "本机保存失败：{error}"), { error: (e as Error).message });} finally {saving--;await refreshDrafts();resetPolling();}
-  }
-  async function persistRetry(key: string, pending: PendingEdit) {
-    if(pendingQueue.get(key)!==pending)return;
-    saving++;state();
-    try {
-      await pendingQueue.runIfCurrent(key,pending,async()=>{
-        await storage.change(key,previous=>({key,space:pending.space,actor:pending.actorId,id:pending.id,base:previous?.base ?? pending.base,desired:pending.document,generation:(previous?.generation ?? 0)+1,...(previous?.attempt?{attempt:previous.attempt,sentGeneration:previous.sentGeneration}:{}),...(previous?.conflict?{conflict:previous.conflict}:{})}));
-        pendingQueue.removeIfCurrent(key,pending);if(!pendingQueue.size)localFailure='';
-      });
-    } catch(e) {localFailure=()=>t(msg("sync.localSaveFailed", "本机保存失败：{error}"), { error: (e as Error).message });} finally {saving--;await refreshDrafts();}
-  }
-  const unsubscribeMarks=session.subscribeMarkChanges((id,document)=>{void enqueue(id,document);});
-  async function apply(removeIds: string[] = []) {
-    if (editing() || saving || pendingQueue.size) return;
-    const captured=generation,edited=editGeneration, records=await storage.records(scope); await refreshDrafts(); if(captured!==generation || editing())return;
-    const pending=currentDrafts(), protectedIds=new Set(pending.map(draft=>draft.id));
-    const documents:AnnotationDocument[]=[];
-    for(const record of records){
-      if(protectedIds.has(record.id))continue;
-      versions.set(record.id,record.revision);managed.add(record.id);
-      if(!record.deleted)documents.push(record.document);
-      const existingPreview=annotationThumbnails.get(record.id);
-      if(!record.deleted && available && (!existingPreview || (existingPreview.url.startsWith('/api/annotations/') && existingPreview.url!==`/api/annotations/spaces/${scope}/${record.id}/preview?revision=${record.revision}`) || (existingPreview.signature && existingPreview.signature!==thumbnailSignature(record.document.mark)))) {
-        publishMarkPreview(record.id,{url:`/api/annotations/spaces/${scope}/${record.id}/preview?revision=${record.revision}`,width:320,height:180,signature:thumbnailSignature(record.document.mark)});
+      if (copy && draft.desired) {
+        const document = structuredClone(draft.desired); document.mark.id = randomUUID();
+        await enqueue(document.mark.id, document, draft.space, actor, 0);
       }
-    }
-    for(const draft of pending){managed.add(draft.id);if(draft.desired)documents.push(draft.desired);}
-    const previews = await storage.previews(scope, documents.map(document => document.mark.id));
-    if(captured!==generation || edited!==editGeneration || editing() || saving || pendingQueue.size)return;
-    for(const document of documents){const preview=previews.get(document.mark.id);if(preview?.signature===thumbnailSignature(document.mark))publishMarkPreview(document.mark.id,preview);}
-    // Identical shared library versions remap to this window's ephemeral media IDs.
-    // Stale ids are removed only with a completed load: dropping live marks
-    // before the replacement is readable leaves a window where failed imports
-    // or skipped syncs observably erase annotations.
-    session.applyStoredAnnotations(documents,[...managed, ...removeIds]);
+      await storage.change(draft.key, current => current?.generation === draft.generation ? undefined : current);
+      await sync();
+    } catch (error) { failure = (error as Error).message; status(); }
   }
-  const uploaded = new Map<string,string>();
-  async function uploadPreviews(space: string, actorId: string) {
-    if(session.getState().playing || editing())return;
-    const records=await storage.records(space);let count=0;
-    for(const record of records){
-      if(record.deleted || count>=4)continue;
-      const token=`${record.revision}/${thumbnailSignature(record.document.mark)}`,key=`${space}/${record.id}`;
-      if(uploaded.get(key)===token)continue;
-      const preview=await storage.preview(space,record.id);
-      if(!preview || !preview.url.startsWith('data:image/jpeg;base64,') || preview.signature!==thumbnailSignature(record.document.mark))continue;
-      count++;
-      const blob=await fetch(preview.url).then(response=>response.blob());
-      const response=await fetch(`/api/annotations/spaces/${space}/${record.id}/preview?revision=${record.revision}&epoch=${previewEpoch}`,{method:'PUT',headers:{'x-voidplayer-action':'annotation','x-voidplayer-actor':actorId,'content-type':'image/jpeg'},body:blob,signal:AbortSignal.any([life.signal,AbortSignal.timeout(10000)])});
-      if(response.ok)uploaded.set(key,token);
+  function targetState(target: string) {
+    if (!targets.has(target)) targets.set(target, { cursor: 0, epoch: 0, initialized: false });
+    return targets.get(target)!;
+  }
+  async function enqueue(id: string, document: AnnotationDocument | null, target: string, actorId: string, base?: number) {
+    targetState(target); assignments.set(id, target); managed.add(id);
+    const key = `${actorId}/${target}/${owner}/${id}`;
+    const value = pending.stage(key, { id, document, base: base ?? versions.get(`${target}/${id}`) ?? 0, space: target, actorId });
+    await persist(key, value);
+    await refreshDrafts();
+    cadence.reset();
+  }
+  async function persist(key: string, value: ReturnType<AnnotationPendingQueue['stage']>) {
+    await pending.runIfCurrent(key, value, async () => {
+      await storage.change(key, previous => ({ key, space: value.space, actor: value.actorId, id: value.id,
+        base: previous?.base ?? value.base, desired: value.document, generation: (previous?.generation ?? 0) + 1,
+        ...(previous?.attempt ? { attempt: previous.attempt, sentGeneration: previous.sentGeneration } : {}),
+        ...(previous?.conflict ? { conflict: previous.conflict } : {}) }));
+      pending.removeIfCurrent(key, value);
+    });
+  }
+  const unsubscribeMarks = session.subscribeMarkChanges((id, document) => {
+    const capturedActor = actor, snapshot = document ? structuredClone(document) : null;
+    if (snapshot) for (const media of snapshot.media) if (media.source) media.source.url = new URL(media.source.url, location.href).href;
+    saving++; status(); cadence.reset();
+    editTail = editTail.then(async () => {
+      const target = snapshot ? await annotationDocumentTarget(snapshot, location.href) : assignments.get(id);
+      if (target) await enqueue(id, snapshot, target, capturedActor);
+    }).catch(error => { localFailure = true; failure = (error as Error).message; }).finally(() => { saving--; status(); });
+  });
+  async function discover() {
+    for (const track of session.getState().tracks) {
+      const target = await annotationTarget(track, location.href); targetState(target); targetMedia.set(target, track);
+      if (track.source) origins.set(target, new URL(track.source.url, location.href).origin);
     }
   }
-  window.addEventListener('voidplayer-annotation-preview',event=>{
-    const {id,preview}=(event as CustomEvent).detail;
-    const mark=session.getState().marks.find(mark=>mark.id===id);
-    if(mark && preview.url.startsWith('data:image/jpeg;base64,') && thumbnailSignature(mark)===preview.signature)void storage.savePreview(scope,id,preview).catch(()=>{});
-  },{signal:life.signal});
-  function resetActivity() {
-    resetPolling();
-    eventCursor = undefined; recentEvents = []; activity.update(scope, recentEvents);
+  function mapDocument(document: AnnotationDocument, target: string): AnnotationDocument {
+    const loaded = targetMedia.get(target), primary = document.media.find(media => media.id === document.mark.mediaId);
+    if (!loaded?.source || !primary?.source) return document;
+    const original = new URL(primary.source.url, location.href).origin, current = new URL(loaded.source.url, location.href).origin;
+    if (original === current) return document;
+    const mapped = structuredClone(document);
+    for (const media of mapped.media) if (media.source) {
+      const url = new URL(media.source.url, location.href);
+      if (url.origin === original) media.source.url = new URL(url.pathname + url.search, current).href;
+    }
+    return mapped;
   }
-  async function syncActivity(space: string, captured: number) {
-    try {
-      // A finite batch lets state sync proceed even when remote writers stay busy.
-      for (let batch = 0; batch < 5; batch++) {
-        const page = await client.events(space, eventCursor);
-        if (captured !== generation) return;
-        if (page.resetRequired) {
-          const records: AnnotationRecord[] = []; let after = 0, snapshot;
-          do {
-            snapshot = await client.changes(space, after);
-            if (captured !== generation) return;
-            records.push(...snapshot.entries); after = snapshot.cursor;
-          } while (snapshot.more);
-          await storage.replaceRecords(space, records);
-          if (captured !== generation) return;
-          cursor = after; versions.clear(); recentEvents = [];
-          // Activity is a recent-history view; repopulate it after rebuilding state.
-          const latest = await client.events(space);
-          if (captured !== generation) return;
-          recentEvents = mergeAnnotationEvents([], latest);
-        } else recentEvents = mergeAnnotationEvents(recentEvents, page);
-        eventCursor = page.cursor;
-        activity.update(space, recentEvents);
-        if (!page.more) break;
+  async function apply() {
+    if (editing() || saving || pending.size || life.signal.aborted) return;
+    const stamp = generation, documents: AnnotationDocument[] = [], nextDrafts: AnnotationDraft[] = [];
+    for (const target of targets.keys()) {
+      const records = await storage.records(target), localDrafts = (await storage.drafts(target, actor)).filter(own);
+      nextDrafts.push(...localDrafts);
+      const protectedIds = new Set(localDrafts.map(draft => draft.id));
+      for (const record of records) {
+        assignments.set(record.id, target); managed.add(record.id); versions.set(`${target}/${record.id}`, record.revision);
+        if (!record.deleted && !protectedIds.has(record.id)) documents.push(mapDocument(record.document, target));
       }
-      return true;
-    } catch (cause) {
-      // An activity failure must not block acknowledged writes or annotation sync.
-      if (captured === generation && !life.signal.aborted) activity.update(space, recentEvents, true);
-      return false;
+      for (const draft of localDrafts) { managed.add(draft.id); if (draft.desired) documents.push(mapDocument(draft.desired, target)); }
+      const previews = await storage.previews(target, documents.map(document => document.mark.id));
+      for (const [id, preview] of previews) {
+        const mark = documents.find(document => document.mark.id === id)?.mark;
+        if (mark && preview.signature === thumbnailSignature(mark)) publishMarkPreview(id, preview);
+      }
+      if (available && !target.startsWith('local-')) for (const record of records) if (!record.deleted) {
+        if (!annotationThumbnails.get(record.id)?.url.startsWith('data:') || annotationThumbnails.get(record.id)?.signature !== thumbnailSignature(record.document.mark)) publishMarkPreview(record.id,
+          { url: `/api/annotations/media/${target}/${record.id}/preview?revision=${record.revision}`, width: 320, height: 180 });
+      }
+    }
+    if (stamp !== generation || editing() || saving || pending.size || life.signal.aborted) return;
+    drafts = nextDrafts;
+    session.applyStoredAnnotations(documents, [...managed]); status();
+  }
+  const uploaded = new Map<string, string>();
+  async function uploadPreviews() {
+    if (!available || session.getState().playing || editing()) return;
+    let count = 0;
+    for (const [target, state] of targets) {
+      if (target.startsWith('local-')) continue;
+      for (const record of await storage.records(target)) {
+        if (record.deleted || count >= 4) continue;
+        const preview = await storage.preview(target, record.id), signature = thumbnailSignature(record.document.mark);
+        if (!preview?.url.startsWith('data:image/jpeg;base64,') || preview.signature !== signature) continue;
+        const key = `${target}/${record.id}`, token = `${record.revision}/${state.epoch}/${signature}`;
+        if (uploaded.get(key) === token) continue;
+        count++;
+        const blob = await fetch(preview.url).then(response => response.blob());
+        const response = await fetch(`/api/annotations/media/${target}/${record.id}/preview?revision=${record.revision}&epoch=${state.epoch}`,
+          { method: 'PUT', headers: { 'x-voidplayer-action': 'annotation', 'x-voidplayer-actor': actor, 'content-type': 'image/jpeg' },
+            body: blob, signal: AbortSignal.any([life.signal, AbortSignal.timeout(10000)]) });
+        if (response.ok) uploaded.set(key, token);
+      }
     }
   }
   async function sync() {
-    if(life.signal.aborted)return;
-    if(working)return syncIdle;
+    if (life.signal.aborted) return;
+    if (working) return idle;
     cadence.ready(!document.hidden);
-    working=true;let release!:()=>void;syncIdle=new Promise(resolve=>{release=resolve;});
-    const captured=generation,space=scope,actorId=actor,pollTicket=pollRevision;
-    let activityFailed = false;
+    working = true; activityFailed = false;
+    let release!: () => void; idle = new Promise(resolve => { release = resolve; });
+    const stamp = generation, actorId = actor;
     try {
-      // REVIEW-01：重试复用快照 pending，不产生新 seq；过期（被新编辑/删除取代）直接跳过。
-      for(const [key, pending] of pendingQueue.snapshot())await persistRetry(key,pending);
-      if(pendingQueue.size)return;
-      await refreshDrafts();
-      if(available && space!=='local') {
-        for(const queued of currentDrafts().filter(draft=>!draft.conflict)) {
-          if(captured!==generation)break;
-          const draft=await storage.change(queued.key,current=>{
-            if(!current || current.conflict)return current;
-            if(!current.attempt){current.attempt={operationId:randomUUID(),id:current.id,revision:current.base,action:current.desired?'put':'delete',client:{kind:'gui',id:owner},...(current.desired?{document:current.desired}:{})};current.sentGeneration=current.generation;}
+      await editTail; await discover();
+      for (const [key, value] of pending.snapshot()) await persist(key, value);
+      if (pending.size) return;
+      localFailure = false;
+      for (const [target, state] of targets) {
+        if (!available || target.startsWith('local-')) continue;
+        for (const queued of (await storage.drafts(target, actorId)).filter(draft => own(draft) && !draft.conflict)) {
+          if (stamp !== generation || actorId !== actor) return;
+          const draft = await storage.change(queued.key, current => {
+            if (!current || current.conflict) return current;
+            if (!current.attempt) {
+              current.attempt = { operationId: randomUUID(), id: current.id, revision: current.base,
+                action: current.desired ? 'put' : 'delete', client: { kind: 'gui', id: owner },
+                ...(current.desired ? { document: current.desired } : {}) };
+              current.sentGeneration = current.generation;
+            }
             return current;
           });
-          if(!draft?.attempt)continue;
-          // Never send a local-only deletion that has not created a remote record.
-          if(draft.base===0 && !draft.desired && !draft.attempt.document){await storage.change(draft.key,()=>undefined);continue;}
+          if (!draft?.attempt) continue;
+          if (!draft.base && !draft.desired && !draft.attempt.document) { await storage.change(draft.key, () => undefined); continue; }
           try {
-            const record=await client.mutate(space,draft.attempt,actorId); await storage.remember([record]);
-            await storage.change(draft.key,current=>{
-              if(!current || current.attempt?.operationId!==draft.attempt!.operationId)return current;
-              return current.generation===current.sentGeneration ? undefined : {...current,base:record.revision,attempt:undefined,sentGeneration:undefined};
+            const record = await client.mutate(target, draft.attempt, actorId);
+            await storage.remember([record]);
+            versions.set(`${target}/${record.id}`, record.revision);
+            await storage.change(draft.key, current => {
+              if (current?.attempt?.operationId !== draft.attempt!.operationId) return current;
+              return current.generation === current.sentGeneration ? undefined
+                : { ...current, base: record.revision, attempt: undefined, sentGeneration: undefined };
             });
-            if(captured===generation)versions.set(record.id,Math.max(versions.get(record.id)??0,record.revision));
-          } catch(e) {
-            const status=(e as {status?:number}).status;
-            if(status===409 || (status && status>=400 && status<500 && status!==408 && status!==429))await storage.change(draft.key,current=>current?{...current,conflict:(e as Error).message}:undefined);
-            else throw e;
+          } catch (error) {
+            const code = (error as { status?: number }).status;
+            if (code && code >= 400 && code < 500 && ![408, 429].includes(code))
+              await storage.change(draft.key, current => current ? { ...current, conflict: (error as Error).message } : undefined);
+            else throw error;
           }
         }
-        if(captured!==generation)return;
-        activityFailed = await syncActivity(space, captured) === false;
-        if(captured!==generation)return;
-        let page;
-        do {page=await client.changes(space,cursor);await storage.remember(page.entries);if(captured!==generation)return;cursor=page.cursor;previewEpoch=page.previewEpoch??0;}while(page.more);
-        error='';
+        if (stamp !== generation) return;
+        // Operation history detects database resets independently of the merged object cursor.
+        let reset = !state.initialized, eventCursor = state.eventCursor;
+        try {
+          const events = await client.events(target, state.eventCursor);
+          reset ||= events.resetRequired;
+          eventsByTarget.set(target, mergeAnnotationEvents(eventsByTarget.get(target) ?? [], events));
+          eventCursor = events.cursor;
+        } catch { activityFailed = true; }
+        const snapshot: import('../../shared/review/annotation-record.ts').AnnotationRecord[] = [];
+        let page, cursor = reset ? 0 : state.cursor;
+        do {
+          page = await client.changes(target, cursor);
+          if (stamp !== generation || life.signal.aborted) return;
+          if (reset) snapshot.push(...page.entries); else await storage.remember(page.entries); cursor = page.cursor; state.epoch = page.previewEpoch ?? 0;
+        } while (page.more);
+        if (reset) await storage.replaceRecords(target, snapshot);
+        state.cursor = cursor; state.eventCursor = eventCursor; state.initialized = true;
       }
-      if(captured===generation)await apply();
-      if(captured===generation && available && space!=='local')await uploadPreviews(space,actorId).catch(()=>{});
-    } catch(e){if(captured===generation){error=available?()=>t(msg("sync.disconnectedKeepDrafts", "连接中断 · 本机草稿保留")):(e as Error).message;}}
-    finally {
-      await refreshDrafts();
-      if (captured === generation && pollTicket === pollRevision) {
-        cadence.observe([space, actorId, cursor, eventCursor, previewEpoch, editGeneration],
-          !!error || !!localFailure || activityFailed || !!saving || !!pendingQueue.size || currentDrafts().some(draft => !draft.conflict));
+      failure = '';
+      if (stamp === generation) await apply();
+      if (stamp === generation) activity.update(available ? 'media' : 'local', [...eventsByTarget.values()].flat().sort((a, b) => a.sequence - b.sequence).slice(-50), activityFailed, origins);
+      if (stamp === generation) await uploadPreviews().catch(() => {});
+      cadence.observe([...targets].map(([target, state]) => [target, state.cursor, state.eventCursor]), activityFailed || !!saving || !!pending.size || drafts.some(draft => own(draft) && !draft.conflict));
+    } catch (error) {
+      if (!life.signal.aborted && stamp === generation) {
+        failure = available ? t(msg('sync.disconnectedKeepDrafts', '连接中断 · 本机草稿保留')) : (error as Error).message;
+        cadence.reset(); await apply();
       }
-      working = false;
-      release();
+    } finally {
+      await refreshDrafts().catch(error => { localFailure = true; failure = (error as Error).message; });
+      working = false; release(); status();
     }
   }
-  async function switchSpace(next:string) {
-    if (localOnly && next !== 'local') throw new Error(t(msg('sites.remoteUnavailable', '此版本仅支持本地文件，请使用完整版访问媒体服务')));
-    if(editing() || pendingQueue.size || saving)throw new Error(t(msg("sync.waitForDrafts", "请先结束标注并等待本机草稿保存完成")));
-    // Restoring the current scope (e.g. failed-import rollback) must not
-    // touch live marks: there is nothing to load that the session lacks.
-    if(next===scope)return;
-    generation++;scope=next;resetActivity();try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();
-    const previous=[...managed];managed.clear();
-    await syncIdle; await apply(previous); await sync();
-  }
-  let trackSignature='';
-  const unsubscribe=session.subscribe(()=>{
-    const snapshot=session.getState(), signature=snapshot.tracks.map(track=>annotationMediaKey(track)).join('|');
-    if(signature!==trackSignature){trackSignature=signature;void apply().catch(e => { error=(e as Error).message;state(); });}
+  window.addEventListener('voidplayer-annotation-preview', event => {
+    const { id, preview } = (event as CustomEvent).detail, target = assignments.get(id);
+    if (!target || !preview.url.startsWith('data:image/jpeg;base64,')) return;
+    void storage.savePreview(target, id, preview).then(() => cadence.reset()).catch(() => {});
+  }, { signal: life.signal });
+  let signature = '';
+  const unsubscribe = session.subscribe(() => {
+    const next = session.getState().tracks.map(track => [track.id, track.source?.url].join(':')).join('|');
+    if (next !== signature) { signature = next; cadence.reset(); void discover().then(apply).catch(error => { failure = (error as Error).message; status(); }); }
   });
-  window.addEventListener('beforeunload',event=>{if(saving || pendingQueue.size || localFailure){event.preventDefault();event.returnValue='';}},{signal:life.signal});
-  const interval=setInterval(()=>{if(cadence.ready(!document.hidden))void sync();},1000);
   async function connect() {
-    resetPolling();
+    if (life.signal.aborted) return;
     try {
       if (!localOnly) {
         const health = await identityHealth();
-        actor = health.actor?.id ?? actor; available = !!health.capabilities?.annotations;
+        const next = health.actor?.id ?? 'local';
+        if (next !== actor) { actor = next; generation++; }
+        available = !!health.actor && !!health.capabilities?.annotations;
       }
-      await apply(); void sync();
-    } catch { void apply().catch(e => { error = (e as Error).message; state(); }); }
+      cadence.reset(); await sync();
+    } catch (error) { failure = (error as Error).message; status(); }
   }
-  window.addEventListener('online',()=>void connect(),{signal:life.signal});
-  const resume = () => { resetPolling(); if (!document.hidden) void sync(); };
-  window.addEventListener('focus',resume,{signal:life.signal});
-  document.addEventListener('visibilitychange',resume,{signal:life.signal});
-  window.addEventListener('voidplayer-identity-change',()=>{
-    const next=currentActor()?.id ?? 'local';if(next===actor)return;
-    generation++;actor=next;resetActivity();cursor=0;versions.clear();void apply().catch(e => { error=(e as Error).message;state(); });
-  },{signal:life.signal});
-  onLanguageChange(state, life.signal);
+  const resume = () => { cadence.reset(); if (!document.hidden) void sync(); };
+  const timer = setInterval(() => { if (cadence.ready(!document.hidden)) void sync(); }, 1000);
+  window.addEventListener('focus', resume, { signal: life.signal });
+  window.addEventListener('online', () => void connect(), { signal: life.signal });
+  window.addEventListener('voidplayer-identity-change', () => { generation++; actor = currentActor()?.id ?? 'local'; void connect(); }, { signal: life.signal });
+  document.addEventListener('visibilitychange', resume, { signal: life.signal });
+  window.addEventListener('beforeunload', event => { if (saving || pending.size || localFailure) { event.preventDefault(); event.returnValue = ''; } }, { signal: life.signal });
+  onLanguageChange(() => { renderedConflicts = ''; status(); }, life.signal);
   void connect();
-  state();
-  return {
-    openSpace: switchSpace,
-    scope: () => scope,
-    locallySaved: () => !saving && !pendingQueue.size && !localFailure,
-    async attachWorkspace(space: string, seededIds: string[] = []) {
-      if (localOnly) throw new Error(t(msg('sites.remoteUnavailable', '此版本仅支持本地文件，请使用完整版访问媒体服务')));
-      // Read the seeded records before switching scope so edits made during the
-      // request keep their local draft. Set all bases before staging remote edits.
-      const records=new Map<string,AnnotationRecord>();
-      let after=0,page;
-      do { page=await client.changes(space,after);await storage.remember(page.entries);after=page.cursor;for(const record of page.entries)records.set(record.id,record); } while(page.more);
-      await syncIdle;
-      if (pendingQueue.size || saving) throw new Error(t(msg("sync.savingDrafts", "本机草稿正在保存，请稍后重试")));
-      const snapshot=session.exportWorkspace(location.origin+'/');
-      generation++; scope=space; resetActivity(); cursor=after; versions.clear(); managed.clear();
-      for(const record of records.values())versions.set(record.id,record.revision);
-      try{sessionStorage.setItem('voidplayer.annotation-space',space);}catch{}
-      const ids=new Set([...snapshot.marks.map(mark=>mark.id),...seededIds]);
-      for (const id of ids) {
-        // Re-read each mark in case another edit occurred while earlier drafts saved.
-        const current=session.exportWorkspace(location.origin+'/'),mark=current.marks.find(mark=>mark.id===id),remote=records.get(id);
-        if(!mark){if(remote && !remote.deleted)await enqueue(id,null,remote.revision);continue;}
-        const mediaIds=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);
-        if (!remote || remote.deleted || JSON.stringify(mark)!==JSON.stringify(remote.document.mark)) await enqueue(id,{mark,media:current.media.filter(media=>mediaIds.has(media.id))},remote?.revision??0);
-      }
-      await sync();
-    },
-    snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机标注尚未保存，请等待自动保存完成")));const previous=scope;generation++;scope='local';resetActivity();try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
-    async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
-    dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();storage.close();},
-  };
+  return { locallySaved: () => !saving && !pending.size && !localFailure, sync,
+    dispose() { life.abort(); clearInterval(timer); unsubscribe(); unsubscribeMarks(); return Promise.allSettled([editTail, idle]).then(() => storage.close()); } };
 }

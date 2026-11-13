@@ -150,9 +150,9 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    assert.equal(await page.locator('#settings-pane-experimental #page-bridge-settings').isVisible(),true);
   }
   if(pane==='workspace') {
-   const [input,save,share]=await Promise.all(['saved-workspace-name','saved-workspace-save','saved-workspace-share'].map(id=>page.locator('#'+id).boundingBox()));
-   assert.deepEqual([save.x-input.x-input.width,share.x-save.x-save.width],[4,4],'both workspace control gaps are four pixels');
-   assert.deepEqual([input.y,input.height,share.y,share.height],[save.y,save.height,save.y,save.height],'name, save and share align on both edges');
+   assert.equal(await page.locator('#saved-workspace-save, #saved-workspace-name, #checkpoint-history-list').count(),0);
+   assert.equal(await page.locator('#state-copy-readable').isVisible(),true);
+   assert.equal(await page.locator('#annotation-status').isVisible(),true);
   }
   if(pane==='performance') {
    const threadMode = page.locator('#wasm-thread-mode');

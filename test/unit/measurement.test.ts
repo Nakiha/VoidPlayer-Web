@@ -22,7 +22,7 @@ async function fixture(run: (f: { base: string; root: string; file: string; data
   const server = createMediaServer({ roots: library.roots, library, admin, onLog: () => {} });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const actors = Object.fromEntries(['owner', 'other', 'viewer'].map(name => [name, admin.workspaces.identify(undefined, name)]));
+  const actors = Object.fromEntries(['owner', 'other', 'viewer'].map(name => [name, admin.users.identify(undefined, name)]));
   const call = (url: string, method = 'GET', value?: unknown, user = 'owner') => httpFetch(base + url, { method, headers: { origin: remote ? 'http://intranet.test' : base, 'x-voidplayer-action': 'admin', ...(value === undefined ? {} : { 'content-type': 'application/json' }), ...(remote ? { host: 'intranet.test', cookie: `voidplayer-user=${actors[user].id}` } : {}) }, body: value === undefined ? undefined : JSON.stringify(value) });
   try { await run({ base, root, file, data, admin, library, call }); }
   finally { await admin.close(); server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); await library.close(); await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }

@@ -147,18 +147,10 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     assert.ok(next > 0, 'offline local file can advance a frame');
     if (engine === 'chromium') {
       await offline.evaluate(async () => {
-        const workspace = window.voidPlayer.exportWorkspace();
-        workspace.positionUs = 0;
-        const root = await navigator.storage.getDirectory();
-        const doc = await root.getFileHandle('review.voidplayer', { create: true });
-        const stream = await doc.createWritable();
-        await new Blob([JSON.stringify(workspace)]).stream().pipeThrough(new CompressionStream('gzip')).pipeTo(stream);
-        window.deliverFiles({ files: [doc, await root.getFileHandle('offline-clip.mkv')] });
+        const state = window.voidPlayer.exportState(); state.positionUs = 0;
+        await window.voidPlayer.applyState(state);
       });
-      await offline.waitForFunction(() => {
-        const state = window.voidPlayer.getState();
-        return state.positionUs === 0 && state.tracks.length === 1 && state.tracks[0].name === 'offline-clip.mkv' && state.tracks[0].frame;
-      });
+      assert.equal(await offline.evaluate(() => window.voidPlayer.getState().positionUs), 0);
       await offline.evaluate(() => window.voidPlayer.step(1));
     }
     const initial = await offline.evaluate(async icons => {

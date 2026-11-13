@@ -213,7 +213,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
   }
   assert.match(packaged.body, /name: Write download summary\n        shell: bash/);
   assert.match(runtimeJob.body, /if: always\(\)[\s\S]*name: native-runtime-reports-\$\{\{ matrix\.os \}\}-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
-  const expectedCounts = { node: 15, bun: 11 };
+  const expectedCounts = { node: 16, bun: 11 };
   for (const runtime of ['node', 'bun']) {
     const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
     assert.equal(runtimeJob.body.split(command).length - 1, 1);
@@ -240,8 +240,8 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  const expected = ['browser-existing-page-bridge-chromium', 'browser-mcp-page-bridge-chromium', 'browser-sharing-webkit',
-    'browser-annotation-persistence-chromium', 'browser-annotation-persistence-webkit', 'browser-cache-chromium', 'browser-cache-webkit'];
+  const expected = ['browser-existing-page-bridge-chromium', 'browser-mcp-page-bridge-chromium',
+    'browser-uri-state-chromium', 'browser-uri-state-webkit', 'browser-cache-chromium', 'browser-cache-webkit'];
   assert.deepEqual(cases.map(row => row.id).sort(), expected.sort());
   const prCases = manifest.cases.filter(row => row.suites.includes('ci-cache-pr'));
   assert.deepEqual(prCases.map(row => row.id).sort(), expected.sort());

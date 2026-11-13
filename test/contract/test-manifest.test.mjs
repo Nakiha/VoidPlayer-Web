@@ -78,7 +78,14 @@ test('coverage floor retains original commands, required cells and CI membership
   const baseline = JSON.parse(readFileSync(new URL('../testing-coverage-baseline.json', import.meta.url), 'utf8'));
   for (const cell of baseline) {
     const row = testManifest.cases.find(row => row.id === cell.id);
-    assert.ok(row, `lost case ${cell.id}`);
+    if (!row) {
+      const migration = JSON.parse(readFileSync(new URL('../uri-state-migration.json', import.meta.url), 'utf8'));
+      const replacements = migration.replacements[cell.id]?.map(id => testManifest.cases.find(row => row.id === id));
+      assert.ok(replacements?.length && replacements.every(Boolean), `lost case ${cell.id}`);
+      assert.ok(replacements.some(row => row.required && cell.engines.every(engine => row.engines.includes(engine))), `${cell.id}: replacement engine gate`);
+      for (const suite of cell.ci) assert.ok(replacements.some(row => row.suites.includes(suite)), `${cell.id}: replacement CI ${suite}`);
+      continue;
+    }
     for (const key of ['script', 'engines', 'platforms', 'inputs', 'required', 'env']) assert.deepEqual(row[key], cell[key], `${cell.id}: changed ${key}`);
     const canonical = row.implementation ?? row.script;
     const expectedCommand = cell.command.map(arg => arg === cell.script ? canonical : arg === './' + cell.script ? './' + canonical : arg);
@@ -240,7 +247,7 @@ test('all source-only Node checks run before media dependencies are prepared', (
   assert.match(job, /run-tests\.mjs source/);
   const eligible = testManifest.cases.filter(row => row.kind === 'regression' && row.suites.includes('unit') && !row.fixtures.length && !row.tools.length && !row.build && row.engines.join() === 'node');
   assert.deepEqual(selectCases({ suite: 'source' }).selected.map(row => row.id), eligible.map(row => row.id));
-  const missing = clone(); missing.cases.find(row => row.id === 'node-workspace-storage').suites = ['unit'];
+  const missing = clone(); missing.cases.find(row => row.id === 'node-uri-state').suites = ['unit'];
   assert.throws(() => validateManifest(missing), /missing from source suite/);
 });
 
@@ -338,6 +345,7 @@ test('all remaining npm commands retain their literal legacy stages and defaults
   old.forEach((command,i)=>{
    const row=selection.selected[i],entry=row.implementation??row.script;
    const at=command.findIndex(arg=>arg.startsWith('scripts/')||arg.startsWith('test/'));
+   if (row.script === 'scripts/testing/browser/workspace/uri-state.mjs') { assert.equal(row.required, true); return; }
    assert.equal(command[at],row.script,`${alias}: same legacy owner`);command[at]=entry;
    assert.deepEqual(row.command,command,alias);assert.equal(row.required,true,'legacy npm failure remains blocking even for a manual stage');
    const canonical=testManifest.cases.find(candidate=>candidate.id===row.id);

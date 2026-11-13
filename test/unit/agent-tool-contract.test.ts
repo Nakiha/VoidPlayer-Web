@@ -12,7 +12,7 @@ function toolsWithSpy() {
   const session = new Proxy({} as ReviewSession, {
     get: (_target, method: string) => (...args: unknown[]) => { calls.push({ method, args }); return args; },
   });
-  const tools = reviewTools(session, { exportWorkspace() {}, async importWorkspace() {} });
+  const tools = reviewTools(session, { exportState() {}, async applyState() {} });
   return { calls, get: (name: string) => tools.find(tool => tool.name === name)! };
 }
 
@@ -37,7 +37,7 @@ test('tool execute validates published types and bounds before entering actions,
     ['benchmark_review', [{ durationMs: 999 }, { durationMs: 30001 }, { durationMs: 1000.5 }]],
     ['list_library', [{ limit: 0 }, { limit: 201 }, { limit: '100' }, { recursive: 1 }, { search: 42 }, { offset: -1 }]],
     ['load_library_item', [{ id: 42, slot: 'A' }]],
-    ['import_workspace', [{ document: null }, { document: [] }]],
+    ['apply_uri_state', [{ state: null }, { state: [] }]],
     ['update_review_mark', [{ id: 1 }, { id: 'm', reply: '' }, { id: 'm', resolved: 'true' }]],
     ['add_review_mark', [
       { slot: 'A', text: 'x'.repeat(2001) }, { slot: 'A', severity: 0 }, { slot: 'A', severity: 6 },

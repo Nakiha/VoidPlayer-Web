@@ -8,7 +8,7 @@ import { installContextMenu } from './context-menu.ts';
 import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';
 import { normalizeWheelDelta } from '../../shared/presentation/viewport.ts';
 
-export type LibraryBrowserElements = { list: HTMLElement; tools: HTMLElement; foot: HTMLElement; visible(): boolean; manage?: boolean; trailing?: HTMLElement; nearEnd?(): boolean };
+export type LibraryBrowserElements = { list: HTMLElement; tools: HTMLElement; foot: HTMLElement; visible(): boolean; manage?: boolean; trailing?: HTMLElement; nearEnd?(): boolean; openFile?(entry: LibraryEntry): void };
 
 /** One directory owner for mounted libraries, scoped search and path navigation. */
 export function installLibraryBrowser(elements: LibraryBrowserElements, change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (home: boolean) => void,
@@ -27,13 +27,13 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   const cadence = new PollingCadence(3000);
   const {list,tools,foot} = elements;
   const densityKey = 'voidplayer.library-compact';
-  let compact = false;
-  try {compact = (localStorage.getItem(densityKey) ?? localStorage.getItem('voidplayer.admin.library-compact')) === 'true';} catch {}
-  const compactButton = createIconButton({glyph:'compactRows',label:t(msg('libraryBrowser.compactList','紧凑列表')),attributes:{id:'library-compact'}});
+  let compact = true;
+  try {compact = (localStorage.getItem(densityKey) ?? localStorage.getItem('voidplayer.admin.library-compact')) !== 'false';} catch {}
+  const compactButton = createIconButton({glyph:'compactRows',label:t(msg('libraryBrowser.expandList','切换为详细列表')),className:'state-toggle',attributes:{id:'library-compact'}});
   function syncDensity() {
     list.dataset.libraryDensity = compact ? 'compact' : 'comfortable';
-    compactButton.setAttribute('aria-pressed',String(compact));
-    const label = t(msg('libraryBrowser.compactList','紧凑列表'));
+    compactButton.dataset.compact = String(compact);
+    const label = t(compact ? msg('libraryBrowser.expandList','切换为详细列表') : msg('libraryBrowser.compactList','切换为紧凑列表'));
     compactButton.setAttribute('aria-label',label); compactButton.dataset.tooltip=label;
     list.dispatchEvent(new Event('library-density-change'));
   }
@@ -44,7 +44,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   },{signal});
   window.addEventListener('storage',event => {
     if (event.key!==densityKey) return;
-    compact=event.newValue==='true'; syncDensity();
+    compact=event.newValue!=='false'; syncDensity();
   },{signal});
   syncDensity();
   const nav = document.createElement('div'); nav.className = 'library-navigation'; nav.id = 'library-navigation';
@@ -107,12 +107,42 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
     if (event.key !== 'Enter') return;
     event.preventDefault();
     if (!locationInput()) { clearTimeout(searchTimer); if (pendingSearch) reset(); return; }
+    void enterLocation();
+  }, { signal });
+  async function enterLocation() {
+    let ticket = sequence;
     try {
       const target = parseLibraryLocationInput(address.value, location.href);
       if (target.root && !roots.some(item => item.id === target.root)) throw new Error(t(msg('libraryBrowser.unknownLibrary', '此媒体库在当前服务中不存在')));
+      if (elements.openFile && /^library:/i.test(address.value.trim()) && target.root && target.directory) {
+        clearTimeout(searchTimer); request?.abort(); request = new AbortController();
+        ticket = ++sequence; loading = true; pendingSearch = false; controls();
+        const slash = target.directory.lastIndexOf('/');
+        const parent = slash < 0 ? '' : target.directory.slice(0, slash), name = target.directory.slice(slash + 1);
+        let offset = 0, revision: number | undefined;
+        do {
+          const found = await fetchLibraryPage({ root: target.root, directory: parent, search: name, recursive: false, limit: 200, offset, revision },
+            AbortSignal.any([signal, request.signal, AbortSignal.timeout(10000)]));
+          if (ticket !== sequence || signal.aborted) return;
+          const file = found.entries.find(entry => entry.rootId === target.root && entry.name === target.directory);
+          if (file) {
+            if (file.state !== 'ready') throw new Error(t(msg('libraryBrowser.fileUnavailable', '片源尚未就绪或已不可用')));
+            if (await revealFile(file)) { address.blur(); elements.openFile(file); }
+            return;
+          }
+          if (found.nextOffset == null) break;
+          offset = found.nextOffset; revision = found.revision;
+        } while (true);
+      }
+      if (ticket !== sequence || signal.aborted) return;
       navigate(target.all ? '' : target.root, target.all ? '' : target.directory); address.blur();
-    } catch (error) { address.setAttribute('aria-invalid', 'true'); notify((error as Error).message); address.select(); }
-  }, { signal });
+    } catch (error) {
+      if (ticket !== sequence || signal.aborted) return;
+      address.setAttribute('aria-invalid', 'true'); notify((error as Error).message); address.select();
+    } finally {
+      if (ticket === sequence && !signal.aborted) { loading = false; controls(); }
+    }
+  }
   function displayName() {
     return directory.split('/').at(-1) || roots.find(item => item.id === root)?.name || t(msg('libraryBrowser.library', '媒体库'));
   }
@@ -184,7 +214,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
         !append && !resetView && !restarted ? previous ?? undefined : undefined);
       if (!root) value = { ...value, entries: [], directories: [], nextOffset: null, total: 0 };
       if (append && previous) value = { ...value, entries: [...previous.entries, ...value.entries], directories: [...previous.directories, ...value.directories] };
-      else if (!resetView && previous?.revision === value.revision && previous.thumbnailEpoch === value.thumbnailEpoch) {
+      else if (!resetView && previous?.revision === value.revision && previous.thumbnailEpoch === value.thumbnailEpoch && previous.thumbnailRevision === value.thumbnailRevision) {
         const fresh = new Map(value.entries.map(entry => [entry.id, entry]));
         value = { ...value, entries: previous.entries.map(entry => fresh.get(entry.id) ?? entry),
           directories: previous.directories, nextOffset: previous.nextOffset };
@@ -195,7 +225,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
       }
       if (ticket !== sequence || signal.aborted) return;
       page = value; roots = value.roots; appliedSearch = search; appliedScope = scope; publishedRoot = root; publishedDirectory = directory; published = true;
-      cadence.observe([scope, page.revision, page.thumbnailEpoch, page.entries.length, page.roots.map(r => [r.id, r.state, r.error])],
+      cadence.observe([scope, page.revision, page.thumbnailEpoch, page.thumbnailRevision, page.entries.length, page.roots.map(r => [r.id, r.state, r.error])],
         page.scanning || page.entries.some(entry => entry.state === 'pending'));
     } catch (error) {
       if (ticket !== sequence || signal.aborted) return;
@@ -246,6 +276,33 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
     pathResize.disconnect(); pathbar.remove();
   }, { once: true });
   controls();
+  async function revealFile(entry: LibraryEntry) {
+    const targetRoot = entry.rootId ?? '';
+    const targetDir = entry.name.includes('/') ? entry.name.slice(0, entry.name.lastIndexOf('/')) : '';
+    // Fast path: already visible — highlight only, no list rebuild (avoids full flicker).
+    if (!!root && search === '' && appliedSearch === '' && page?.entries.some(item => item.id === entry.id)) return true;
+    const sameScope = root === targetRoot && directory === targetDir && search === '' && appliedSearch === '' && !!page;
+    clearTimeout(searchTimer); request?.abort(); sequence++;
+    rememberNavigation({root:targetRoot,directory:targetDir,search:''});
+    root = targetRoot; directory = targetDir;
+    search = ''; address.value = ''; pendingSearch = false;
+    // Keep the current page visible until the new one publishes: no
+    // page=null + render() empty flash. load() updates controls and swaps atomically.
+    let append = sameScope;
+    do {
+      const previousOffset = (page as LibraryPage | null)?.nextOffset;
+      const pending = load(append, !append), ticket = sequence;
+      await pending;
+      // A newer navigation wins over this locate request.
+      if (signal.aborted || sequence !== ticket) return false;
+      const current = page as LibraryPage | null; // load publishes asynchronously.
+      if (current?.entries.some(item => item.id === entry.id)) return true;
+      if (append && current?.nextOffset === previousOffset) return false;
+      append = true;
+    } while ((page as LibraryPage | null)?.nextOffset != null);
+    return false;
+  }
+
   return {
     snapshot: () => ({ root, directory, search, all: false }),
     async restore(state: { root: string; directory: string; search: string; all: boolean; recent?: boolean; query?: string }) {
@@ -257,32 +314,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
       history = [currentLocation()]; historyIndex = 0;
       address.value = search; await load(false, true);
     },
-    async reveal(entry: LibraryEntry) {
-      const targetRoot = entry.rootId ?? '';
-      const targetDir = entry.name.includes('/') ? entry.name.slice(0, entry.name.lastIndexOf('/')) : '';
-      // Fast path: already visible — highlight only, no list rebuild (avoids full flicker).
-      if (!!root && search === '' && appliedSearch === '' && page?.entries.some(item => item.id === entry.id)) return true;
-      const sameScope = root === targetRoot && directory === targetDir && search === '' && appliedSearch === '' && !!page;
-      clearTimeout(searchTimer); request?.abort(); sequence++;
-      rememberNavigation({root:targetRoot,directory:targetDir,search:''});
-      root = targetRoot; directory = targetDir;
-      search = ''; address.value = ''; pendingSearch = false;
-      // Keep the current page visible until the new one publishes: no
-      // page=null + render() empty flash. load() updates controls and swaps atomically.
-      let append = sameScope;
-      do {
-        const previousOffset = (page as LibraryPage | null)?.nextOffset;
-        const pending = load(append, !append), ticket = sequence;
-        await pending;
-        // A newer navigation wins over this locate request.
-        if (signal.aborted || sequence !== ticket) return false;
-        const current = page as LibraryPage | null; // load publishes asynchronously.
-        if (current?.entries.some(item => item.id === entry.id)) return true;
-        if (append && current?.nextOffset === previousOffset) return false;
-        append = true;
-      } while ((page as LibraryPage | null)?.nextOffset != null);
-      return false;
-    },
+    reveal: revealFile,
     appliedLocation: () => ({root:publishedRoot,directory:publishedDirectory,search:appliedSearch}),
     more, navigate, page: () => page, filter: () => appliedSearch, isRoot: () => !publishedRoot,
     load: () => load(),

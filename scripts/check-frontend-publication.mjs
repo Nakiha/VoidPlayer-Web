@@ -115,13 +115,11 @@ try {
   for (const lane of pages) {
     const { page } = lane;
     await page.locator('#server-update').click();
-    await page.locator('.toast-warning').filter({hasText:'ffv1_yuv422p_8bit.mkv'}).waitFor();
+    await page.locator('.toast-warning').filter({hasText:/本地片源|local source/i}).waitFor();
     assert.deepEqual(await lane.snapshot(), lane.before);
     await page.evaluate(() => window.voidPlayer.removeTrack('B'));
     const scene = () => page.evaluate(() => {
-      const { generatedAt, thumbnails, media, ...document } = window.voidPlayer.exportWorkspace();
-      // Reopening a source increments its diagnostic metadata revision.
-      return { ...document, media: media.map(({ metadataRevision, ...info }) => info) };
+      return window.voidPlayer.exportState();
     });
     const before = await scene();
     const action = lane.standalone ? page.locator('.toast-warning button').filter({hasText:/保存现场并刷新|Save this session and refresh/}).last() : page.locator('#server-update');

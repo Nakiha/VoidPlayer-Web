@@ -40,7 +40,7 @@ test('shared annotation polling backs off, caps idle delay, and wakes for edits,
   t.mock.timers.enable({ apis: ['setInterval'] });
   let change!: (id: string, document: AnnotationDocument | null) => void;
   const controller = installAnnotationSync({ subscribe: () => () => {}, subscribeMarkChanges: (callback: typeof change) => { change = callback; return () => {}; },
-    getState: () => ({ tracks: [], marks: [], playing: false }), applyStoredAnnotations() {} } as unknown as ReviewSession, () => false);
+    getState: () => ({ tracks: [{id:'track',source:{id:'a'.repeat(24),url:'http://localhost/api/media/'+ 'a'.repeat(24)+'/content?v='+ 'b'.repeat(24)}}], marks: [], playing: false }), applyStoredAnnotations() {} } as unknown as ReviewSession, () => false);
   const settle = async () => { for (let i = 0; i < 60; i++) await setImmediate(); };
   t.after(async () => {
     await settle(); controller.dispose();
@@ -48,7 +48,7 @@ test('shared annotation polling backs off, caps idle delay, and wakes for edits,
   });
   const advance = async (ms: number) => { now += ms; t.mock.timers.tick(ms); await settle(); };
   const reads = () => requests.filter(request => request.url.startsWith('/api/annotations/'));
-  await settle(); await controller.openSpace('shared');
+  await settle();
   requests.length = 0;
   for (const delay of [3000, 6000, 12000, 15000, 15000]) {
     const count = reads().length;

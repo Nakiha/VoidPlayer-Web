@@ -6,6 +6,7 @@ import type { MediaOpenProgress } from '../media/progress.ts';
 import { openMediaFromUrl } from '../media/source.ts';
 import { contextLog } from '../logging/log.ts';
 import {ownLibraryIndexReference} from '../media/indexing/library-index-reference.ts';
+import { prefetchThumbnailStatuses } from '../thumbnails/client.ts';
 
 // Client side of the optional media-library service (browser/server/). The app
 // works without it: when no service answers, the library is simply unavailable.
@@ -21,6 +22,8 @@ export interface LibraryEntry {
   rootId?: string;
   /** Current-recipe cover presence from the browse page; advisory only. */
   thumbnail?: boolean;
+  thumbnailEpoch?: number;
+  thumbnailRevision?: string;
 }
 
 export function mediaUrl(id: string, version?: string): string {
@@ -32,7 +35,7 @@ export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpe
   contextLog().info('media', '从媒体库载入', { id: entry.id, name: entry.name, root: entry.root, size: entry.size });
   if(!entry.version){const current=await fetchLibraryItem(entry.id,signal);if(!current?.version)throw new Error('媒体库片源版本不可用。');entry=current;}
   const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress, signal,ownLibraryIndexReference(entry.id,entry.version!),configuration);
-  updateMediaInfo(source,{source:{kind:'library',id:entry.id,url:mediaUrl(entry.id,entry.version)}},'identity');
+  updateMediaInfo(source,{source:{kind:'library',id:entry.id,url:new URL(mediaUrl(entry.id,entry.version),location.href).href}},'identity');
   return source;
 }
 
@@ -46,6 +49,7 @@ export interface LibraryPage {
   total: number; offset: number; limit: number; nextOffset: number | null; revision: number;
   ready: boolean; scanning: boolean;
   thumbnailEpoch?: number;
+  thumbnailRevision?: string;
   job: { id: number; state: string; visited: number; files: number; errors: number; current_path: string | null } | null;
 }
 export interface LibraryQuery { root?: string; directory?: string; search?: string; recursive?: boolean; offset?: number; revision?: number; limit?: number }
@@ -66,7 +70,11 @@ export async function fetchLibraryItem(id: string, signal?: AbortSignal): Promis
   const response = await fetch(`/api/media/${encodeURIComponent(id)}`, { cache: 'no-store', signal });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`无法读取媒体库引用（HTTP ${response.status}）。`);
-  return response.json();
+  const entry: LibraryEntry = await response.json();
+  // Metadata is already version-pinned and carries the upload epoch. Warm it
+  // before any URI/Agent open can present its first frame, without another IO.
+  if (typeof entry.thumbnail === 'boolean' && Number.isSafeInteger(entry.thumbnailEpoch)) prefetchThumbnailStatuses([entry], 1, entry.thumbnailEpoch);
+  return entry;
 }
 export async function requestLibraryScan(action: 'refresh' | 'cancel') {
   const response = await fetch('/api/library/scan', { method: 'POST', headers: { 'x-voidplayer-action': 'scan','content-type':'application/json' }, body:JSON.stringify({action}), signal: AbortSignal.timeout(5000) });

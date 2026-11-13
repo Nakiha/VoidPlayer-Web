@@ -36,13 +36,13 @@ import type { AnalysisQueryTrack } from './queries.ts';
 import { installAnalysisStatus } from './status.ts';
 import { installAnalysisHoverCards } from './hover-cards.ts';
 import { createInspectionController } from './inspection-state.ts';
-import { drawAnalysisOverlay } from './chart-overlay.ts';
+import { drawAnalysisOverlay, pickLoadCurve } from './chart-overlay.ts';
 import { installAnalysisGestures } from './gestures.ts';
 import { installFilterGestures } from './filter-gestures.ts';
 import { installAnalysisRangeEditor } from './range-editor.ts';
 import { publishAnalysisTestHook } from './test-hook.ts';
 import { createFrameTask } from '../frame-task.ts';
-import { zoomTimeRange } from '../../../shared/analysis/metadata/projection.ts';
+import { centerTimeRange, zoomTimeRange } from '../../../shared/analysis/metadata/projection.ts';
 import './panel.css';
 
 import type { ChartHover, AnalysisAction as Action } from './shared.ts';
@@ -62,7 +62,7 @@ const WINDOW_LABELS: Record<number, string> = Object.fromEntries(
 const layoutLabel = (mode: 'merged' | 'rows') => t(mode === 'merged' ? msg("analysis.layoutMerged", "码流合并") : msg("analysis.layoutRows", "码流分轨"));
 
 
-interface TrackEntry extends AnalysisQueryTrack { name: string; frameIntervalUs: number }
+interface TrackEntry extends AnalysisQueryTrack { name: string; frameIntervalUs: number; firstPtsUs: number }
 
 export function installAnalysisPanel(session: ReviewSession, act: Action, hooks: AnalysisHooks): {
   setOpen(open: boolean): void;
@@ -95,6 +95,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           <button type="button" id="analysis-zoom-in" class="icon-button">${icon('zoomIn')}</button>
           <button type="button" id="analysis-zoom-out" class="icon-button">${icon('zoomOut')}</button>
           <button type="button" class="icon-button" data-seg="full">${icon('fullRange')}</button>
+          <button type="button" id="analysis-locate" class="icon-button">${icon('center')}</button>
+          <button type="button" id="analysis-follow" class="icon-button analysis-follow-button" aria-pressed="false">${icon('navigationArrow')}<span>${th(msg('analysis.follow', '跟随'))}</span></button>
         </div>
       </div>
       <div class="analysis-status" id="analysis-status" role="group" aria-label="${th(msg("analysis.currentFrameNumbers", "当前上屏帧号"))}">
@@ -510,7 +512,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const viewRange = () => view ?? fullRange();
 
   /** Shared session-time viewport; null follows the complete time domain. */
-  function setView(start: number | null, end?: number) {
+  let follow = false, locateSequence = 0, followingFrame = '';
+  function setView(start: number | null, end?: number, automatic = false) {
+    if (!automatic) { follow = false; followingFrame = ''; ++locateSequence; }
     if (start == null) view = null;
     else {
       const span = Math.max(MIN_SPAN_US, (end ?? start) - start);
@@ -524,6 +528,32 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       }
     }
     save(); refreshTools(); queueAutomaticStreams(); requestRender(); scheduleQuery();
+  }
+
+  async function locateCurrentFrame(continuous = false) {
+    const slot = streamSlot(), track = tracks.find(track => track.slot === slot);
+    if (!slot || !track) return;
+    const frame = session.getPresentedFrame(slot);
+    if (!frame) return;
+    const key = `${slot}/${track.sourceGen}/${frame.normalizedMediaUs}/${prefs.axis}`;
+    if (continuous && key === followingFrame) return;
+    followingFrame = key;
+    const sequence = ++locateSequence, axis = prefs.axis;
+    let time = frame.normalizedMediaUs + track.offsetUs;
+    if (axis === 'dts') {
+      const rank = await session.rankAnalysisFrame(slot, time, 'pts', { cachedOnly: continuous });
+      if (sequence !== locateSequence || signal.aborted || !open || prefs.axis !== axis) return;
+      const latest = session.getPresentedFrame(slot);
+      if (!latest || latest.generation !== frame.generation || latest.normalizedMediaUs !== frame.normalizedMediaUs) return;
+      if (!('sourceDtsUs' in rank) || rank.sourceDtsUs == null) { followingFrame = ''; return; }
+      time = rank.sourceDtsUs - track.firstPtsUs + track.offsetUs;
+    }
+    if (continuous && !follow) return;
+    const range = viewRange(), next = centerTimeRange(range, time, domainBounds(range.end - range.start));
+    if (next.start !== range.start || next.end !== range.end) setView(next.start, next.end, true);
+  }
+  function requestLocate(continuous = false) {
+    void locateCurrentFrame(continuous).catch(() => { followingFrame = ''; });
   }
 
   let viewRaf = 0;
@@ -644,6 +674,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const segButtons = new Map<string, HTMLButtonElement>();
   for (const b of tools.querySelectorAll<HTMLButtonElement>('[data-seg]')) segButtons.set(b.dataset.seg!, b);
   segButtons.get('full')!.onclick = () => setView(null);
+  $<HTMLButtonElement>('#analysis-locate').onclick = () => { clearSharedHover(); requestLocate(); };
+  $<HTMLButtonElement>('#analysis-follow').onclick = () => {
+    follow = !follow; followingFrame = ''; ++locateSequence;
+    refreshTools();
+    if (follow) requestLocate();
+  };
   for (const [id, factor] of [['analysis-zoom-in', .5], ['analysis-zoom-out', 2]] as const) {
     $<HTMLButtonElement>(`#${id}`).onclick = () => {
       clearSharedHover();
@@ -687,6 +723,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function refreshTools() {
     const dtsOk = allHaveDts();
     const hasTracks = selectedTracks().length > 0;
+    $<HTMLButtonElement>('#analysis-locate').disabled = !hasTracks;
+    $<HTMLButtonElement>('#analysis-follow').disabled = !hasTracks;
+    $<HTMLButtonElement>('#analysis-follow').setAttribute('aria-pressed', String(follow));
     rangeTrigger.disabled = !hasTracks; if (!hasTracks || !open) closeRangeEditor();
     if (hasTracks && prefs.axis === 'dts' && !dtsOk) { prefs.axis = 'pts'; save(); }
     refreshDiagram();
@@ -730,10 +769,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     for (const [selector,label] of [
       ['#analysis-zoom-in',msg('analysis.zoomIn','放大')],
       ['#analysis-zoom-out',msg('analysis.zoomOut','缩小')],
+      ['#analysis-locate',msg('analysis.locateFrame','定位当前帧')],
+      ['#analysis-follow',msg('analysis.followFrame','跟随当前帧')],
       ['[data-seg="full"]',msg('analysis.fullTimeRange','全时段')],
     ] as const) {
       const button=$<HTMLButtonElement>(selector); button.setAttribute('aria-label',t(label)); button.dataset.tooltip=t(label);
     }
+    $<HTMLElement>('#analysis-follow span').textContent = t(msg('analysis.follow', '跟随'));
     statusEl.setAttribute('aria-label', t(msg("analysis.currentFrameNumbers", "当前上屏帧号")));
     canvas.setAttribute('aria-label', t(msg("analysis.canvasLabel", "码流分析图：码率曲线与帧大小柱，方向键移动检查位置，回车定位，Escape 退出检查")));
   }
@@ -1027,6 +1069,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   const gestures = installAnalysisGestures({ signal, canvas, session, act, live, hoverEl, inspection,
+    curveTargetAt(x, y, snapshot) {
+      if (!lastModel) return null;
+      const bounds = canvas.getBoundingClientRect();
+      return pickLoadCurve(lastModel, snapshot, x - bounds.left, y - bounds.top, qpAt);
+    },
     retainHoverOnLeave: event => charts.matches(':hover') || (event.relatedTarget instanceof Node && hoverCardsContain(event.relatedTarget)),
     scene: { get open() { return open; }, get lastModel() { return lastModel; }, get lastGeom() { return lastGeom; },
       get positionUs() { return positionUs; }, results,
@@ -1043,6 +1090,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     render();
     if (open) { refreshTools(); scheduleQuery(true); }
     else {
+      ++locateSequence; followingFrame = '';
       closeRangeEditor();
       inspection.invalidate(); clearSharedHover();
       cardEl.hidden = true;
@@ -1059,7 +1107,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       view: view == null ? null : { start: Math.floor(view.start), end: Math.ceil(view.end) },
       axis: prefs.axis, windowUs: prefs.windowUs, layoutMode: prefs.layoutMode,
       showBitrate: prefs.showBitrate, showSize: prefs.showSize, loadMetrics: [...loadMetrics],
-      follow: false, selected: [...prefs.selected],
+      follow, selected: [...prefs.selected],
       numAxis: prefs.axis, diagrams: [...(prefs.diagrams ?? [])],
     };
   }
@@ -1070,10 +1118,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (pendingAnalysisView === undefined) return;
     const v = pendingAnalysisView;
     pendingAnalysisView = undefined;
-    if (v) setView(v.start, v.end);
-    else setView(null);
+    if (v) setView(v.start, v.end, true);
+    else setView(null, undefined, true);
   }
   function restoreAnalysisState(s: AnalysisViewState) {
+    follow = s.follow; followingFrame = ''; ++locateSequence;
     viewInitialized = true;
     diagramSolo = undefined;
     loadSolo=undefined; loadMetrics=new Set(s.loadMetrics ?? ['bitrate']); prefs.loadMetrics=[...loadMetrics];
@@ -1103,6 +1152,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       durationUs: t.durationUs as number, name: (t.name as string) ?? '',
       sourceGen: (t.sourceGen as number) ?? 0,
       frameIntervalUs: t.frame?.durationUs && t.frame.durationUs > 0 ? t.frame.durationUs : 33_333,
+      firstPtsUs: t.firstPtsUs,
     }));
     // 内容签名含 source 实例 generation：同 mediaId 重建实例也算内容变化，
     // 触发结果失效与重查；纯索引进度变化走下方轻量分支。
@@ -1170,7 +1220,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const onProgress = (pos: number) => {
     positionUs = pos;
     refreshDeep();
-    if (open) positionPlayhead(); // 只移动标记，不重算整张图
+    if (open) { positionPlayhead(); if (follow) requestLocate(true); }
   };
 
   const offSession = session.subscribe(onSession);

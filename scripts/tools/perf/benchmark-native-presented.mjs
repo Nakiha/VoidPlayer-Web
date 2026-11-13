@@ -14,9 +14,7 @@ try{
   const [e]=await waitForAnnotationMedia(service.library,['cost.flv']),base=`http://127.0.0.1:${service.server.address().port}`;assert.ok((await fetch(`${base}/api/media/${e.id}/frame-index/build?v=${e.version}`,{method:'POST',headers:{origin:base,'x-voidplayer-action':'frame-index','content-type':'application/json'},body:'{}'})).ok);
   assert.equal((await fetch(`${base}/api/media/${e.id}/frame-index?v=${e.version}`)).status,200);
   const response=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'Cost gate'})}),actor=(await response.json()).actor,cookie=response.headers.get('set-cookie').split(';')[0];
-  const source={id:'cost-source',name:'cost.flv',size:e.size,lastModified:e.lastModified,codec:'h264',decoder:'webcodecs',width:1280,height:720,durationUs:4000000,firstPtsUs:67000,source:{kind:'library',id:e.id,url:`${base}/api/media/${e.id}/content?v=${e.version}`}};
-  const doc={schema:'voidplayer-workspace',version:1,name:'Same decoder cost',generatedAt:new Date().toISOString(),serverUrl:base,positionUs:0,tracks:[{slot:'A',mediaId:source.id,offsetUs:0}],media:[source],marks:[],viewport:{},layout:{panels:{inspector:false,subtracks:true,sources:false},selected:'A',dockHeight:250,marksExpanded:true}};
-  const shared=await fetch(base+'/api/workspaces/share',{method:'POST',headers:{cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'workspace'},body:JSON.stringify({name:'Cost gate',document:doc})});assert.equal(shared.status,201);const workspace=await shared.json();Object.assign(servers.at(-1),{base,actor,url:`${base}/?workspace=${workspace.id}`});
+  Object.assign(servers.at(-1),{base,actor,url:`${base}/?media=${e.id}&v=${e.version}`});
  }
  for(const [engine,type]of Object.entries({chromium,webkit})){
   browser=await type.launch(engine==='webkit'?(process.env.VOIDPLAYER_WEBKIT_EXECUTABLE?{executablePath:process.env.VOIDPLAYER_WEBKIT_EXECUTABLE}:{}):{});

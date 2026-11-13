@@ -285,6 +285,8 @@
 .analysis-tools { flex-basis:0; }
 
 .analysis-tools #analysis-axis { flex: 0 0 auto; }
+.analysis-follow-button.analysis-follow-button { width:auto; flex-basis:auto; padding-inline:6px; gap:4px; white-space:nowrap; }
+.analysis-follow-button > .icon { transform:translateY(-1px); }
 .analysis-zoom-controls { display:flex; align-items:center; gap:2px; flex:0 0 auto; }
 
 .analysis-primary { display:flex; align-items:center; gap:4px; min-width:0; }

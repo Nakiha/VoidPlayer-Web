@@ -2,7 +2,7 @@ import type { ViewportTrace } from './viewport-trace.ts';
 import { SLOTS } from '../../shared/review/model.ts';
 import type { ReviewSession } from '../session.ts';
 import { log } from '../logging/log.ts';
-import { Viewport, WheelGesture, type WheelBehavior, ZOOM_MIN, normalizeWheelDelta, wheelZoomFactor } from '../../shared/presentation/viewport.ts';
+import { Viewport, WheelGesture, type WheelBehavior, ZOOM_MIN, ZOOM_MAX, normalizeWheelDelta, wheelZoomFactor } from '../../shared/presentation/viewport.ts';
 
 export type ViewportGestureDeps = {
   $<T extends Element = HTMLElement>(id: string): T;
@@ -17,6 +17,8 @@ export type ViewportGestureDeps = {
   syncSplitGeometry(): void;
   syncZoomSelect(loaded: boolean): void;
   render(): void;
+  annotationActive?(): boolean;
+  cancelAnnotationGesture?(): void;
 };
 
 // Viewport gestures (desktop parity): right-drag pans, wheel/pinch zooms at the
@@ -78,6 +80,69 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
     if (viewport.zoom === ZOOM_MIN && !pendingPanX && !pendingPanY) flushPendingView();
     return true;
   }
+
+  // Capture before the drawing SVG: a second finger changes ownership of the
+  // whole contact sequence, including a stroke that has already started.
+  const touches = new Map<number, { x: number; y: number }>();
+  let touchStage: HTMLElement | null = null, touchNavigating = false;
+  let touchBase: { x: number; y: number; distance: number; zoom: number; offsetX: number; offsetY: number; anchorX: number; anchorY: number };
+  function touchGeometry() {
+    const [a, b] = [...touches.values()];
+    return b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(b.x - a.x, b.y - a.y) }
+      : { ...a, distance: 0 };
+  }
+  function rebaseTouch() {
+    if (!touches.size) return;
+    const geometry = touchGeometry(), anchor = zoomAnchor(touchStage, geometry.x, geometry.y);
+    touchBase = { ...geometry, zoom: viewport.zoom, offsetX: viewport.offsetX, offsetY: viewport.offsetY, anchorX: anchor.x, anchorY: anchor.y };
+  }
+  screens.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch' || !session.trackCount) return;
+    const target = e.target as Element;
+    const stage = target.closest<HTMLElement>('.frame-stage');
+    if (!stage || target.closest('button, input, label, a, select')) return;
+    flushPendingView();
+    if (!touches.size) { touchStage = stage; touchNavigating = !deps.annotationActive?.(); }
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size > 1) { deps.cancelAnnotationGesture?.(); touchNavigating = true; }
+    rebaseTouch();
+    if (!touchNavigating) return;
+    e.preventDefault(); e.stopPropagation();
+    stage.setPointerCapture(e.pointerId);
+    trace?.input('touch-start', e, 'boundary');
+  }, true);
+  screens.addEventListener('pointermove', e => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!touchNavigating) return;
+    e.preventDefault(); e.stopPropagation();
+    // In annotation mode a remaining finger stays reserved until every finger
+    // lifts. It must neither draw nor make an unexpected one-finger pan.
+    if (touches.size === 1 && deps.annotationActive?.()) return;
+    const after = touchGeometry();
+    // Absolute distance avoids accumulating clamp error when the browser emits
+    // the two pointer movements separately at the minimum/maximum zoom.
+    const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, touchBase.distance > 0 ? touchBase.zoom * after.distance / touchBase.distance : touchBase.zoom));
+    const factor = zoom / touchBase.zoom;
+    zoomChanged = zoomChanged || zoom !== viewport.zoom;
+    viewport.apply({ zoom,
+      offsetX: factor * touchBase.offsetX + (1 - factor) * touchBase.anchorX + after.x - touchBase.x,
+      offsetY: factor * touchBase.offsetY + (1 - factor) * touchBase.anchorY + after.y - touchBase.y });
+    trace?.input('touch-view', e, 'apply');
+    scheduleView();
+  }, true);
+  function endTouch(e: PointerEvent) {
+    if (!touches.has(e.pointerId)) return;
+    if (touchNavigating) { e.preventDefault(); e.stopPropagation(); }
+    touches.delete(e.pointerId);
+    flushPendingView();
+    if (touches.size) { rebaseTouch(); return; }
+    touchStage = null; touchNavigating = false;
+    logViewSettled('Touch viewport adjustment');
+  }
+  screens.addEventListener('pointerup', endTouch, true);
+  screens.addEventListener('pointercancel', endTouch, true);
+  screens.addEventListener('lostpointercapture', endTouch, true);
 
   // `contextmenu` may target the element under the pointer rather than the
   // captured stage in some browser/input sequences. Keep a short, gesture-
@@ -175,6 +240,7 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
   for (const type of ['gesturestart', 'gesturechange', 'gestureend'] as const) {
     screens.addEventListener(type, e => {
       e.preventDefault();
+      if (touches.size) return; // iOS can also emit native pinch events for these contacts.
       const event = e as Event & { scale?: number; clientX?: number; clientY?: number };
       const scale = event.scale ?? 1;
       if (type === 'gesturestart') { gestureScale = scale; return; }

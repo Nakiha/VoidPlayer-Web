@@ -48,7 +48,7 @@ export function installLazyAnalysisPanel(session: ReviewSession, act: Action, ho
     getAnalysisState() { if (panel) return panel.getAnalysisState(); reconcile(); return structuredClone(snapshot); },
     restoreAnalysisState(state: AnalysisViewState) {
       restored = true;
-      snapshot = { ...structuredClone(state), numAxis: state.axis, follow: false };
+      snapshot = { ...structuredClone(state), numAxis: state.axis };
       known.clear();
       for (const track of session.getAnalysisCapabilities()) known.add(`${track.slot}|${track.mediaId}`);
       panel?.restoreAnalysisState(state);

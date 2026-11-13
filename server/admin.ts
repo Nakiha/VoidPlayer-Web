@@ -24,7 +24,7 @@ import { AdminError } from './admin-error.ts';
 import { Measurements } from './measurement.ts';
 import { CacheManager } from './caches.ts';
 import { AnnotationStore } from './annotations.ts';
-import { WorkspaceStore } from './workspaces.ts';
+import { UserStore } from './users.ts';
 export function adminWriteAllowed(req: IncomingMessage, action = 'admin') {
   if (req.headers['x-voidplayer-action'] !== action) return false;
   try {
@@ -66,7 +66,7 @@ export class AdminController {
     return this.analysisInstance;
   }
   readonly measurements: Measurements;
-  readonly workspaces: WorkspaceStore;
+  readonly users: UserStore;
   readonly annotations: AnnotationStore;
   private build: { version: string; revision: string };
   private mutation: Promise<unknown> | null = null;
@@ -78,10 +78,10 @@ export class AdminController {
     this.runtimeLog = runtimeLog; this.reports = new ReportLogs(config.logsDir, logPolicy(config.logging).reports);
     this.config = config; this.library = library; this.build = build;
     this.measurements = new Measurements(library);
-    this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite'));
+    this.users = new UserStore(path.join(config.dataDir, 'users.sqlite'));
     try { this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
     catch (error) {
-      try { this.workspaces.close(); }
+      try { this.users.close(); }
       catch (cleanup) { throw new AggregateError([error, cleanup], 'Admin initialization failed', { cause: error }); }
       throw error;
     } }
@@ -180,7 +180,7 @@ export class AdminController {
       await this.mutation?.catch(() => {});
       await this.analysisInstance?.close();
     }],
-    ['workspaces', () => this.workspaces.close()],
+    ['users', () => this.users.close()],
     ['annotations', () => this.annotations.close()],
   ]); }
 }

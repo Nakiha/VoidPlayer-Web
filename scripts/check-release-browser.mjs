@@ -83,14 +83,14 @@ try {
   // Decoded tracks commit before asynchronous annotation/layout restoration.
   const waitForWorkspace = async (p, expected) => {
    try { await p.waitForFunction(expected => {
-    const actual = window.voidPlayer?.exportWorkspace();
+    const actual = window.voidPlayer?.exportState();
     const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
       ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
-    return actual && ['marks', 'tracks', 'positionUs', 'viewport', 'layout'].every(key => JSON.stringify(canonical(actual[key])) === JSON.stringify(canonical(expected[key])));
+    return actual && ['tracks', 'positionUs', 'viewport', 'layout', 'comparison'].every(key => JSON.stringify(canonical(actual[key])) === JSON.stringify(canonical(expected[key])));
    }, expected); }
    catch (error) {
-    const actual = await call(p, 'export_workspace');
-    for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(actual[key], expected[key], `restore ${key}`);
+    const actual = await call(p, 'get_uri_state');
+    for (const key of ['tracks', 'positionUs', 'viewport', 'layout', 'comparison']) assert.deepEqual(actual[key], expected[key], `restore ${key}`);
     throw error;
    }
   };
@@ -121,52 +121,35 @@ try {
   await call(page, 'seek_review', { ptsUs: 1000000 });
   await call(page, 'add_review_mark', { slot: 'A', text: 'Native release round trip', drawings: [{ id: 'rect', tool: 'rect', color: '#ff3b30', strokeWidth: 4, points: [{ x: .2, y: .2 }, { x: .6, y: .5 }] }] });
   await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'split', splitPos: .37, zoom: 1.5 }));
-  const saved = await call(page, 'export_workspace');
-  assert.equal(saved.marks.length, 1); assert.equal(saved.viewport.mode, 'split');
+  const saved = await call(page, 'get_uri_state');
+  const savedMarks = (await call(page, 'get_review_session')).marks; assert.equal(savedMarks.length, 1); assert.equal(saved.viewport.mode, 'split');
   assert.equal(saved.viewport.zoom, 1.5); assert.ok(saved.layout);
-  await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
-  await page.locator('#saved-workspace-name').fill('Native release'); await page.locator('#saved-workspace-save').click();
-  await page.locator('.saved-workspace-open').filter({ hasText: 'Native release' }).waitFor();
-  await page.waitForFunction(() => !document.querySelector('#saved-workspace-name').disabled);
-  const stored = (await (await context.request.get(base + '/api/workspaces')).json()).entries[0];
-  assert.ok(stored, 'saved workspace belongs to the browser identity'); assert.equal(stored.revision, 1);
+  const shared = await call(page, 'share_state'); assert.ok(new URL(shared.url).searchParams.has('s'));
   const admin = await context.newPage(); await admin.goto(base + '/admin');
-  await admin.getByRole('button', { name: '工作区', exact: true }).click();
-  await admin.locator('#admin-workspaces-list button').filter({ hasText: 'Native release' }).click();
-  await admin.waitForFunction(() => document.querySelector('#admin-workspace-json').value.includes('Native release round trip'));
-  const [download] = await Promise.all([admin.waitForEvent('download'), admin.locator('#admin-workspace-download').click()]);
-  const document = await readFile(await download.path()); assert.deepEqual(JSON.parse(gunzipSync(document)).marks, saved.marks);
-  const restored = await context.newPage(); restored.on('pageerror', e => errors.push(e.message)); await restored.goto(base);
-  // The shell input exists before main's asynchronous imports finish attaching
-  // the file handler. Wait for the same session facade as the initial page.
-  await restored.waitForFunction(() => window.voidPlayer);
-  await chooseTestGuest(restored);
-  await restored.locator('#workspace-file').setInputFiles({ name: 'review.voidplayer', mimeType: 'application/gzip', buffer: document });
-  try { await restored.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy); }
-  catch (error) {
-    console.error('Workspace file import diagnostics', JSON.stringify(await restored.evaluate(() => ({ state: window.voidPlayer?.getState(), dialogs: [...document.querySelectorAll('dialog[open]')].map(node => node.textContent), notices: [...document.querySelectorAll('[role=status],[role=alert]')].map(node => node.textContent) }))), errors);
-    throw error;
-  }
+  await admin.getByRole('button', { name: '标注', exact: true }).click();
+  await admin.locator('#admin-annotation-list button').filter({ hasText: 'Native release round trip' }).waitFor();
+  const restored = await context.newPage(); restored.on('pageerror', e => errors.push(e.message)); await restored.goto(shared.url);
+  await restored.waitForFunction(() => window.voidPlayer); await chooseTestGuest(restored);
+  await restored.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
   await waitForWorkspace(restored, saved);
-  const imported = await call(restored, 'export_workspace');
-  for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(imported[key], saved[key], key);
+  await restored.waitForFunction(id => window.voidPlayer.getState().marks.some(mark => mark.id === id), savedMarks[0].id);
   await context.close();
   await generated?.disconnect();
   await stop(); await start();
   if (generated) {
     await generated.verifyOffline();
-    assert.equal((await (await fetch(base + '/api/workspaces/' + stored.id)).json()).id, stored.id);
+    assert.equal((await fetch(base + '/api/uri/decode?s=' + new URL(shared.url).searchParams.get('s'))).status, 200);
     await generated.reconnect();
   }
   const restarted = await browser.newPage({locale:'zh-CN'}); restarted.on('pageerror', e => errors.push(e.message));
-  await restarted.goto(base + '/?workspace=' + stored.id);
+  await restarted.goto(shared.url);
   await chooseTestGuest(restarted);
   await restarted.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 2 && window.voidPlayer.getState().marks.length === 1 && !window.voidPlayer.getState().busy);
   await waitForWorkspace(restarted, saved);
-  const reopened = await call(restarted, 'export_workspace');
-  for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(reopened[key], saved[key], `restart ${key}`);
+  const reopened = await call(restarted, 'get_uri_state');
+  for (const key of ['tracks', 'positionUs', 'viewport', 'layout', 'comparison']) assert.deepEqual(reopened[key], saved[key], `restart ${key}`);
   assert.deepEqual(errors, []);
-  console.log(`PASS native ${manifest.appVersion} ${manifest.revision} ${browserName}: packaged frontend, dual decode, vector marks, gzip file restore, server save/admin inspection, process restart and workspace restore; empty PATH and isolated data`);
+  console.log(`PASS native ${manifest.appVersion} ${manifest.revision} ${browserName}: packaged frontend, dual decode, vector marks, ABI state restore, source annotation/admin inspection and process restart; empty PATH and isolated data`);
   } else {
     assert.deepEqual(errors, []);
     console.log(`PASS native ${manifest.appVersion} ${manifest.revision} ${browserName}: packaged start/About version equals server/manifest; empty PATH and unrelated cwd`);

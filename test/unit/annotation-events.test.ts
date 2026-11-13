@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AnnotationStore, ANNOTATION_EVENT_RETENTION } from '../../server/annotations.ts';
+function fixtureStore(file: string) { const store = new AnnotationStore(file); store.ensureSpace('default', '共享评审'); return store; }
 import { openIndexDatabase } from '../../server/sqlite.ts';
 import { mergeAnnotationEvents } from '../../shared/review/annotation-events.ts';
 import { applyAnnotationOperation, parseAnnotationOperation } from '../../shared/review/annotation-command.ts';
@@ -32,7 +33,7 @@ test('shared commands use explicit anchors and do not mutate the caller or requi
 
 test('commits retain every operation, deduplicate retries and survive disconnected consumers/restart', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'vp-events-')), file = path.join(dir, 'annotations.sqlite');
-  let store = new AnnotationStore(file);
+  let store = fixtureStore(file);
   try {
     const create = command();
     const first = store.mutate('default', create, actor, 'request-1');
@@ -48,7 +49,7 @@ test('commits retain every operation, deduplicate retries and survive disconnect
     assert.deepEqual(mergeAnnotationEvents(events.events, events), events.events, 'duplicate delivery is inert');
     assert.throws(() => store.mutate('default', { ...create, operationId: 'conflict' }, actor), { code: 'annotation-revision-conflict' });
     assert.equal(store.events('default', 0).events.length, 3, 'rejected writes emit no commit event');
-    store.close(); store = new AnnotationStore(file);
+    store.close(); store = fixtureStore(file);
     assert.deepEqual(store.events('default', 1).events.map(event => event.revision), [2, 3]);
     assert.equal(store.events('default', 3).events.length, 0);
     assert.equal(store.events('default', 4).reason, 'cursor-ahead');
@@ -57,7 +58,7 @@ test('commits retain every operation, deduplicate retries and survive disconnect
 });
 
 test('bounded history paginates, distinguishes shared-clock gaps, and tells slow consumers to rebuild state', () => {
-  const store = new AnnotationStore(':memory:');
+  const store = fixtureStore(':memory:');
   try {
     const other = store.createSpace('other');
     store.mutate(other.id, command('other'), actor);
@@ -68,7 +69,7 @@ test('bounded history paginates, distinguishes shared-clock gaps, and tells slow
     const reset = store.events('default', 0);
     assert.equal(reset.resetRequired, true); assert.equal(reset.reason, 'history-expired');
     assert.equal(reset.events.length, 0); assert.equal(reset.cursor, ANNOTATION_EVENT_RETENTION + 3);
-    assert.equal(reset.snapshotUrl, '/api/annotations/spaces/default?after=0');
+    assert.equal(reset.snapshotUrl, '/api/annotations/media/default?after=0');
     assert.equal(store.changes('default').entries[0].revision, ANNOTATION_EVENT_RETENTION + 2);
     assert.deepEqual(mergeAnnotationEvents(store.events('default').events, reset), []);
     const page = store.events('default', 3);
@@ -85,7 +86,7 @@ test('bounded history paginates, distinguishes shared-clock gaps, and tells slow
 
 test('event failure rolls back object, clock and idempotency receipt as one transaction', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'vp-events-atomic-')), file = path.join(dir, 'annotations.sqlite');
-  const store = new AnnotationStore(file), db = openIndexDatabase(file);
+  const store = fixtureStore(file), db = openIndexDatabase(file);
   try {
     db.exec("CREATE TRIGGER reject_event BEFORE INSERT ON annotation_events BEGIN SELECT RAISE(ABORT,'event write failed'); END;");
     assert.throws(() => store.mutate('default', command(), actor), /event write failed/);
@@ -98,13 +99,13 @@ test('event failure rolls back object, clock and idempotency receipt as one tran
 
 test('v1 databases keep receipts and records while announcing the unavailable event history', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'vp-events-migrate-')), file = path.join(dir, 'annotations.sqlite');
-  let store = new AnnotationStore(file);
+  let store = fixtureStore(file);
   try {
     const create = command(), first = store.mutate('default', create, actor);
     store.close();
     const db = openIndexDatabase(file);
     db.exec('DROP TABLE annotation_events; DROP TABLE annotation_event_floor; PRAGMA user_version=1;'); db.close();
-    store = new AnnotationStore(file);
+    store = fixtureStore(file);
     assert.deepEqual(store.mutate('default', create, actor), first);
     assert.equal(store.events('default', 0).resetRequired, true);
     assert.equal(store.events('default').events.length, 0);
@@ -114,7 +115,7 @@ test('v1 databases keep receipts and records while announcing the unavailable ev
 });
 
 test('candidate/CAMBI-capable database v5 keeps old records/receipts and rejects future schemas',()=>{
- const dir=mkdtempSync(path.join(os.tmpdir(),'vp-candidate-schema-')),file=path.join(dir,'annotations.sqlite');let store:AnnotationStore|undefined=new AnnotationStore(file);
- try{const op=command(),record=store.mutate('default',op,actor);store.close();store=undefined;let db=openIndexDatabase(file);db.exec('PRAGMA user_version=3');db.close();store=new AnnotationStore(file);assert.deepEqual(store.read('default',record.id),record);assert.deepEqual(store.mutate('default',op,actor),record);store.close();store=undefined;db=openIndexDatabase(file);assert.equal(db.prepare('PRAGMA user_version').get()!.user_version,5);db.exec('PRAGMA user_version=6');db.close();assert.throws(()=>new AnnotationStore(file),/更新的程序/);
+ const dir=mkdtempSync(path.join(os.tmpdir(),'vp-candidate-schema-')),file=path.join(dir,'annotations.sqlite');let store:AnnotationStore|undefined=fixtureStore(file);
+ try{const op=command(),record=store.mutate('default',op,actor);store.close();store=undefined;let db=openIndexDatabase(file);db.exec('PRAGMA user_version=3');db.close();store=fixtureStore(file);assert.deepEqual(store.read('default',record.id),record);assert.deepEqual(store.mutate('default',op,actor),record);store.close();store=undefined;db=openIndexDatabase(file);assert.equal(db.prepare('PRAGMA user_version').get()!.user_version,5);db.exec('PRAGMA user_version=6');db.close();assert.throws(()=>fixtureStore(file),/更新的程序/);
  }finally{store?.close();rmSync(dir,{recursive:true,force:true});}
 });

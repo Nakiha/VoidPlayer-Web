@@ -10,9 +10,9 @@
 
 管理概览可用 `GET /api/admin/status?view=overview` 省略请求历史，默认 status 保留旧 wire。`GET /api/admin/requests?page=1&pageSize=40` 查询保留的运行日志，返回 `recentRequests`、`page`、`pages`、`pageSize`（默认 40，范围 1–100）和 `total`；单页记录仍按时间正序，管理页倒序展示。支持绑定当前 actor 和页内容的私有条件读取；管理 GET 不列入记录。`GET /api/admin/logs?page=1&pageSize=40` 同样支持页码、总页数、总条数，原 `before` 游标调用继续可用。页码须为正安全整数，越过末页时返回最后一页。GUI 仅在请求视图首页自动观察，旧页由翻页或刷新主动读取。CPU、运行时间等动态状态不使用整包 ETag。GUI 的空闲退避只调度自动读取，不改变 Agent 的显式读取、持久提交或服务执行。
 
-HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/annotations/spaces/SPACE` 提交 `AnnotationOperation`。必须提供与服务匹配的 `Origin`、对应的 `X-VoidPlayer-Action` 和 JSON Content-Type。用户名与 `client` 是可信内网下的归属声明，不是身份认证；既有同源保护保持不变。
+HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/annotations/media/TARGET` 提交 `AnnotationOperation`。必须提供与服务匹配的 `Origin`、对应的 `X-VoidPlayer-Action` 和 JSON Content-Type。用户名与 `client` 是可信内网下的归属声明，不是身份认证；既有同源保护保持不变。
 
-持久目标由 space、标注 ID、`document.media` 中的源 ID/版本和 `mark.frame` 确定。现有文档仍带有 A–H 槽位与 decoder 来源字段；它们是兼容的显示/来源描述，不是要求 Agent 加载轨道或拥有浏览器。媒体描述必须来自已知工作区或实际探测，不能编造；接受标注不意味着服务器验证了帧内容。自解释缓存媒体信息/索引的首批只读接口见 [媒体查询](media-query.md)。
+持久目标由片源版本 target、标注 ID、`document.media` 中的源 ID/版本和 `mark.frame` 确定。现有文档仍带有 A–H 槽位与 decoder 来源字段；它们是兼容的显示/来源描述，不是要求 Agent 加载轨道或拥有浏览器。媒体描述必须来自已知工作区或实际探测，不能编造；接受标注不意味着服务器验证了帧内容。自解释缓存媒体信息/索引的首批只读接口见 [媒体查询](media-query.md)。
 
 浏览器标注构造和编辑已移到 `shared/review/marks.ts`。`shared/review/annotation-command.ts` 定义与宿主无关的命令验证和持久状态转换；SQLite 适配器负责事务和序列。页面 GUI 与 WebMCP 继续共用 `ReviewSession` 视图行为。HTTP 业务命令不依赖 GUI 是否在线、播放状态、当前帧或选中轨道。
 
@@ -22,10 +22,12 @@ HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/ann
 
 `GET /api/annotations/events/SPACE` 读取最近 50 条保留事件；加 `?after=CURSOR` 每页最多 100 条，按 sequence 升序续读。事件记录操作、请求 ID、actor、声明的 client、对象/修订、源/帧目标和提交状态。对象、回执和事件在同一个 SQLite 事务提交，响应不等待 GUI 消费。
 
-事件是确认的操作历史；`GET /api/annotations/spaces/SPACE?after=...` 是合并过的最新对象状态，二者不能混用。sequence 全库递增，某一空间出现空档是正常的。消费者按 sequence 去重，处理整页后保存 cursor，并继续读取 more=true 的页。
+事件是确认的操作历史；`GET /api/annotations/media/TARGET?after=...` 是合并过的最新对象状态，二者不能混用。sequence 全库递增，某一空间出现空档是正常的。消费者按 sequence 去重，处理整页后保存 cursor，并继续读取 more=true 的页。
 
 全库保留最近 10000 条事件，幂等回执沿用原有持久策略。游标落后于保留窗口或超前于恢复后的数据库时，响应返回 `resetRequired`、原因、快照入口和当前 cursor。客户端保留本机待提交草稿，完整分页读取并替换已确认状态，再从捕获的 cursor 继续观察。GUI 的活动轮询每轮最多读五页，失败不会阻塞标注同步；活动区不会自动打开、改变播放、替换轨道或移动焦点。
 
 标注数据库升级至 user_version=2。v1 对象与幂等回执保留；升级前没有操作历史，因此较旧事件游标会要求重同步。旧版本程序会拒绝打开升级后的数据库，不支持原地降级。
 
 Node 回归覆盖无前端 HTTP 写入、Origin/身份检查、重复提交、版本冲突、重启和事件游标。已移除的技术发现、任务中心和评分接口均返回 404。
+
+URI 分享不创建持久工作区；新状态 ABI、目标键计算与接口见 [URI 状态](uri-state.md)。旧工作区 CRUD 和任意空间创建接口已移除。

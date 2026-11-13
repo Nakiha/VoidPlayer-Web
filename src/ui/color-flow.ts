@@ -52,7 +52,7 @@ export function colorSettingsShell() {
     <h4 class="settings-section-title">${th(msg("colorFlow.colorConversion", "色彩转换"))}</h4>
     <div class="settings-group color-settings-card">
       <div id="color-mode" class="color-mode-options segmented" role="group" aria-label="${th(msg("colorFlow.colorConversion", "色彩转换"))}">
-        <button data-color-mode="reference" aria-pressed="false"><strong>${th(msg("colorFlow.managedColor", "自有色彩"))}</strong><span>${th(msg("colorOutput.managedConversion", "统一 SDR / HDR 转换"))}</span></button>
+        <button data-color-mode="reference" aria-pressed="false"><strong>${th(msg("colorFlow.managedColor", "默认色彩"))}</strong><span>${th(msg("colorOutput.managedConversion", "统一 SDR / HDR 转换"))}</span></button>
         <button data-color-mode="browser" aria-pressed="false"><strong>${th(msg("colorFlow.browserColor", "浏览器色彩"))}</strong><span>${th(msg("colorFlow.nativeFrameConversion", "沿用原生帧转换"))}</span></button>
       </div>
       <div id="reference-decode-settings">

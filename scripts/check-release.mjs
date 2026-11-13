@@ -3,7 +3,7 @@ import { verifyFrontendIdentity } from './release-version.mjs';
 import { httpFetch } from '../test/http-request.ts';
 import { syntheticFlv } from '../test/flv-fixture.ts';
 import { FLV_INDEX_SCHEMA } from '../shared/media/indexing/flv-index-cache.ts';
-import { verifySavedWorkspaces, verifyWorkspaceRestore } from './workspace-acceptance.mjs';
+import { verifyUriSharing, verifyUriRestore } from './uri-state-acceptance.mjs';
 import { verifyMeasurements } from './measurement-acceptance.mjs';
 import { openIndexDatabase } from '../server/sqlite.ts';
 // Test the extracted release itself. Its server gets an empty PATH and an unrelated cwd.
@@ -197,8 +197,8 @@ try {
   assert.equal(identityResponse.status, 200);
   const workspaceActor = (await identityResponse.json()).actor;
   const workspaceCookie = identityResponse.headers.get('set-cookie').split(';')[0];
-  const workspaceTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base, cookie: workspaceCookie } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };
-  const savedWorkspace = await verifySavedWorkspaces(workspaceTransport, listing.entries[0], base + '/', workspaceActor.id);
+  const stateTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base, cookie: workspaceCookie } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };
+  const sharedState = await verifyUriSharing(stateTransport, listing.entries[0], base + '/', workspaceActor.id);
   const url = base + '/api/media/' + listing.entries[0].id + '/content?v=' + listing.entries[0].version;
   const head = await fetch(url, { method: 'HEAD' }); assert.equal(head.headers.get('content-length'), String(bytes.length)); assert.equal((await head.arrayBuffer()).byteLength, 0);
   await Promise.all(Array.from({ length: 12 }, async (_, i) => {
@@ -285,7 +285,7 @@ try {
   assert.ok(unverified.errors.some(error => error.code === 'ESTORAGEUNVERIFIED'));
   assert.equal((await (await fetch(base + '/api/library/browse?recursive=1&limit=200')).json()).entries[0].id, listing.entries[0].id);
   assert.equal((await fetch(url)).status, 404);
-  await verifyWorkspaceRestore(workspaceTransport, savedWorkspace);
+  await verifyUriRestore(stateTransport, sharedState);
   await stop();
   await rm(media, { recursive: true }); await renameReleased(migrationOffline, media);
   base = await start(port); await waitForStorage('ready');
@@ -307,7 +307,7 @@ try {
   base = await start(port);
   assert.equal(await readFile(configPath, 'utf8'), original);
   assert.deepEqual(await reportFiles(), [uploadedName]); assert.deepEqual(await readFile(path.join(data, 'logs', uploadedName)), uploadedBytes);
-  await verifyWorkspaceRestore(workspaceTransport, savedWorkspace);
+  await verifyUriRestore(stateTransport, sharedState);
   const restored = await (await fetch(base + '/api/library/browse?recursive=1&limit=200')).json();
   assert.equal(restored.entries.length, 1, 'restored index stays queryable while storage is offline');
   assert.equal(restored.entries[0].id, listing.entries[0].id);
@@ -332,6 +332,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, portable HTTP identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, trusted-user admin page/identity/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-4 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index and versioned workspaces`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, portable HTTP identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, trusted-user admin page/identity/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-4 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index, stateless URI shares and versioned annotations`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);

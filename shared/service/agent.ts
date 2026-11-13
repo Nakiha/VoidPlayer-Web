@@ -2,7 +2,7 @@ import {AGENT_TASK_CATALOG,AGENT_OPERATION_PATH,AGENT_OPERATIONS_VERSION} from '
 import {PAGE_TOOLS,PAGE_BRIDGE_LIMITS,PAGE_MCP_VERSIONS,MCP_PAGE_TOOLS} from './page-bridge.ts';
 /** Discovery describes this deployment without starting work or creating users. */
 export function serviceCapabilities(storageEnabled: boolean, revealEnabled: boolean) {
-  return { admin: storageEnabled, workspaces: storageEnabled, annotations: storageEnabled, reveal: revealEnabled };
+  return { admin: storageEnabled, uriState: true, annotations: storageEnabled, reveal: revealEnabled };
 }
 type ServiceCapabilities = ReturnType<typeof serviceCapabilities>;
 export type AgentCapability = {
@@ -14,19 +14,19 @@ export type AgentCapability = {
   guide: string;
 };
 export const AGENT_TASKS = {
-  library: '/agent/library.md', workspaces: '/agent/workspaces.md', annotations: '/agent/annotations.md',
+  library: '/agent/library.md', state: '/agent/state.md', annotations: '/agent/annotations.md',
   liveSession: '/agent/live-session.md', errors: '/agent/errors.md',
 } as const;
 
 export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; localPageBridge?:boolean; actor: { id: string; name: string } | null }) {
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
-    {id:'identity.select',implemented:true,enabled:c.admin,readiness:c.admin?'ready':'unavailable',requiresBrowser:false,guide:AGENT_TASKS.workspaces},
+    {id:'identity.select',implemented:true,enabled:c.admin,readiness:c.admin?'ready':'unavailable',requiresBrowser:false,guide:AGENT_TASKS.state},
     { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.cached-info', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.cached-index-query', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.read', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
-    { id: 'workspaces.read', implemented: true, enabled: c.workspaces, readiness: c.workspaces ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.workspaces },
+    { id: 'uri-state.decode', implemented: true, enabled: true, readiness: 'ready', requiresBrowser: false, guide: AGENT_TASKS.state },
     { id: 'annotations.write', implemented: true, enabled: c.annotations, readiness: !c.annotations ? 'unavailable' : actor ? 'ready' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.annotations },
     { id: 'annotations.events', implemented: true, enabled: c.annotations, readiness: c.annotations ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.annotations },
     { id: 'session.view', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
@@ -41,9 +41,9 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     capabilities,
     writes: { identity: '/api/identity', identityIsAuthentication: false, originRequired: true,
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
-    annotations: { version: 1, spaces: '/api/annotations/spaces',
+    annotations: { version: 1, targets: '/api/annotations/media',
       events: '/api/annotations/events/{space}?after={cursor}',
-      identity: ['space', 'id'], concurrency: 'expected-revision', idempotency: 'operationId',
+      identity: ['media-version-target', 'id'], concurrency: 'expected-revision', idempotency: 'operationId',
       frameTimeUnit: 'integer-microseconds', target: 'document.media + mark.mediaId + mark.frame',
       slotMeaning: 'legacy-display-hint; no loaded track required' },
   };

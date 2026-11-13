@@ -1,0 +1,93 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { writeFile } from 'node:fs/promises';
+import { withBrowserFixture } from '../../browser-fixture.mjs';
+import { repositoryRoot } from '../../manifest.mjs';
+import { loadConfig } from '../../../../server/config.ts';
+import { startService } from '../../../../server/runtime.ts';
+import { annotationTarget } from '../../../../shared/review/annotation-target.ts';
+const engine = process.argv[2] ?? 'webkit';
+await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' },
+  dependencies: { startService: async ({ temp }) => {
+    await writeFile(path.join(temp, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'qa', name: 'QA', path: path.join(repositoryRoot, 'fixtures/video') }],
+      dataDir: 'data', logsDir: null, staticDir: path.join(repositoryRoot, 'dist'), indexWatch: false }));
+    const config = await loadConfig([], 'production', temp); config.port = 0;
+    const service = await startService(config, false); await service.library.refresh();
+    return { server: service.server, close: () => service.close(), url: `http://127.0.0.1:${service.server.address().port}/` };
+  } },
+}, async ({ page, context, url: base, ready, artifact }) => {
+  const origin = new URL(base).origin, errors = [], requests = [];
+  context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
+  page.on('pageerror', error => errors.push(error.message));
+  context.on('request', request => requests.push(request.url()));
+  await context.request.post(base + 'api/identity', { headers: { origin, 'x-voidplayer-action': 'identity' }, data: { name: 'URI 回归' } });
+  await ready();
+  const call = (page, name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(tool => tool.name === name).execute(args), { name, args });
+  const library = await call(page, 'list_library');
+  const a = library.entries.find(entry => entry.name === 'h264_9s_1920x1080.mp4');
+  const b = library.entries.find(entry => entry.name === 'ffv1_yuv444p10le.mkv');
+  assert.ok(a && b);
+  await call(page, 'load_library_item', { slot: 'A', id: a.id });
+  await call(page, 'load_library_item', { slot: 'B', id: b.id });
+  await call(page, 'seek_review', { ptsUs: 1000000 });
+  const mark = await call(page, 'add_review_mark', { slot: 'A', text: '独立片源标注', drawings: [{ tool: 'rect', points: [{ x: .2, y: .2 }, { x: .5, y: .5 }] }] });
+  const target = await annotationTarget({ source: { id: a.id, url: `${origin}/api/media/${a.id}/content?v=${a.version}` } }, base);
+  await page.waitForFunction(async ({ target, id }) => {
+    const response = await fetch(`/api/annotations/media/${target}/${id}`); return response.ok;
+  }, { target, id: mark.id });
+  await call(page, 'set_review_track_offset', { slot: 'B', offsetUs: 40000 });
+  await call(page, 'reorder_review_tracks', { order: ['B', 'A'] });
+  await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'split', splitPos: .37, zoom: 1.5 }));
+  const state = await call(page, 'get_uri_state');
+  const shared = await call(page, 'share_state');
+  assert.match(new URL(shared.url).searchParams.get('s'), /^1\.[bnd]\./);
+  const decoded = await context.request.get(origin + '/api/uri/decode?s=' + new URL(shared.url).searchParams.get('s')).then(r => r.json());
+  assert.deepEqual(decoded.state, state);
+  assert.equal(JSON.stringify(decoded).includes('独立片源标注'), false);
+  const recipient = await context.newPage();
+  await recipient.goto(shared.url + '&t=2&channel=y');
+  await recipient.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
+  await recipient.waitForFunction(() => window.voidPlayer.getViewport().mode === 'split' && window.voidPlayer.getState().positionUs === 2000000);
+  assert.equal(await recipient.evaluate(() => window.voidPlayer.getViewport().channel), 'y');
+  await recipient.waitForFunction(id => window.voidPlayer.getState().marks.some(mark => mark.id === id), mark.id);
+  const beforeMarkJump = await recipient.evaluate(() => window.voidPlayer.exportState());
+  await recipient.evaluate(({ state, id }) => window.voidPlayer.applyState({ ...state, mark: id }), { state: beforeMarkJump, id: mark.id });
+  assert.equal(await recipient.evaluate(() => window.voidPlayer.getState().positionUs), mark.frame.ptsUs, 'mark navigation uses the source frame anchor, independent of the requested session time');
+  assert.equal(await recipient.evaluate(() => window.voidPlayer.getState().tracks.find(track => track.slot === 'A').frame.ptsUs), mark.frame.ptsUs);
+  await recipient.evaluate(state => window.voidPlayer.applyState(state), beforeMarkJump);
+  const independent = await context.newPage();
+  await independent.goto(`${origin}/?abi=1&H=${a.id}@${a.version}&t=1`);
+  await independent.waitForFunction(id => window.voidPlayer?.getState().tracks[0]?.slot === 'H' && window.voidPlayer.getState().marks.some(mark => mark.id === id), mark.id);
+  await call(independent, 'update_review_mark', { id: mark.id, resolved: true, reply: '另一个布局中的回复' });
+  await page.waitForFunction(id => window.voidPlayer.getState().marks.find(mark => mark.id === id)?.resolved, mark.id);
+  assert.equal(await page.evaluate(id => window.voidPlayer.getState().marks.find(mark => mark.id === id).replies.at(-1).text, mark.id), '另一个布局中的回复');
+  // Commit once, drop its acknowledgement, then reload. The durable operation ID must be reused.
+  const beforeRetry = await context.request.get(`${origin}/api/annotations/media/${target}/${mark.id}`).then(r => r.json());
+  let committed; const committedOnce = new Promise(resolve => { committed = resolve; });
+  const endpoint = `${origin}/api/annotations/media/${target}`;
+  await page.route(endpoint, async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const operation = route.request().postDataJSON(); await route.fetch(); await route.abort('failed'); committed(operation);
+  });
+  await call(page, 'update_review_mark', { id: mark.id, text: '丢失回执后仍只提交一次' });
+  const operation = await committedOnce;
+  await page.unroute(endpoint); await page.reload();
+  await page.waitForFunction(id => window.voidPlayer?.getState().marks.find(mark => mark.id === id)?.text === '丢失回执后仍只提交一次', mark.id);
+  await page.waitForFunction(() => document.querySelector('#annotation-status').textContent === '已同步');
+  const afterRetry = await context.request.get(`${origin}/api/annotations/media/${target}/${mark.id}`).then(r => r.json());
+  assert.equal(afterRetry.revision, beforeRetry.revision + 1);
+  const events = await context.request.get(`${origin}/api/annotations/events/${target}?after=0`).then(r => r.json());
+  assert.equal(events.events.filter(event => event.operationId === operation.operationId).length, 1);
+  const wrongTarget = await annotationTarget({ source: { id: a.id, url: `${origin}/api/media/${a.id}/content?v=${'0'.repeat(24)}` } }, base);
+  assert.equal((await context.request.get(`${origin}/api/annotations/media/${wrongTarget}`)).status(), 200);
+  assert.equal((await context.request.get(`${origin}/api/annotations/media/${wrongTarget}`).then(r => r.json())).entries.length, 0);
+  const snapshot = await recipient.evaluate(() => window.voidPlayer.exportState());
+  await recipient.evaluate(state => window.voidPlayer.applyState({ ...state, positionUs: 3000000 }), snapshot);
+  await recipient.goBack();
+  await recipient.waitForFunction(() => window.voidPlayer.getState().positionUs === 2000000 && !window.voidPlayer.getState().busy);
+  assert.equal((await context.request.get(origin + '/api/workspaces')).status(), 404);
+  assert.ok(!requests.some(url => url.includes('/api/workspaces')));
+  assert.deepEqual(errors, []);
+  await page.screenshot({ path: artifact('uri-state.png') });
+  console.log('PASS: ABI sharing and overrides, source-version annotations across layouts, replies/status sync and URI history');
+});

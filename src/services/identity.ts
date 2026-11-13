@@ -6,7 +6,7 @@ type Health = {
   frontendBuildId?: string;
   capabilities?: {
     admin?: boolean;
-    workspaces?: boolean;
+    uriState?: boolean;
     annotations?: boolean;
     reveal?: boolean;
   };

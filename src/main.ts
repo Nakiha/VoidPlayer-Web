@@ -19,7 +19,7 @@ import { AnnotationClient } from './review/annotation-client.ts';
 import { installAnnotationSync } from './ui/annotation-sync.ts';
 import { installOfflineControls } from './ui/offline-app.ts';
 import { installIdentitySettings } from './ui/identity-settings.ts';
-import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
+import { installUriState } from './ui/uri-state.ts';
 import { installThemeControls } from './ui/theme.ts';
 import { installTimeInput } from './ui/time-input.ts';
 import { installFramePositions } from './ui/frame-position.ts';
@@ -146,7 +146,7 @@ const renderColorMode=()=>{
   peakMenu.sync(String(state.colorOutput.preview.sourcePeakNits),`${state.colorOutput.preview.sourcePeakNits} nits`,!state.busy);
   const fallback=state.colorOutput.target==='hdr'&&state.tracks.length>0&&state.tracks.some(track=>track.presentation?.actualTarget!=='hdr');
   const nativeBlocked=state.tracks.some(track=>track.presentation?.fallbackReason?.startsWith('browser-hdr-'));
-  $('color-output-description').textContent=nativeBlocked?tr(msg("colorOutput.browserPreview", "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留")):'';
+  $('color-output-description').textContent=nativeBlocked?tr(msg("colorOutput.browserPreview", "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换默认色彩输出 HDR")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留")):'';
   const key=`${getLocale()}/${mode}/${decoder}`;
   if(key!==flowKey){
     flowKey=key;updateColorFlow($('color-flow-diagram'),mode,decoder);
@@ -190,7 +190,7 @@ $('toggle-annotations').onclick = () => {
 };
 const removeTrackDrag = installTrackDrag(session);
 const sourceActions = localOnly ? { render(_state: ReturnType<ReviewSession['getState']>) {}, dispose() {} } : installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify, {
-  toasts, refresh: buildId => workspaceTransfer.refreshForUpdate(buildId),
+  toasts, refresh: buildId => uriState.refreshForUpdate(buildId),
 });
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
 let timelineDragging = false;
@@ -251,14 +251,12 @@ window.addEventListener('voidplayer:ui-error', event => showError((event as Cust
 const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const viewportTrace = installViewportTrace(session, viewport, settings.wheelBehavior, settings.close, uiEvents.signal);
-const workspaceTransfer = installWorkspaceTransfer(session, {
-  openSharedSpace: (space, seededIds) => seededIds ? annotationSync.attachWorkspace(space, seededIds) : annotationSync.openSpace(space),
-  annotationScope: annotationSync.scope,
+const uriState = installUriState(session, {
   editsReady: () => !drawingEditor.active() && annotationSync.locallySaved(),
   identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
   openingChanged: () => render(),
-  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
-  async restore(document, resumeCloudAnnotations) { if (!resumeCloudAnnotations) await annotationSync.captureSnapshot(); viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
+  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); },
+  async restore(document, resumeCloudAnnotations) { viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
 // Recovery's pagehide listener must capture the scene before disposal clears its tracks.
 window.addEventListener('pagehide', event => {
@@ -294,7 +292,7 @@ const channelMenu = installChoiceMenu('channel-select', () => (Object.keys(chann
   void act(redrawPresentationChannel, 'channel.redraw', { channel: viewport.channel });
 },'appearance', undefined, undefined, () => {
   if (session.getState().colorMode === 'reference') return true;
-  toasts.show(() => tr(msg("player.switchToManagedColorInColorDecoding", "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道")), {
+  toasts.show(() => tr(msg("player.switchToManagedColorInColorDecoding", "请先在“色彩与解码”中切换为“默认色彩”，再选择 YUV 通道")), {
     action: { label: () => tr(msg("player.openColorSettings", "前往色彩设置")), onClick: () => settings.openPane('performance', $<HTMLElement>('channel-select')) },
   });
   return false;
@@ -371,11 +369,11 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?tr(msg("player.uniformPixels", "统一像素")):tr(msg("player.fillView", "填满视图")),loaded);
   // 通道隔离只对原始平面帧生效（见 presenter 按 frame.kind 守卫）：浏览器色彩下
   // 实际输出恒为 RGB。这里显示实际生效的通道，已存的 viewport.channel 原样保留，
-  // 切回自有色彩时仍恢复，避免丢掉用户的选择。
+  // 切回默认色彩时仍恢复，避免丢掉用户的选择。
   const effectiveChannel = state.colorMode === 'reference' ? viewport.channel : 'rgb';
   channelMenu.sync(effectiveChannel, channelLabels()[effectiveChannel], loaded);
   $<HTMLElement>('channel-select').dataset.tooltip = state.colorMode === 'reference'
-    ? tr(msg("shell.yuvChannelsRawYuvFramesOnly", "YUV 通道：仅原始平面帧生效")) : tr(msg("player.yuvChannelsSwitchToManagedColorFirst", "YUV 通道：请先切换为自有色彩"));
+    ? tr(msg("shell.yuvChannelsRawYuvFramesOnly", "YUV 通道：仅原始平面帧生效")) : tr(msg("player.yuvChannelsSwitchToManagedColorFirst", "YUV 通道：请先切换为默认色彩"));
   syncZoomSelect(loaded);
   // Transient seek preparation must not dim the row or steal button focus.
   // Keep native disabled for empty sessions; busy actions are guarded below.
@@ -398,7 +396,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   timeline.setAttribute('aria-busy', String(state.busy));
   renderProgress(state.positionUs, state.durationUs);
   $('duration').textContent = formatTime(state.durationUs);
-  $('status').textContent = openingWorkspace ? tr(msg('transfer.importing', '工作区正在导入，请等待完成')) : state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
+  $('status').textContent = openingWorkspace ? tr(msg('uriState.loading', '正在恢复观看状态…')) : state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? tr(msg("player.actualSpeed", "实际速度 {p0}×"), { p0: state.playback.speed.toFixed(2) }) : loaded ? tr(msg("player.lastSeekMs", "最近定位 {p0} ms"), { p0: state.lastDecodeMs }) : '—';
   renderTrackToasts(state.tracks);
   const warning = state.error;
@@ -457,14 +455,6 @@ async function importFiles(files: File[], handles?: (FsFileHandle | undefined)[]
 }
 const dropFeedback = installFileDropFeedback(document.querySelector<HTMLElement>('.viewport-surface')!);
 const fileActions: LocalFileActions = {
-  document: {
-    accepts: files => files.some(isWorkspaceFile),
-    load: (files, origin) => traceOperation('ui', `workspace.${origin}`, { trigger: origin === 'launch' ? 'system' : inputTrigger }, async () => {
-      const documents = files.filter(isWorkspaceFile);
-      if (documents.length !== 1) throw new Error(tr(msg('player.openOneWorkspaceFileAtATime', '每次请打开一个工作区文件')));
-      await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f)));
-    }),
-  },
   loaded: () => session.getState().tracks.map(track => track.slot),
   load: (files, slots, handles, origin) => act(() => importFiles(files, handles), `files.${origin}`, { files, slots }),
   error: error => { if (!(error instanceof LocalInputError)) log.warn('ui', '打开本地文件失败', {error}); showError(error); },
@@ -485,7 +475,7 @@ for (const slot of SLOTS) {
   let drawingStart: PointerEvent | undefined;
   let clickedDrawing: string | undefined;
   stage.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || session.getState().busy || drawingEditor.active() ||
+    if (e.pointerType === 'touch' || e.button !== 0 || session.getState().busy || drawingEditor.active() ||
       (e.target as Element).closest('button, input, label') || !session.getState().tracks.some(t => t.slot === slot && t.frame)) return;
     drawingStart = e;
     clickedDrawing = (e.target as Element).closest<SVGElement>('#annotations-' + slot + ' [data-shape-id]')?.dataset.shapeId;
@@ -509,6 +499,7 @@ for (const slot of SLOTS) {
   stage.addEventListener('pointercancel', () => { drawingStart = undefined; clickedDrawing = undefined; }, { signal: uiEvents.signal });
 }
 installViewportGestures({ $, screens, viewport, session, trace: viewportTrace, wheelBehavior: settings.wheelBehavior, getTrigger: () => inputTrigger,
+  annotationActive: drawingEditor.active, cancelAnnotationGesture: drawingEditor.cancelGesture,
   applyViewTransform, zoomAnchor: viewBindings.zoomAnchor, syncSplitGeometry, syncZoomSelect, render });
 installTimeInput($<HTMLInputElement>('position'),{
   read:()=>session.getState().positionUs,format:formatTime,parse:parseTimeInput,
@@ -645,7 +636,7 @@ onLanguageChange(() => {
 }, uiEvents.signal);
 session.subscribe(render);
 session.subscribeProgress(renderProgress);
-const unregister = registerReviewTools(session, workspaceTransfer);
+const unregister = registerReviewTools(session, uriState);
 const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);
 const api = {
   getState: () => session.getState(),
@@ -659,7 +650,7 @@ const api = {
     const result = await session.load(slot, (signal, progress, configuration) => openMedia(file, undefined, progress, signal, configuration), file.name); workbench.rememberFile(file); return result;
   }),
   getWorkspace: () => workbench.getState(),
-  shareWorkspace: workspaceTransfer.shareWorkspace, exportWorkspace: workspaceTransfer.exportWorkspace, importWorkspace: workspaceTransfer.importWorkspace,
+  shareState: uriState.shareState, exportState: uriState.exportState, applyState: uriState.applyState,
   removeTrack: (slot: Slot) => apiCall('removeTrack', { slot }, () => session.removeTrack(slot)),
   reorderTracks: (order: Slot[]) => apiCall('reorderTracks', { order }, () => session.reorderTracks(order)),
   seek: (ptsUs: number) => apiCall('seek', { ptsUs }, () => session.seek(ptsUs)), step: (direction: number) => apiCall('step', { direction }, () => session.step(direction)),
@@ -683,7 +674,7 @@ const api = {
     render();
 
   }),
-  tools: reviewTools(session, workspaceTransfer),
+  tools: reviewTools(session, uriState),
   subscribePresentedFrames: (listener: Parameters<ReviewSession['subscribePresentedFrames']>[0]) => session.subscribePresentedFrames(listener),
   subscribeState: (listener: () => void) => session.subscribe(listener),
 };
@@ -700,20 +691,9 @@ if (!localOnly && annotationLink.has('media') && !['annotation','workspace','sha
   await identitySettings.ready;
   if (!uiEvents.signal.aborted) await workbench.openLibraryFile(file.id,file.version);
 },'library.open-link');
-if (!localOnly && annotationLink.has('annotation')) void act(async () => {
-  // A cold annotation deep link must establish its actor before accepting the
-  // workspace open intent, just like saved-workspace and recovery entry points.
-  await identitySettings.ready;
-  const space=annotationLink.get('space') ?? 'default', id=annotationLink.get('annotation')!;
-  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(space) || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new Error(tr(msg("player.invalidAnnotationAddress", "标注地址无效")));
-  const record=await new AnnotationClient(uiEvents.signal).read(space,id);
-  if(record.deleted)throw new Error(tr(msg("player.thisAnnotationIsInTheRecycleBin", "这条标注已在回收站")));
-  const mark=record.document.mark;
-  const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
-  if(opened)await annotationSync.openSpace(space);
-},'annotation.open');
 
-import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); viewportChrome.dispose(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); dropFeedback.dispose(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+
+import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); uriState.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); viewportChrome.dispose(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); dropFeedback.dispose(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 // GPU admission is complete and handlers are wired. Explicit deep-link loads
 // are already async, so bootstrap can reveal without waiting for them.

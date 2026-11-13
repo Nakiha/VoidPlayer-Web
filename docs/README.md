@@ -14,7 +14,7 @@
 | ChatGPT Sites 与纯静态分发 | [Sites 本地文件版](../deploy/sites.md) |
 | 独立程序、HTTPS 与桌面安装 | [便携运行](../deploy/standalone.md)、[安装与离线使用](../deploy/web-app.md) |
 | 服务端日志与上传报告 | [轮转、配额与保留](server-logging.md) |
-| 用户、访客、分享与工作区 | [身份与分享](identity-and-sharing.md)、[工作区格式](workspace-format.md) |
+| 用户、访客、状态分享与片源标注 | [身份与分享](identity-and-sharing.md)、[URI 状态与 ABI 分享](uri-state.md) |
 | 媒体库与存储 | [媒体库索引](media-library-evolution.md)、[存储位置](library-location.md)、[文件管理](library-file-management.md) |
 | 索引、定位与时间戳 | [渐进索引](progressive-indexing.md)、[统一索引](unified-indexing.md)、[JS 容器与索引](js-container-migration.md)、[FLV 时间线](flv-timeline.md)、[MP4 Range 边界](mp4-range-boundaries.md)、[时间戳兼容](timestamp-compatibility.md) |
 | 色彩与帧资源 | [色彩链路契约](color-pipeline.md)、[HDR 支持](hdr-support.md) |
@@ -31,7 +31,7 @@
 
 ## 发布历史与原始证据
 
-- [2.1.0](releases/2.1.0.md)、[2.0.0](releases/2.0.0.md)、[1.0.0](releases/1.0.0.md)、[0.7.0](releases/0.7.0.md)；全部发布说明按版本保留在 [releases/](releases/)，不随当前代码重写。
+- [2.2.0](releases/2.2.0.md)、[2.1.0](releases/2.1.0.md)、[2.0.0](releases/2.0.0.md)、[1.0.0](releases/1.0.0.md)、[0.7.0](releases/0.7.0.md)；全部发布说明按版本保留在 [releases/](releases/)，不随当前代码重写。
 - [帧契约验收数据](frame-contract-acceptance.json)与 [evidence/](evidence/) 保留原始通过和失败产物。解释入口见 [本地化证据边界](localization.md#historical-evidence-and-limitations)、[HDR 验证](hdr-support.md#验证)、[测试证据边界](testing.md#历史证据的读取边界)。
 - 不可丢失的旧色彩失败结论及固定版本来源集中在 [色彩证据边界](color-pipeline.md#历史负面证据的边界)。未提交的本地产物不能在当前 checkout 中复核。
 

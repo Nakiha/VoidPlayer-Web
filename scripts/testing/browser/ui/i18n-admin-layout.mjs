@@ -17,7 +17,7 @@ await withBrowserFixture({caseName:'i18n-admin-layout',engine,pageOptions:{viewp
  await page.goto(url+'admin?pseudo-locale');await chooseTestGuest(page);assert.match(await page.locator('[data-pane=overview]').innerText(),/［/);
  for(const width of [1280,720,390,320]){
   await page.setViewportSize({width,height:900});
-  for(const pane of ['overview','library','caches','workspaces','annotations','logs','measurements','preferences']){
+  for(const pane of ['overview','library','caches','annotations','logs','measurements','preferences']){
    // A pane click starts an asynchronous measurement poll. Finish its body
    // before installing routes/navigating: WebKit reports an in-flight request
    // interrupted by navigation as an access-control page error.

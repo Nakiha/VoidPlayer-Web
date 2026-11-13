@@ -45,6 +45,8 @@ try {
     const filter = process.argv.find(arg => arg.startsWith('--filter='))?.slice(9);
     if (filter && !name.includes(filter)) return;
     const page = await browser.newPage({locale:'zh-CN',  viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', ...options });
+    // These geometry cases exercise detailed rows; the compact default is covered separately.
+    await page.addInitScript(() => { if (localStorage.getItem('voidplayer.library-compact') == null) localStorage.setItem('voidplayer.library-compact', 'false'); });
     page.setDefaultTimeout(15000);
     const errors = [];
     const evidence = recordBrowserEvidence(page), checkpoints = [], started = Date.now();
@@ -164,7 +166,7 @@ try {
     });
     for (const [name, mime, reason] of [
       ['installer.dmg','','磁盘映像'], ['screenshot.png','image/png','图片'], ['photo.heic','','图片'], ['sound.flac','audio/flac','音频文件'],
-      ['notes.txt','text/plain','作为视频打开'], ['legacy.wmv','video/x-ms-wmv','作为视频打开'], ['settings.json','application/json','工作区文件'],
+      ['notes.txt','text/plain','作为视频打开'], ['legacy.wmv','video/x-ms-wmv','作为视频打开'], ['settings.json','application/json','作为视频打开'],
     ]) {
       if (name.endsWith('.json')) {
         await page.evaluate(name => {
@@ -595,7 +597,7 @@ try {
     assert.equal(await panel.evaluate(el => el.classList.contains('resizing')), false);
     await left.dblclick(); assert.ok(Math.abs((await panel.boundingBox()).width - initial.width) < 1, 'double-click restores the default');
     await right.press('ArrowRight'); const preferred = (await panel.boundingBox()).width;
-    await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+    await page.reload(); await page.waitForFunction(() => window.voidPlayer && !document.querySelector('#app').hasAttribute('data-workspace-opening'));
     assert.ok(Math.abs((await panel.boundingBox()).width - preferred) < 1, 'reload preserves the preference');
     await page.setViewportSize({ width: 390, height: 700 }); await settle(page);
     const small = await panel.boundingBox(), host = await page.locator('#empty-A').boundingBox();
@@ -805,7 +807,7 @@ try {
     const channel = page.locator('#channel-select');
     await page.waitForFunction(() => !document.getElementById('channel-select').disabled);
     await channel.click();
-    assert.match(await page.locator('.toast-message').last().textContent(), /切换为“自有色彩”/);
+    assert.match(await page.locator('.toast-message').last().textContent(), /切换为“默认色彩”/);
     assert.equal(await page.locator('#channel-select-menu').evaluate(menu => menu.matches(':popover-open')), false);
     await page.locator('.toast-action').last().click();
     assert.equal(await page.locator('#settings-tab-performance').getAttribute('aria-selected'), 'true');
@@ -1526,12 +1528,12 @@ try {
     assert.equal(await page.locator('.video-card[data-slot="B"]').isVisible(), true);
     assert.equal(await page.locator('.screens').evaluate(el => el.classList.contains('split')), false);
     assert.equal(await eye.getAttribute('aria-label'), '显示轨道 A');
-    const saved = await page.evaluate(async () => window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({}));
+    const saved = await page.evaluate(async () => window.voidPlayer.tools.find(t => t.name === 'get_uri_state').execute({}));
     assert.equal(saved.tracks[0].visible, false);
     await eye.click(); await settle(page);
     assert.equal(await page.locator('.video-card[data-slot="A"]').isVisible(), true);
     assert.equal(await page.locator('.screens').evaluate(el => el.classList.contains('split')), true);
-    await page.evaluate(async document => window.voidPlayer.tools.find(t => t.name === 'import_workspace').execute({ document }), saved);
+    await page.evaluate(async document => window.voidPlayer.tools.find(t => t.name === 'apply_uri_state').execute({ state: document }), saved);
     await settle(page);
     assert.equal(await page.locator('.video-card[data-slot="A"]').isVisible(), false);
     await page.locator('[data-track-drag="B"] .track-visibility').click(); await settle(page);
@@ -2546,16 +2548,16 @@ try {
       assert.deepEqual(await page.locator('#image-A').boundingBox(), originalBox);
       assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks[0].id), original);
       // Workspace restoration reports loading in its badge and publishes only ready source frames.
-      const workspace = await page.evaluate(() => window.voidPlayer.exportWorkspace());
+      const workspace = await page.evaluate(() => window.voidPlayer.exportState());
       await page.locator('#remove-track-A').click();
       const restoring = [], restoreRoute = `**/api/media/${encodeURIComponent(entries[1].id)}/content?*`;
       await page.route(restoreRoute, route => restoring.push(route));
       const restoreRequest = page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[1].id)}/content`);
-      await page.evaluate(document => { window.pendingRestore = window.voidPlayer.importWorkspace(document); }, workspace);
-      await page.locator('#source-activity-track-A[data-state=pending]').waitFor();
-      assert.equal(await page.locator('#source-activity-track-A').getAttribute('data-state'), 'pending');
-      assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 0);
+      await page.evaluate(document => { window.pendingRestore = window.voidPlayer.applyState(document); }, workspace);
       await restoreRequest;
+      assert.equal(await page.evaluate(() => window.voidPlayer.getState().busy), true);
+      assert.equal(await page.locator('#app').evaluate(el => el.hasAttribute('data-workspace-opening')), true);
+      assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 0);
       assert.equal(await page.locator('.image-wrap:visible').count(), 0);
       assert.equal(await page.locator('.frame-loading').count(), 0);
       await page.screenshot({ path: path.join(screenshots, `${browserName}-workspace-loading.png`) });
@@ -2669,7 +2671,7 @@ try {
     await firstRow.locator('.source-remove').click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1);
     await page.locator('#library-compact').click();
-    await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+    await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
     await page.waitForFunction(() => document.querySelectorAll('#start-library-list .start-recent-row').length === 2);
     const rows = await page.locator('#start-library-list .start-recent-row').allTextContents();
     assert.ok(entries.every(entry => rows.some(text => text.includes(entry.root))));

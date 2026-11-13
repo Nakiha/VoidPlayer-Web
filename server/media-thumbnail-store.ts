@@ -41,7 +41,11 @@ function checkRecipe(recipe: string | null): string {
 
 export class MediaThumbnailStore {
   private db: IndexDatabase;
+  private presenceRevision = 0;
   constructor(db: IndexDatabase) { this.db = db; }
+
+  /** Presence changes only; reads and deduplicated uploads do not invalidate lists. */
+  get revision(): number { return this.presenceRevision; }
 
   get epoch(): number {
     return Number(this.db.prepare('SELECT epoch FROM thumbnail_epoch WHERE id=1').get()!.epoch);
@@ -130,6 +134,7 @@ export class MediaThumbnailStore {
       if (result.changes === 0) { this.db.exec('COMMIT'); return { ok: true, deduped: true }; }
       this.trim();
       this.db.exec('COMMIT');
+      this.presenceRevision++;
       return { ok: true };
     } catch (error) {
       try { this.db.exec('ROLLBACK'); } catch {}
@@ -168,6 +173,7 @@ export class MediaThumbnailStore {
       // uploads fail closed; documented phase-1 simplification.
       this.db.exec('UPDATE thumbnail_epoch SET epoch=epoch+1 WHERE id=1');
       this.db.exec('COMMIT');
+      this.presenceRevision++;
       return { removed: Number(removed.changes) };
     } catch (error) {
       try { this.db.exec('ROLLBACK'); } catch {}

@@ -33,6 +33,12 @@ export function offerSessionThumbnail(
     let kind: 'library' | 'local';
     let epoch: number | undefined;
     if (libraryId) {
+      // A URI can reference another service. Its identity is not a cache key
+      // on this service, even when the asset/version strings happen to match.
+      if (typeof location !== 'undefined' && new URL(source.info.source!.url, location.href).origin !== location.origin) {
+        thumbnailState.skip('unsupported:foreign-library');
+        return;
+      }
       // Without a reliable media version, a replaced same-name file would
       // inherit the old cover: stay missing instead of uploading a cache.
       if (!mediaVersion) {

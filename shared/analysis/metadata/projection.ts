@@ -38,6 +38,13 @@ export function panTimeRange(
   const s = Math.min(Math.max(start + shiftUs, domain.start), domain.end - span);
   return { start: Math.floor(s), end: Math.ceil(s + span) };
 }
+
+/** Locate a displayed frame without changing the visible time span. */
+export function centerTimeRange(range: { start: number; end: number }, center: number, domain: { start: number; end: number }) {
+  const span = range.end - range.start;
+  const start = Math.round(Math.max(domain.start, Math.min(domain.end - span, center - span / 2)));
+  return { start, end: start + span };
+}
 /** Fixed overview axis: center the new selection on the time under the pointer. */
 export function zoomOverviewRange(range: { start: number; end: number }, domain: { start: number; end: number }, fraction: number, factor: number, minSpan: number) {
   const time = domain.start + Math.max(0, Math.min(1, fraction)) * (domain.end - domain.start);

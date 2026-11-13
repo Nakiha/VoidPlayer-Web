@@ -1,0 +1,62 @@
+{
+  "reason": "Workspace persistence was removed. ABI URI state and media-version annotation synchronization replace its format, UI and share flows. Transaction/idempotency/identity checks remain in annotation-store, events, agent-http and identity tests.",
+  "replacements": {
+    "node-saved-workspaces-ui": [
+      "node-uri-state-ui"
+    ],
+    "node-saved-workspaces": [
+      "node-uri-state"
+    ],
+    "bun-saved-workspaces": [
+      "bun-uri-state"
+    ],
+    "node-shared-workspaces": [
+      "node-uri-state"
+    ],
+    "node-workspace-storage": [
+      "node-uri-state"
+    ],
+    "browser-annotation-persistence-webkit": [
+      "browser-uri-state-webkit"
+    ],
+    "browser-annotation-persistence-chromium": [
+      "browser-uri-state-chromium"
+    ],
+    "browser-recovery-webkit": [
+      "browser-uri-state-webkit"
+    ],
+    "browser-recovery-chromium": [
+      "browser-uri-state-chromium"
+    ],
+    "browser-saved-workspaces-webkit": [
+      "browser-uri-state-webkit"
+    ],
+    "browser-saved-workspaces-chromium": [
+      "browser-uri-state-chromium"
+    ],
+    "browser-sharing-webkit": [
+      "browser-uri-state-webkit"
+    ],
+    "browser-sharing-chromium": [
+      "browser-uri-state-chromium"
+    ],
+    "browser-source-access-webkit": [
+      "browser-uri-state-webkit"
+    ],
+    "browser-source-access-chromium": [
+      "browser-uri-state-chromium"
+    ],
+    "browser-workspace-webkit": [
+      "browser-uri-state-webkit"
+    ],
+    "browser-workspace-chromium": [
+      "browser-uri-state-chromium"
+    ],
+    "browser-workspace-link-webkit": [
+      "browser-uri-state-webkit"
+    ],
+    "browser-workspace-list-webkit": [
+      "browser-uri-state-webkit"
+    ]
+  }
+}

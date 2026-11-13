@@ -91,11 +91,12 @@ test('unloaded analysis preserves workspace preferences and applies the latest r
   f.lazy.restoreAnalysisState(snapshot); snapshot.selected.push('B');
   assert.deepEqual(f.lazy.getAnalysisState().selected, ['A'], 'caller mutation does not change restored selection');
   f.lazy.setOpen(true); assert.equal(f.loads(), 1);
-  const newer = f.lazy.getAnalysisState(); newer.view = { start: 30, end: 40 };
+  const newer = f.lazy.getAnalysisState(); newer.view = { start: 30, end: 40 }; newer.follow = true;
   f.lazy.restoreAnalysisState(newer);
   f.pending.resolve(f.module); await f.lazy.ready();
   assert.equal(f.mounts.length, 1); assert.deepEqual(f.mounts[0].view, { start: 30, end: 40 });
   assert.deepEqual(f.mounts[0].selected, ['A']);
+  assert.equal(f.mounts[0].follow, true, 'follow survives lazy loading and URI restoration');
 });
 
 test('closing or disposing during analysis import does not mount stale UI and a later open retries', async () => {

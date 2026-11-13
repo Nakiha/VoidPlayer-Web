@@ -34,116 +34,60 @@ try {
   const entries = (await (await fetch(base + '/api/library/browse?recursive=1')).json()).entries;
   const media = entries.map(entry => ({ id: `snapshot-${entry.name[0]}`, name: entry.name, size: entry.size, lastModified: entry.lastModified, codec: probe.codec_tag_string, decoder: 'webcodecs', width: probe.width, height: probe.height, durationUs: Math.round(Number(probe.duration) * 1e6), firstPtsUs: Math.round(Number(probe.start_time) * 1e6), source: { kind: 'library', id: entry.id, url: `${base}/api/media/${entry.id}/content?v=${entry.version}` } }));
   const a = media.find(item => item.name === 'A.mp4'), b = media.find(item => item.name === 'B.mp4');
-  const document = { schema: 'voidplayer-workspace', version: 1, name: 'Agent integration', generatedAt: new Date().toISOString(), serverUrl: base, positionUs: 0, tracks: [{ slot: 'A', mediaId: a.id, offsetUs: 0 }], media, marks: [], viewport: {} };
-  const shared = await fetch(base + '/api/workspaces/share', { method: 'POST', headers: { ...headers, 'x-voidplayer-action': 'workspace' }, body: JSON.stringify({ name: 'Agent integration', document }) });
-  assert.equal(shared.status, 201); const workspace = await shared.json(), space = workspace.space;
-  const endpoint = `${base}/api/annotations/spaces/${space}`;
-  const annotation = (source, id, text) => ({ media: [source], mark: { id, text, severity: 3, origin: 'agent', createdAt: new Date().toISOString(), slot: 'H', mediaId: source.id, frame: { ptsUs: 0, sourcePtsUs: source.firstPtsUs, durationUs: 100000 }, comparison: [], region: { left: .2, top: .2, width: .2, height: .2 } } });
+  const { annotationTarget } = await import('../shared/review/annotation-target.ts');
+  const targets = new Map(); for (const item of media) targets.set(item.id, await annotationTarget(item, base));
+  const annotation = (source, id, text) => ({ media: [source], mark: { id, text, severity: 3, origin: 'agent', createdAt: new Date().toISOString(), slot: 'H', mediaId: source.id, frame: { ptsUs: 0, sourcePtsUs: source.firstPtsUs, durationUs: 100000 }, comparison: [], region: null } });
+  const submit = async (operation, source = b) => {
+    const response = await fetch(`${base}/api/annotations/media/${targets.get(source.id)}`, { method: 'POST', headers, body: JSON.stringify(operation) });
+    assert.equal(response.status, 200, await response.clone().text()); return response.json();
+  };
   const first = { operationId: 'before-gui', id: 'mark-B', revision: 0, action: 'put', client: { kind: 'agent', id: 'scout' }, document: annotation(b, 'mark-B', 'Created before any GUI') };
-  const submit = async operation => { const response = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(operation) }); assert.equal(response.status, 200, await response.clone().text()); return response.json(); };
   await submit(first);
-  // A real old database snapshot later exercises the cursor-ahead recovery path.
   const database = path.join(config.dataDir, 'annotations.sqlite'), backup = path.join(temp, 'annotations-before-gui.sqlite');
   const snapshot = openIndexDatabase(database); snapshot.prepare('VACUUM INTO ?').run(backup); snapshot.close();
-
   phase = 'open-after-headless-write';
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ locale: 'en-US', viewport: { width: 1280, height: 900 }, colorScheme: 'dark' });
   const errors = []; context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   page = await context.newPage(); evidence = recordBrowserEvidence(page);
-  const url = `${base}/?workspace=${workspace.id}`;
-  const ready = async target => { await target.waitForFunction(annotationWorkspacePlayable); };
+  const url = `${base}/?abi=1&A=${a.source.id}@${new URL(a.source.url).searchParams.get('v')}`;
+  const ready = target => target.waitForFunction(() => window.voidPlayer?.getState().tracks[0]?.frame && !window.voidPlayer.getState().busy);
   await page.goto(url); await chooseTestGuest(page); await ready(page);
-  await page.waitForFunction(() => !!document.querySelector('[data-operation-id="before-gui"]'));
+  assert.equal(await page.evaluate(() => window.voidPlayer.getState().marks.length), 0, 'unloaded source annotations do not join the scene');
+  await page.evaluate(id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ id, slot: 'B' }), b.source.id);
+  await page.waitForFunction(() => window.voidPlayer.getState().marks.some(mark => mark.id === 'mark-B'));
   const read = () => page.evaluate(() => window.voidPlayer.getState());
-  assert.equal((await read()).tracks[0].name, 'A.mp4');
-  assert.equal((await read()).marks.length, 0, 'B annotations do not attach to a loaded A');
-  await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
-  assert.equal(await page.locator('#settings details, #settings summary').count(), 0, 'activity follows the flat settings layout');
-  assert.equal(await page.locator('[data-operation-id="before-gui"] a').isVisible(), true, 'activity is visible without expanding a disclosure');
-  assert.match(await page.locator('#annotation-activity').textContent(), /Agent.*B\.mp4/s);
-  await page.screenshot({ path: path.join(directory, 'activity-dark.png') });
-  await page.locator('#settings-close').click(); await waitForDialogClosed(page);
-
-  phase = 'playing-a-agent-writes-b-with-observer-disconnected';
-  await page.locator('#play').focus();
-  await page.evaluate(() => window.voidPlayer.play());
-  await page.waitForFunction(() => window.voidPlayer.getState().playing && window.voidPlayer.getState().positionUs > 200000);
-  const before = await read(), tracks = before.tracks.map(track => [track.slot, track.id]);
-  await page.route('**/api/annotations/events/*', route => route.abort());
-  const second = { ...first, operationId: 'while-playing', revision: 1, document: annotation(b, 'mark-B', 'Updated while A plays') };
-  assert.equal((await submit(second)).revision, 2, 'server commits while GUI observation is disconnected');
-  await page.waitForFunction(position => window.voidPlayer.getState().positionUs > position + 500000, before.positionUs);
-  await page.unroute('**/api/annotations/events/*');
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await page.waitForFunction(() => !!document.querySelector('[data-operation-id="while-playing"]'));
-  const after = await read();
-  assert.equal(after.playing, true); assert.deepEqual(after.tracks.map(track => [track.slot, track.id]), tracks);
+  const tracks = (await read()).tracks.map(track => [track.slot, track.id]);
+  phase = 'write-during-playback-with-events-disconnected';
+  await page.locator('#play').focus(); await page.evaluate(() => window.voidPlayer.play());
+  await page.route('**/api/annotations/events/*', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
+  const second = { ...first, operationId: 'while-playing', revision: 1, document: annotation(b, 'mark-B', 'Updated while playing') };
+  await submit(second);
+  await page.waitForFunction(() => window.voidPlayer.getState().marks.find(mark => mark.id === 'mark-B')?.text === 'Updated while playing');
+  const after = await read(); assert.equal(after.playing, true); assert.deepEqual(after.tracks.map(track => [track.slot, track.id]), tracks);
   assert.equal(await page.evaluate(() => document.activeElement.id), 'play');
-  assert.equal(context.pages().length, 1); assert.equal(after.marks.length, 0);
-
-  phase = 'focused-activity-link-survives-new-operation';
-  await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
-  const focused = page.locator('[data-operation-id="before-gui"] a'); await focused.focus();
-  const third = { ...second, operationId: 'focused-link', revision: 2, document: annotation(b, 'mark-B', 'Another background update') };
-  const receipt = await submit(third); assert.deepEqual(await submit(third), receipt);
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await page.waitForFunction(() => document.querySelector('#annotation-activity-title').textContent.includes('(3)'));
-  assert.equal(await focused.evaluate(element => element === document.activeElement), true);
-  await page.locator('#saved-workspace-name').focus();
-  await page.waitForFunction(() => !!document.querySelector('[data-operation-id="focused-link"]'));
-  assert.equal(await page.locator('[data-operation-id="focused-link"]').count(), 1);
-  await page.evaluate(() => window.voidPlayer.pause());
-  const position = (await read()).positionUs;
-  await page.emulateMedia({ colorScheme: 'light' });
-  await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
-  await page.screenshot({ path: path.join(directory, 'activity-light.png') });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: path.join(directory, 'activity-narrow.png') });
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  await page.setViewportSize({ width: 1280, height: 900 });
-
-  phase = 'restore-server-snapshot-with-gui-still-open';
-  await submit({ ...first, id: 'mark-A', operationId: 'later-mark-A', document: annotation(a, 'mark-A', 'Only in the newer database') });
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.unroute('**/api/annotations/events/*'); await page.evaluate(() => { window.voidPlayer.pause(); window.dispatchEvent(new Event('focus')); });
+  await page.waitForFunction(() => document.querySelector('[data-operation-id="while-playing"]'));
+  phase = 'restore-server-snapshot';
+  const newer = { ...first, id: 'mark-A', operationId: 'later-mark-A', document: annotation(a, 'mark-A', 'Only in newer database') };
+  await submit(newer, a); await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.waitForFunction(() => window.voidPlayer.getState().marks.some(mark => mark.id === 'mark-A'));
-  await page.waitForFunction(() => !!document.querySelector('[data-operation-id="later-mark-A"]'));
+  const position = (await read()).positionUs;
   config.port = service.server.address().port; await service.close(); service = undefined;
-  await copyFile(backup, database);
-  service = await startService(config); await service.library.refresh();
+  await copyFile(backup, database); service = await startService(config); await service.library.refresh();
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await page.waitForFunction(() => !window.voidPlayer.getState().marks.some(mark => mark.id === 'mark-A') && document.querySelectorAll('#annotation-activity li').length === 1);
+  await page.waitForFunction(() => !window.voidPlayer.getState().marks.some(mark => mark.id === 'mark-A') && window.voidPlayer.getState().marks.find(mark => mark.id === 'mark-B')?.text === 'Created before any GUI');
   assert.equal((await read()).positionUs, position); assert.equal((await read()).playing, false);
   assert.deepEqual((await read()).tracks.map(track => [track.slot, track.id]), tracks);
-
-  phase = 'gui-closed-write-reopen-and-explicit-navigation';
+  phase = 'gui-closed-write-and-deep-link';
   await page.close();
-  const fourth = { ...second, operationId: 'gui-closed', revision: 1, document: annotation(b, 'mark-B', 'Written with GUI closed') };
-  assert.equal((await submit(fourth)).revision, 2);
-  page = await context.newPage(); evidence = recordBrowserEvidence(page); await page.goto(url); await ready(page);
-  await page.waitForFunction(() => !!document.querySelector('[data-operation-id="gui-closed"]'));
-  await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
-  assert.equal(await page.locator('[data-operation-id="gui-closed"] a').isVisible(), true, 'reopened workspace shows activity directly');
-  // A cold deep link must not accept a workspace intent before its initial
-  // actor confirmation. Hold that boundary so a fast annotation GET cannot win.
-  let releaseIdentity,identitySeen;const identityGate=new Promise(r=>releaseIdentity=r),seenIdentity=new Promise(r=>identitySeen=r);
-  const coldReads=[];
-  const observeColdRead=request=>{try{if(request.frame().page()!==page&&new URL(request.url()).pathname.endsWith('/mark-B'))coldReads.push(request.url());}catch{}};
-  const holdIdentity=async route=>{if(route.request().frame().page()===page)return route.continue();const response=await route.fetch();identitySeen();await identityGate;await route.fulfill({response});};
-  context.on('request',observeColdRead);await context.route('**/api/health',holdIdentity);
-  let popup;
-  try{
-    [popup] = await Promise.all([context.waitForEvent('page'), page.locator('[data-operation-id="gui-closed"] a').click()]);
-    await popup.waitForFunction(()=>!!window.voidPlayer);await seenIdentity;
-    assert.deepEqual(coldReads,[],'annotation restoration waits for the initial actor');
-    releaseIdentity();await ready(popup);
-  }finally{releaseIdentity();context.off('request',observeColdRead);await context.unroute('**/api/health',holdIdentity);}
-
-  assert.equal((await popup.evaluate(() => window.voidPlayer.getState())).tracks[0].name, 'B.mp4');
-  assert.equal((await read()).tracks[0].name, 'A.mp4');
-  assert.deepEqual(errors, []);
-  console.log(`PASS Chromium ${browser.version()}: headless write/retry, delayed GUI, playback/focus isolation, server snapshot recovery, GUI reopening and explicit navigation`);
+  await submit({ ...first, operationId: 'gui-closed', revision: 1, document: annotation(b, 'mark-B', 'Written with GUI closed') });
+  page = await context.newPage(); evidence = recordBrowserEvidence(page);
+  await page.goto(`${base}/?abi=1&H=${b.source.id}@${new URL(b.source.url).searchParams.get('v')}&mark=mark-B`); await ready(page);
+  await page.waitForFunction(() => window.voidPlayer.getState().marks.find(mark => mark.id === 'mark-B')?.text === 'Written with GUI closed');
+  assert.equal((await read()).tracks[0].slot, 'H'); assert.equal((await read()).positionUs, 0);
+  assert.deepEqual(errors, []); await page.screenshot({ path: path.join(directory, 'media-annotations.png') });
+  console.log('PASS: headless media annotations, passive playback sync, event failure isolation, restored-database reset and source deep links');
 } catch (error) {
-  await saveBrowserFailure({ page: page?.isClosed() ? undefined : page, directory, name: 'agent-annotations', context: { caseName: 'agent-annotations', engine: 'chromium', phase }, error, evidence });
-  throw error;
+  await saveBrowserFailure({ page, directory, caseName: 'agent-annotations', engine: 'chromium', phase, error, evidence }); throw error;
 } finally { await browser?.close(); await service?.close(); await rm(temp, { recursive: true, force: true }); }

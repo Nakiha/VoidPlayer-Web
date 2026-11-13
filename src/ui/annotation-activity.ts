@@ -12,13 +12,14 @@ export function annotationActivityShell() {
 /** A passive observer. Links only navigate after an explicit user action. */
 export function installAnnotationActivity(signal: AbortSignal) {
   const root = document.getElementById('annotation-activity')!;
+  let origins = new Map<string, string>();
   let scope = 'local', events: AnnotationEvent[] = [], failed = false;
   function render() {
     root.hidden = scope === 'local';
     root.querySelector('h4')!.textContent = t(msg('activity.title', '评审活动')) + (events.length ? ` (${events.length})` : '');
     root.querySelector('p')!.textContent = failed
       ? t(msg('activity.disconnected', '活动连接中断，恢复后自动续读'))
-      : events.length ? t(msg('activity.recent', '共享评审空间的最近操作；不会改变当前播放')) : t(msg('activity.empty', '此评审空间暂无操作记录'));
+      : events.length ? t(msg('activity.recent', '片源版本的最近标注操作；不会改变当前播放')) : t(msg('activity.empty', '此片源版本暂无操作记录'));
     const list = root.querySelector('ol')!;
     const existing = new Map([...list.querySelectorAll<HTMLElement>('li')].map(row => [row.dataset.eventKey, row]));
     const rows = [...events].reverse().map(event => {
@@ -39,7 +40,9 @@ export function installAnnotationActivity(signal: AbortSignal) {
       const time = row.querySelector('time')!; time.dateTime = event.occurredAt; time.textContent = formatDate(event.occurredAt);
       if (event.action !== 'delete') {
         const open = row.querySelector('a')!;
-        open.href = `/?annotation=${encodeURIComponent(event.id)}&space=${encodeURIComponent(event.space)}`;
+        const url = new URL('/', location.origin), source = event.target.source;
+        if (source) { const origin = origins.get(event.space); url.searchParams.set('abi', '1'); url.searchParams.set('A', `${origin && origin !== location.origin ? origin + '/' : ''}${source.id}@${source.version}`); url.searchParams.set('mark', event.id); url.searchParams.set('t', String(event.target.frame.ptsUs / 1e6)); }
+        open.href = url.href;
         open.target = '_blank'; open.rel = 'noopener'; open.textContent = t(msg('activity.open', '在新窗口打开标注'));
       }
       return row;
@@ -57,7 +60,8 @@ export function installAnnotationActivity(signal: AbortSignal) {
   root.addEventListener('focusout', () => setTimeout(() => { if (!signal.aborted) render(); }, 0), { signal });
   onLanguageChange(render, signal);
   return {
-    update(space: string, entries: AnnotationEvent[], disconnected = false) {
+    update(space: string, entries: AnnotationEvent[], disconnected = false, sourceOrigins = new Map<string, string>()) {
+      origins = sourceOrigins;
       const changed = scope !== space || failed !== disconnected || JSON.stringify(events) !== JSON.stringify(entries);
       scope = space; events = entries; failed = disconnected;
       if (changed) render();
