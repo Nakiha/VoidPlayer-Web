@@ -194,7 +194,7 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .dock-resize { position: absolute; top: -3px; left: 0; right: 0; height: 6px; cursor: row-resize; touch-action: none; z-index: 5; }
 .subtracks-panel .panel-heading button:not(.icon-button) { height: var(--control-small-height); min-height: var(--control-small-height); padding: 0 var(--space-3); font-size: var(--text-sm); }
 .subtrack-scroll { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
-.subtrack-columns, .subtrack-row { display: grid; grid-template-columns: var(--track-label-size, var(--track-label-width)) var(--button-size) var(--button-size) var(--offset-column-width) minmax(0,1fr); align-items: center; }
+.subtrack-columns, .subtrack-row { display: grid; grid-template-columns: var(--track-label-size, var(--track-label-width)) repeat(2, calc(var(--button-size) + var(--control-gap))) var(--offset-column-width) minmax(0,1fr); align-items: center; }
 .subtrack-columns { flex-shrink: 0; position: sticky; top: 0; z-index: 3; background: var(--surface-panel); height: var(--panel-heading-height); padding: 0 var(--track-row-padding-inline); color: var(--text-secondary); font-size: var(--text-xs);  }
 .subtrack-name-heading { position: relative; align-self: stretch; display: flex; align-items: center; }
 #track-label-resize { position: absolute; right: calc(var(--panel-resize-hit-width) / -2); top: 0; bottom: 0; width: var(--panel-resize-hit-width); cursor: col-resize; touch-action: none; z-index: 4; }
@@ -225,7 +225,7 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .seek-preview-thumbnail { display: block; width: 180px; max-width: 100%; height: auto; max-height: 120px; object-fit: contain; margin: 0 auto 6px; border-radius: var(--radius-small); }
 .seek-preview:has(.seek-preview-thumbnail) { text-align: center; }
 .subtrack-row.selected .track-playhead { background: var(--accent); }
-.subtrack-row .track-audio, .subtrack-row .track-visibility { background: transparent; border-color: transparent; }
+.subtrack-row .track-audio, .subtrack-row .track-visibility { margin-inline-start: var(--control-gap); background: transparent; border-color: transparent; }
 .track-playhead { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: var(--track-playhead); pointer-events: none; }
 .track-seek-preview { opacity: .5; }
 .track-offset { text-align: center; font: var(--text-xs)/1 var(--font-mono); }

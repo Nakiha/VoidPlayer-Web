@@ -81,9 +81,12 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const controls = await page.locator('.subtrack-row').evaluateAll(rows => rows.map(row => {
    const box = selector => row.querySelector(selector).getBoundingClientRect();
    const name = box('.subtrack-label'), audio = box('.track-audio'), eye = box('.track-visibility'), offset = box('.track-offset');
-   return name.right <= audio.left && audio.right <= eye.left && eye.right <= offset.left;
+   return {ordered:name.right <= audio.left && audio.right <= eye.left && eye.right <= offset.left,
+     audioGap:audio.left-name.right,visibilityGap:eye.left-audio.right};
  }));
- assert.ok(controls.every(Boolean), 'each row places audio and visibility before offset in visual and tab order');
+ assert.ok(controls.every(control=>control.ordered), 'each row places audio and visibility before offset in visual and tab order');
+ assert.ok(controls.every(control=>Math.abs(control.audioGap-4)<.1&&Math.abs(control.visibilityGap-4)<.1),
+   'each audio and visibility control has 4px of space before its full-size button');
  assert.equal(await page.locator('.marks-empty').isVisible(),false,'collapsed empty annotations have no placeholder');
  await page.locator('#toggle-marks').click();assert.equal(await page.locator('.marks-empty').isVisible(),true);
  assert.equal(await page.locator('.marks-empty .icon').count(),0);
