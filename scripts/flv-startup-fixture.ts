@@ -30,17 +30,22 @@ export async function startupFixture(nodeOrigin = false, blockAfterVideo = false
   const handler = server.listeners('request')[0]; server.removeAllListeners('request');
   let release!: () => void, block = true, delayed = 0, ranges = 0;
   const gate = new Promise<void>(resolve => { release = resolve; });
-  const buildIndex=library.indexJobs.buildIndex.bind(library.indexJobs);
-  library.indexJobs.buildIndex=async(request,options)=>{
-    if(blockServerIndex&&request.identity.kind==='flv'&&block){delayed++;await gate;}
-    return buildIndex(request,options);
-  };
+  const createBuildWorker=Reflect.get(library.indexJobs,'createBuildWorker');
+  Reflect.set(library.indexJobs,'createBuildWorker',(options:unknown)=>{
+    const worker=createBuildWorker(options),postMessage=worker.postMessage.bind(worker);
+    let exited=false;worker.once('exit',()=>{exited=true;});
+    worker.postMessage=(message:any)=>{
+      if(blockServerIndex&&message.identity.kind==='flv'&&block){delayed++;void gate.then(()=>{if(!exited)postMessage(message);});}
+      else postMessage(message);
+    };
+    return worker;
+  });
   let base = '';
   server.on('request', async (req, res) => {
     // Raw URLs deliberately have no library index endpoint, for client-only scan tests.
-    if(req.url?.startsWith('/raw/'))req.url=req.url.replace('/raw/','/api/media/');
+    if(req.url?.startsWith('/raw/'))req.url=req.url.replace(/^\/raw\/([a-f0-9]{24})/, '/api/media/$1/content');
     if (nodeOrigin && req.method === 'POST' && req.url?.includes('/frame-index')) req.headers.origin = base;
-    if (/^\/api\/media\/[a-f0-9]{24}(\?|$)/.test(req.url ?? '') && req.headers.range) {
+    if (/^\/api\/media\/[a-f0-9]{24}\/content(\?|$)/.test(req.url ?? '') && req.headers.range) {
       ranges++; const start = Number(/^bytes=(\d+)/.exec(req.headers.range)?.[1]);
       if (block && start >= (blockAfterVideo ? Math.max(65536, original.length) : 65536)) { delayed++; await gate; if (res.destroyed) return; }
     }

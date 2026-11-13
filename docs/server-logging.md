@@ -52,3 +52,7 @@
 `test/unit/server-logging.test.ts` 登记为 `node-server-logging`：用临时文件、真实 gzip 和排他锁验证大小/UTC 切段、按时间回收、压缩替换失败与重启恢复、慢 IO 队列上限、ENOSPC 恢复、并发报告配额和显式过期。采用小配额，数据量约数 MiB，不依赖媒体/core/浏览器。
 
 扩充既有 `test/unit/admin.test.ts` 覆盖 HTTP 并发 201/507、保留历史报告及 500 堆栈/requestId/查询脱敏；扩充既有管理浏览器用例验证策略占用可见，复用原有亮暗和响应式检查，不新增浏览器矩阵。故障注入要求源段在失败后仍可读取，重启后内容逐条一致，独立预期来自文件实际解压与 HTTP 回执。
+
+## 请求资源上下文
+
+请求历史保留路径及白名单查询字段，媒体请求额外记录 `media.id/rootId/root/path/version/requestedVersion` 和合法单段 `range`。管理页直接显示所属库、相对路径和版本；运行日志回读保留相同字段。查询值按字段截断，不记录任意 URL 参数、cookie、Authorization、请求体或页面桥凭据。媒体上下文在分派请求前捕获，避免写入过程中位置改变或删除导致日志丢失目标。

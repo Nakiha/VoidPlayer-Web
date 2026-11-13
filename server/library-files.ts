@@ -42,7 +42,7 @@ export function parseLibraryFileCommand(body:unknown):LibraryFileCommand {
 /** No symlink traversal, no mount-root mutation, no overwrite or implicit retry.
  * App-owned writes are serialized by MediaLibraryIndex. Other filesystem writers
  * are not locked; verify source identity again immediately before each write. */
-export async function mutateLibraryFiles(roots:readonly Root[], command:LibraryFileCommand, version:(stat:Stats)=>string, beforeWrite?:()=>void) {
+export async function mutateLibraryFiles(roots:readonly Root[], command:LibraryFileCommand, version:(stat:Stats)=>string, beforeWrite?:()=>void, expectedFingerprint?:(ref:LibraryFileRef)=>string) {
   const sources=command.operation==='rename'?[command.source]:command.sources;
   const rootPaths=new Map<string,string>();
   const rootPath=async (id:string) => {
@@ -75,7 +75,7 @@ export async function mutateLibraryFiles(roots:readonly Root[], command:LibraryF
       if (mounted&&(mounted===absolute||mounted.startsWith(absolute+path.sep))) throw new AdminError(409,'不能移动、改名或删除已配置的媒体库挂载目录。','library-mount-protected');
     }
     if (source.kind==='file'?!stat.isFile():!stat.isDirectory()) throw new AdminError(409,'文件类型已变化。','library-file-changed');
-    if (source.version&&version(stat)!==source.version) throw new AdminError(409,'文件已变化，请刷新目录后重试。','library-file-changed');
+    if (source.version&&version(stat)!==(expectedFingerprint?.(source)??source.version)) throw new AdminError(409,'文件已变化，请刷新目录后重试。','library-file-changed');
     let destination:{rootId:string;path:string}|undefined, target:string|undefined;
     if (command.operation!=='delete') {
       const directory=command.operation==='move'?command.target.directory:path.posix.dirname(source.path).replace(/^\.$/,'');

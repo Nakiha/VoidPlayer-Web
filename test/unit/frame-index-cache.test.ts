@@ -34,8 +34,8 @@ test('shared frame indexes persist, respect versions and clear permissions, and 
     assert.equal(cacheResponse.status, 200, cacheBody);
     assert.equal((await upload(0, document, 'https://evil.invalid')).status, 403);
     assert.equal((await upload(0, { ...document, packets: [[entry.size, 10, 0, 0, 1]] })).status, 400);
-    assert.equal((await fetch(base + '/api/admin/frame-indexes', { method: 'DELETE' })).status, 403);
-    const removed = await fetch(base + '/api/admin/frame-indexes', { method: 'DELETE', headers: { origin: base, 'x-voidplayer-action': 'admin' } });
+    assert.equal((await fetch(base + '/api/admin/caches/frame-indexes', { method: 'DELETE' })).status, 403);
+    const removed = await fetch(base + '/api/admin/caches/frame-indexes', { method: 'DELETE', headers: { origin: base, 'x-voidplayer-action': 'admin','content-type':'application/json' },body:JSON.stringify({all:true}) });
     assert.deepEqual(await removed.json(), { removed: 1 });
     assert.equal((await upload(0)).status, 409, 'in-flight uploads cannot undo a clear');
     assert.equal((await upload(1)).status, 201);

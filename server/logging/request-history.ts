@@ -51,8 +51,8 @@ export class RequestHistory {
                 try { entry = JSON.parse(line.toString('utf8')); } catch { continue; }
                 if (entry?.event !== 'http-request' || typeof entry.requestId !== 'string'
                   || typeof entry.url !== 'string' || entry.method === 'GET' && entry.url.startsWith('/api/admin/')) continue;
-                const { t, requestId, clientIp, actorId, method, url, status, completed, ms } = entry;
-                insert.run(file.name, offset, JSON.stringify({ t, requestId, clientIp, actorId, method, url, status, completed, ms }));
+                const { t, requestId, clientIp, actorId, method, url, status, completed, ms, query, media, range } = entry;
+                insert.run(file.name, offset, JSON.stringify({ t, requestId, clientIp, actorId, method, url, status, completed, ms, query, media, range }));
               }
               // A damaged segment must not accumulate an unbounded partial line.
               if (pending.length > 16384) throw Error('Invalid runtime log record');

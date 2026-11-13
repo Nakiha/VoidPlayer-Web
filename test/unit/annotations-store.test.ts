@@ -6,7 +6,7 @@ import path from 'node:path';
 import { AnnotationStore } from '../../server/annotations.ts';
 import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
 const alice = { id: 'alice', name: 'Alice' }, bob = { id: 'bob', name: 'Bob' };
-const document = (id='mark'): AnnotationDocument => ({ media: [{id:'media',name:'a.mp4',size:10,lastModified:1,codec:'avc1',decoder:'webcodecs',width:320,height:180,durationUs:1000000,firstPtsUs:0,source:{kind:'library',id:'library',url:'http://localhost/api/media/library?v=one'}}], mark:{id,text:'original',severity:3,origin:'human',createdAt:'2026-09-08',slot:'A',mediaId:'media',frame:{ptsUs:0,sourcePtsUs:0,durationUs:40000},comparison:[],region:null,drawings:[]} });
+const document = (id='mark'): AnnotationDocument => ({ media: [{id:'media',name:'a.mp4',size:10,lastModified:1,codec:'avc1',decoder:'webcodecs',width:320,height:180,durationUs:1000000,firstPtsUs:0,source:{kind:'library',id:'library',url:'http://localhost/api/media/library/content?v=one'}}], mark:{id,text:'original',severity:3,origin:'human',createdAt:'2026-09-08',slot:'A',mediaId:'media',frame:{ptsUs:0,sourcePtsUs:0,durationUs:40000},comparison:[],region:null,drawings:[]} });
 test('annotation writes are versioned, idempotent and never resurrect tombstones', () => {
  const dir=mkdtempSync(path.join(os.tmpdir(),'vp-annotations-')),file=path.join(dir,'annotations.sqlite');
  const a=new AnnotationStore(file),b=new AnnotationStore(file);
@@ -24,7 +24,7 @@ test('annotation writes are versioned, idempotent and never resurrect tombstones
   const restored=a.mutate('default',{operationId:'restore',id:'mark',revision:3,action:'restore'},alice); assert.equal(restored.revision,4); assert.equal(restored.deleted,false);
   const changes=a.changes('default',first.sequence); assert.equal(changes.entries.length,1); assert.equal(changes.entries[0].revision,4);
   assert.equal(a.changes('default',changes.cursor).entries.length,0);
-  const wrong=document(); wrong.media[0].source!.url='http://localhost/api/media/library?v=two';
+  const wrong=document(); wrong.media[0].source!.url='http://localhost/api/media/library/content?v=two';
   assert.throws(()=>a.mutate('default',{...create,operationId:'wrong-version',revision:4,document:wrong},alice),/媒体版本/);
   assert.equal(a.read('default','mark')?.revision,4,'rejected operations leave no revision change');
   const jpeg=new Uint8Array([255,216,1,2,255,217]); a.putPreview('default','mark',4,jpeg);

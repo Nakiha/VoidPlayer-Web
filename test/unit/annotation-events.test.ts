@@ -12,7 +12,7 @@ import type { AnnotationDocument, AnnotationOperation } from '../../shared/revie
 const actor = { id: 'reviewer', name: 'Reviewer' };
 function document(id = 'mark'): AnnotationDocument {
   return {
-    media: [{ id: 'snapshot', name: 'B.mp4', size: 10, lastModified: 1, codec: 'avc1', decoder: 'webcodecs', width: 320, height: 180, durationUs: 1000000, firstPtsUs: -40000, source: { kind: 'library', id: 'source-B', url: 'http://localhost/api/media/source-B?v=v1' } }],
+    media: [{ id: 'snapshot', name: 'B.mp4', size: 10, lastModified: 1, codec: 'avc1', decoder: 'webcodecs', width: 320, height: 180, durationUs: 1000000, firstPtsUs: -40000, source: { kind: 'library', id: 'source-B', url: 'http://localhost/api/media/source-B/content?v=v1' } }],
     mark: { id, text: 'Artifact on B', severity: 3, origin: 'agent', createdAt: '2026-10-23', slot: 'H', mediaId: 'snapshot', frame: { ptsUs: 0, sourcePtsUs: -40000, durationUs: 40000 }, comparison: [], region: { left: .2, top: .3, width: .1, height: .1 } },
   };
 }

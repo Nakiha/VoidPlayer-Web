@@ -56,7 +56,7 @@ type FallbackInput = File | (MediaMeta & { url: string });
 function ffmpegIndexMediaUrl(url: string): string | undefined {
   try {
     const source = new URL(url, globalThis.location?.href);
-    if (!/^\/api\/media\/[0-9a-f]{24}$/.test(source.pathname) || !source.searchParams.has('v')) return undefined;
+    if (!/^\/api\/media\/[0-9a-f]{24}\/content$/.test(source.pathname) || !source.searchParams.has('v')) return undefined;
     source.searchParams.set('kind', 'ffmpeg');
     return source.href;
   } catch { return undefined; }

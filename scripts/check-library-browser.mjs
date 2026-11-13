@@ -28,7 +28,7 @@ try {
     if (url.pathname === '/api/library/browse' && /^(library:|https?:)/i.test(url.searchParams.get('search') ?? '')) protocolSearches.push(url.href);
   });
   page.on('pageerror', error => errors.push(error.message));
-  page.on('request', request => { if (new URL(request.url()).pathname === '/api/library') legacy.push(request.url()); });
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/library/browse?recursive=1&limit=200') legacy.push(request.url()); });
   const go = async path => {
     await page.locator('#library-location').fill(path); await page.locator('#library-location').press('Enter');
     await page.waitForFunction(() => document.querySelector('#source-list')?.getAttribute('aria-busy') === 'false');
@@ -275,35 +275,32 @@ try {
   const bytes = await readFile(sample); await new Promise(r => setTimeout(r, 5)); await writeFile(sample, bytes); await utimes(sample, 2000, 2000); await library.refresh();
   assert.notEqual(library.browse().entries.find(e => e.name === 'sample.mp4').version, entry.version);
   assert.notEqual(library.browse().entries.find(e => e.name === 'sample.mp4').lastModified, entry.lastModified, 'the fixture must drift the recorded mtime while keeping the bytes');
-  // mtime-only drift restores with a warning instead of pending relink. Observe
-  // the toast stack before importing: the warning toast is informational and
-  // auto-dismisses after 5s, while the restore still has to index and decode the
-  // source, so an observer attached afterwards can miss it on a slow machine.
-  const mtimeWarning = page.locator('.toast').filter({ hasText: '修改时间与工作区记录不一致' }).waitFor({ timeout: 30000 });
+  // A changed version requires explicit relinking even if the replacement has the same size.
   await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);
-  await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.tracks.length > 0 && !state.busy && state.tracks.every(t => !!t.frame); });
-  await mtimeWarning;
+  await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
+  assert.deepEqual((await call('get_review_session')).tracks,[]);
+  await page.locator('.toast-warning').filter({hasText:'已发生变化'}).waitFor();
   // A real byte change (size differs) still refuses with a field-level message.
   await writeFile(sample, Buffer.concat([bytes, Buffer.from([0])])); await library.refresh();
   await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);
   const unavailable = await page.evaluate(() => window.voidPlayer.getState());
   assert.deepEqual(unavailable.tracks, []);
-  const warning = page.locator('.toast-warning').filter({hasText:'以下片源无法打开，已跳过'});
+  const warning = page.locator('.toast-warning').filter({hasText:'以下片源无法打开，已跳过'}).last();
   assert.match(await warning.innerText(), /已发生变化/);
-  assert.match(await warning.innerText(), /大小/);
+  assert.match(await warning.innerText(), /内容版本/);
   assert.equal(await warning.locator('.toast-action').count(),0);
   assert.deepEqual(unavailable.marks, saved.marks);
   await writeFile(sample, bytes); await utimes(sample, 1000, 1000); await library.refresh();
   assert.deepEqual(unavailable.marks, saved.marks);
-  // A legacy reference with matching recorded metadata is migrated to a version URL.
+  // Unversioned references never select the latest file implicitly.
   const legacyWorkspace = structuredClone(saved); for (const media of legacyWorkspace.media) media.source.url = media.source.url.split('?')[0];
   await page.evaluate(value => window.voidPlayer.importWorkspace(value), legacyWorkspace);
-  assert.ok((await call('export_workspace')).media[0].source.url.includes('?v='));
+  assert.deepEqual((await call('get_review_session')).tracks,[]);
   await page.screenshot({ path: `/tmp/voidplayer-library-light-${engine}.png` });
   await page.locator('#settings-open').click(); await page.locator('[data-theme-choice=dark]').click(); await page.locator('#settings-close').click();
   await page.waitForFunction(() => !document.querySelector('#settings').open); await page.screenshot({ path: `/tmp/voidplayer-library-dark-${engine}.png` });
   assert.deepEqual(legacy, [], 'UI and Agent must not fetch the capped flat listing'); assert.deepEqual(errors, []);
-  console.log(`PASS ${engine}: mounted libraries, collapsible history, scoped search, continuous scrolling, index invalidation, workspace restore, versioned download, mtime-tolerant restore with warning, size-change refusal and legacy workspace migration`);
+  console.log(`PASS ${engine}: mounted libraries, collapsible history, scoped search, continuous scrolling, index invalidation, workspace restore, versioned download, strict pinned-version restore, changed-content refusal and unversioned-reference rejection`);
   }
 } finally {
   await browser.close(); await new Promise(r => server.close(r)); await library.close(); await rm(directory, { recursive: true, force: true });

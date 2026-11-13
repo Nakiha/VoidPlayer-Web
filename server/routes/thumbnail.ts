@@ -1,3 +1,4 @@
+import {requireMediaVersion} from './media-version.ts';
 import type { IncomingMessage, ServerResponse } from '../http.ts';
 import { createHash } from 'node:crypto';
 import { matchesEtag } from '../conditional.ts';
@@ -13,9 +14,8 @@ export async function handleThumbnailRoute(library: RouteContext['library'], req
   if (thumbMatch) {
     const thumbId = thumbMatch[1]!, thumbAction = thumbMatch[2]!;
     try {
-      const version = url.searchParams.get('v');
+      const version = requireMediaVersion(url);
       const recipe = url.searchParams.get('recipe') || THUMB_RECIPE_VERSION;
-      if (!version) throw new AdminError(400, '缩略图需要媒体版本。');
       if (thumbAction === 'thumbnail-status') {
         // Read-only presence probe: metadata + cache lookup, never decode.
         if (req.method !== 'GET') throw new AdminError(405, '不支持的缩略图操作。');

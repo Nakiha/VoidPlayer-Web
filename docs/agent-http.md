@@ -1,5 +1,7 @@
 # HTTP Agent 与操作同步
 
+完整接口与版本规则见 [HTTP API](http-api.md)。
+
 服务入口为 `/llms.txt`、`/agent.md` 和 `/api/agent`；能力描述只包含当前提供的媒体库、缓存查询、工作区、标注和页面桥。操作目录位于 `/api/agent/tasks`，它描述调用流程，不保存后台任务。
 
 ## 无页面写入

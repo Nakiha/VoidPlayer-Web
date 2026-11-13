@@ -105,31 +105,6 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       annotations.mutate(record.space, { operationId: `seed-${createHash('sha256').update(id + '/' + mark.id).digest('hex')}`, id: mark.id, revision: 0, action: 'put', document: { mark, media: seeds!.document.media.filter(media => ids.has(media.id)) } }, seeds!.actor);
     }
   }
-  if (url.pathname === '/api/shares' || url.pathname.startsWith('/api/shares/') || url.pathname.startsWith('/api/reviews/')) {
-    if (!options.admin) { sendJson(res, 503, { error: '当前服务不支持工作区分享。' }); return true; }
-    const store = options.admin.workspaces;
-    try {
-      const id = /^\/api\/(shares|reviews)\/([a-f0-9-]{36})$/.exec(url.pathname);
-      if (url.pathname === '/api/shares' && req.method === 'POST') {
-        if (!adminWriteAllowed(req, 'workspace')) throw new AdminError(403, '请从同源页面分享工作区。');
-        if (!ctx.actor || (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== ctx.actor.id)) throw new AdminError(409, '请先选择用户或以访客继续。');
-        const document = await readAdminJson(req, WORKSPACE_BYTES + 2048) as {name?: string};
-        const {record} = store.shareWorkspace(randomUUID(),{name:document.name || '共享工作区',document},undefined,ctx.actor);
-        seedWorkspace(record.id);sendJson(res,201,{...record,path:`/?workspace=${record.id}`});return true;
-      }
-      if (!id) throw new AdminError(405, '不支持的工作区操作。');
-      const record = store.fromLegacy(id[2],id[1] === 'shares' ? 'share' : 'review').record;
-      seedWorkspace(record.id);
-      if (req.method === 'GET') { sendJson(res,200,{...store.read(record.id,ctx.actor ?? {id:'guest',name:'访客'}),path:`/?workspace=${record.id}`});return true; }
-      if (req.method === 'PUT') {
-        if (!adminWriteAllowed(req, 'workspace')) throw new AdminError(403, '请从同源页面更新工作区。');
-        if (!ctx.actor || (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== ctx.actor.id)) throw new AdminError(409, '用户已切换，请重新打开工作区。');
-        sendJson(res,200,store.update(record.id,typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined,await readAdminJson(req,WORKSPACE_BYTES + 2048),ctx.actor));return true;
-      }
-      throw new AdminError(405, '不支持的工作区操作。');
-    } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res,error instanceof AdminError ? error.status : 500,adminErrorBody(error)); }
-    return true;
-  }
   if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
     if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供工作区存储。' }); return true; }
     if (req.method !== 'GET' && !adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, { error: '请从同源页面保存工作区。' }); return true; }
@@ -151,7 +126,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         if (req.method === 'POST') { sendJson(res, 201, store.create(await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return true; }
       }
       if (id) {
-        if (req.method === 'GET') { seedWorkspace(id); const value = store.read(id, workspaceActor); res.setHeader('etag', `"${value.revision}"`); sendJson(res, 200, value); return true; }
+        if (req.method === 'GET') { const value = store.read(id, workspaceActor); res.setHeader('etag', `"${value.revision}"`); sendJson(res, 200, value); return true; }
         const revision = typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined;
         if (req.method === 'PUT') { sendJson(res, 200, store.update(id, revision, await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return true; }
         if (req.method === 'DELETE') { sendJson(res, 200, store.remove(id, revision, workspaceActor)); return true; }
@@ -160,6 +135,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
     } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); return true; }
   }
   if (url.pathname.startsWith('/api/admin/')) {
+    if (!/^\/api\/admin\/(?:caches(?:\/[a-z-]+)?|measurements(?:\/[a-f0-9-]{36}(?:\/(?:transfer|finish))?)?|status|requests|analysis|roots|logs(?:\/[^/]+)?)$/.test(url.pathname)) return false;
     const admin: AdminController | undefined = options.admin;
     if (!admin) { sendJson(res, 404, { error: '此服务尚未提供管理后台。' }); return true; }
     if (req.method !== 'GET' && !adminWriteAllowed(req)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return true; }
@@ -171,12 +147,6 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       const cacheType = /^\/api\/admin\/caches\/([a-z-]+)$/.exec(url.pathname);
       if (cacheType && req.method === 'GET') { sendJson(res, 200, admin.caches.list(cacheType[1]!, Number(url.searchParams.get('offset') ?? 0), url.searchParams.get('search') ?? '')); return true; }
       if (cacheType && req.method === 'DELETE') { sendJson(res, 200, admin.caches.remove(cacheType[1]!, await readAdminJson(req))); return true; }
-      if (url.pathname === '/api/admin/frame-indexes') {
-        if (req.method === 'GET') { sendJson(res, 200, library.frameIndexes.list(Number(url.searchParams.get('offset') ?? 0), url.searchParams.get('search') ?? '')); return true; }
-        if (req.method === 'DELETE') { sendJson(res, 200, library.frameIndexes.remove()); return true; }
-      }
-      const frameIndex = /^\/api\/admin\/frame-indexes\/([0-9a-f]{24})$/.exec(url.pathname);
-      if (frameIndex && req.method === 'DELETE') { sendJson(res, 200, library.frameIndexes.remove(frameIndex[1], url.searchParams.get('v') ?? undefined)); return true; }
       if (url.pathname === '/api/admin/measurements') {
         if (req.method === 'GET') { sendJson(res, 200, admin.measurements.status()); return true; }
         if (req.method === 'POST') { sendJson(res, 202, admin.measurements.start(await readAdminJson(req), identity.id)); return true; }
@@ -208,26 +178,6 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       if (url.pathname === '/api/admin/roots') {
         if (req.method === 'GET') { sendJson(res, 200, await admin.roots()); return true; }
         if (req.method === 'PUT') { sendJson(res, 200, await admin.saveRoots(await readAdminJson(req))); return true; }
-      }
-      if (url.pathname === '/api/admin/scan') {
-        if (req.method === 'GET') {
-          const offset = Number(url.searchParams.get('offset') ?? 0);
-          if (!Number.isSafeInteger(offset) || offset < 0) throw new AdminError(400, '错误分页位置无效。');
-          sendJson(res, 200, { ...library.status(), errors: library.errors(100, offset), offset }); return true;
-        }
-        if (req.method === 'POST') {
-          const body = await readAdminJson(req) as { action?: unknown; rootId?: unknown } | null;
-          if (body?.action === 'refresh') {
-            if (body.rootId !== undefined) {
-              if (typeof body.rootId !== 'string' || !library.status().roots.some(root => root.id===body.rootId))
-                throw new AdminError(400,'未知媒体根目录。');
-              void library.refreshRoot(body.rootId).catch(() => {});
-            } else void library.refresh().catch(() => {});
-          }
-          else if (body?.action === 'cancel') library.cancel();
-          else throw new AdminError(400, '未知扫描操作。');
-          sendJson(res, 202, library.status()); return true;
-        }
       }
       if (url.pathname === '/api/admin/logs' && req.method === 'GET') {
         const page = url.searchParams.has('page') ? Number(url.searchParams.get('page')) : undefined;

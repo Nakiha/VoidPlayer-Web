@@ -8,11 +8,11 @@ import type {LibraryScanStatus} from '../shared/service/admin.ts';
 import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import type { Stats } from 'node:fs';
 import path from 'node:path';
-import { LibraryStore, normalizeRoots, mediaId } from './library-store.ts';
+import { LibraryStore, normalizeRoots } from './library-store.ts';
 import { THUMB_RECIPE_VERSION } from '../shared/thumbnails/contract.ts';
 import type { MediaRoot, RootRecord, StoredMedia } from './library-store.ts';
 import { DirectoryChanges, DirectoryWatchHints } from './library-watch.ts';
@@ -25,7 +25,8 @@ export interface LibraryEntry { id: string; name: string; root: string; rootInde
 export interface Library { roots: string[]; entries: LibraryEntry[]; truncated: boolean }
 interface IndexOptions { analysisCoreDir?:string; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scanDelayMs?: number; scanBatchDelayMs?: number; scan?: typeof scanLibrary; now?: () => number }
 export interface BrowseQuery { rootId?: string; directory?: string; search?: string; recursive?: boolean; limit?: number; offset?: number; revision?: number }
-export function fileVersion(stat: Stats) { return createHash('sha256').update(`${stat.size}:${Math.round(stat.mtimeMs)}:${Math.round(stat.ctimeMs)}:${stat.ino}`).digest('hex').slice(0, 24); }
+import {fileVersion} from './file-stat.ts';
+export {fileVersion} from './file-stat.ts';
 const parent = (name: string) => path.posix.dirname(name) === '.' ? '' : path.posix.dirname(name);
 
 /** Persistent, progressively updated metadata. Range lookups never wait for a scan. */
@@ -310,10 +311,8 @@ export class MediaLibraryIndex {
     const job = Number(db.prepare("INSERT INTO scan_jobs(state,started_at) VALUES('running',?)").run(this.now()).lastInsertRowid);
     let visited = 0, files = 0, errors = 0, reads = 0, entries = 0;
     const progress = (root?: string, directory?: string) => db.prepare('UPDATE scan_jobs SET visited=?,files=?,errors=?,current_root=?,current_path=? WHERE id=?').run(visited, files, errors, root ?? null, directory ?? null, job);
-    const upsert = db.prepare(`INSERT INTO media(id,root_id,path,parent,size,modified,version,state,generation,observed_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(root_id,path) DO UPDATE SET size=excluded.size,modified=excluded.modified,version=excluded.version,state=excluded.state,generation=excluded.generation,observed_at=CASE WHEN media.version=excluded.version THEN media.observed_at ELSE excluded.observed_at END`);
-    const findId = db.prepare('SELECT id FROM media WHERE root_id=? AND path=?');
-    const alias = db.prepare('INSERT INTO aliases(id,media_id) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET media_id=excluded.media_id');
-    const priorVersion = db.prepare('SELECT version,state,observed_at FROM media WHERE root_id=? AND path=?');
+    const upsert = db.prepare(`INSERT INTO media(id,root_id,path,parent,size,modified,version,fingerprint,state,generation,observed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(root_id,path) DO UPDATE SET size=excluded.size,modified=excluded.modified,version=CASE WHEN media.fingerprint=excluded.fingerprint THEN media.version ELSE excluded.version END,fingerprint=excluded.fingerprint,state=excluded.state,generation=excluded.generation,observed_at=CASE WHEN media.version=excluded.version THEN media.observed_at ELSE excluded.observed_at END`);
+    const priorVersion = db.prepare('SELECT version,fingerprint,state,observed_at FROM media WHERE root_id=? AND path=?');
     const insertDirectory = db.prepare('INSERT OR IGNORE INTO directories(root_id,path,parent,name,generation) VALUES(?,?,?,?,?)');
     // Keep disk commits bounded, without holding a transaction over network I/O.
     // FULL durability is retained; one commit covers up to 64 media records.
@@ -326,12 +325,8 @@ export class MediaLibraryIndex {
     };
     const put = (root: RootRecord, relative: string, size: number, modified: number, version: string, state: string) => {
       const observedAt = this.now();
-      const relocation=this.relocations, cover=relocation?.find(root.id,relative,version);
       writes.push(() => {
-        upsert.run(mediaId(root.seed, relative), root.id, relative, parent(relative), size, modified, version, state, job, observedAt);
-        const record = findId.get(root.id, relative) as { id: string };
-        alias.run(mediaId(root.path, relative), record.id);
-        if (state==='ready'&&cover) this.thumbnails.copyRelocated(cover.id,cover.version,record.id,version,relocation!.epoch);
+        upsert.run(randomBytes(12).toString('hex'), root.id, relative, parent(relative), size, modified, version, version, state, job, observedAt);
       });
       if (writes.length >= 64) flush();
     };
@@ -420,19 +415,18 @@ export class MediaLibraryIndex {
               catch (error) { errorAt(root, name, error); continue; }
               if (!stat.isFile() || stat.isSymbolicLink()) continue;
               const version = fileVersion(stat), settleMs = this.options.settleMs ?? 0;
-              const prior = priorVersion.get(root.id, name) as { version: string; state: string; observed_at: number } | undefined;
+              const prior = priorVersion.get(root.id, name) as { version: string; fingerprint: string; state: string; observed_at: number } | undefined;
               // Schema 1 had no filesystem binding. Require one unchanged known
               // file before accepting a first binding for an existing library.
-              if (!storageVerified && prior?.version === version) storageVerified = await this.checkStorage(root, signal, true);
+              if (!storageVerified && prior?.fingerprint === version) storageVerified = await this.checkStorage(root, signal, true);
               if (!storageVerified) { unverifiedFiles = true; continue; }
               const relocated=this.relocations?.find(root.id,name,version);
-              const pending = !relocated && settleMs > 0 && (prior?.version === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
+              const pending = !relocated && settleMs > 0 && (prior?.fingerprint === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
               if (pending) this.settling.add({ rootId: root.id, directory: relative });
               // Database errors fail the job, rather than being treated as a bad file.
               const state = pending ? 'pending' : 'ready';
               seenMedia.add(name);
-              if (!shallow || prior?.version !== version || prior.state !== state
-                || !db.prepare('SELECT 1 FROM aliases WHERE id=?').get(mediaId(root.path, name)))
+              if (!shallow || prior?.fingerprint !== version || prior.state !== state)
                 put(root, name, stat.size, Math.round(stat.mtimeMs), version, state);
               files++;
             }
@@ -509,15 +503,19 @@ export class MediaLibraryIndex {
       if (!signal.aborted) throw error;
     }
   }
+  describe(id:string) { const row=this.store.find(id);return row?this.entry(row):null; }
   metadata(id: string) {
-    const row = this.store.find(id);
-    if (!row) return null;
-    const entry = this.entry(row);
+    const entry=this.describe(id);
+    if (!entry) return null;
     let thumbnail = false;
     try {
       thumbnail = entry.version ? this.thumbnails.status(entry.id, entry.version, THUMB_RECIPE_VERSION).ready : false;
     } catch { /* Thumbnail presence is advisory; metadata must still load. */ }
     return { ...entry, thumbnail, thumbnailEpoch: this.thumbnails.epoch };
+  }
+  fingerprint(id:string,version?:string) {
+    const row=this.store.find(id);
+    return row&&(!version||row.version===version)?row.fingerprint:undefined;
   }
   async resolve(id: string, version?: string): Promise<string | null> {
     if (!/^[0-9a-f]{24}$/.test(id) || this.closed) return null;
@@ -531,7 +529,7 @@ export class MediaLibraryIndex {
       const real = await this.io(fs.realpath(path.join(rootReal, entry.path)));
       if (!real.startsWith(rootReal + path.sep)) return null;
       const stat = await this.io(fs.stat(real));
-      if (!stat.isFile() || fileVersion(stat) !== entry.version) return null;
+      if (!stat.isFile() || fileVersion(stat) !== entry.fingerprint) return null;
       return real;
     } catch { return null; }
   }
@@ -549,9 +547,13 @@ export class MediaLibraryIndex {
       let relocations:LibraryRelocations|undefined;
       try {
         const mutation=await mutateLibraryFiles(this.definitions,command,fileVersion,() => {
-          relocations=new LibraryRelocations(this.store.db,command,this.thumbnails.epoch);
+          relocations=new LibraryRelocations(this.store.db,command);
+        }, ref => {
+          const row = this.store.db.prepare('SELECT version,fingerprint FROM media WHERE root_id=? AND path=?').get(ref.rootId,ref.path);
+          if (!row || row.version !== ref.version) throw new AdminError(409,'文件版本已改变。','library-file-changed');
+          return String(row.fingerprint);
         });
-        relocations!.approve(mutation);this.relocations=relocations;
+        await relocations!.approve(mutation,this.definitions);this.relocations=relocations;
         let indexRefreshed=true;
         const generation=this.cancelGeneration;
         try {await this.refreshDirectories(mutation.scopes);indexRefreshed=!this.closed&&generation===this.cancelGeneration;}
@@ -613,8 +615,4 @@ export class MediaLibraryIndex {
 export async function scanLibrary(roots: string[]): Promise<Library> {
   const index = new MediaLibraryIndex(roots);
   try { return await index.list(true); } finally { await index.close(); }
-}
-export async function resolveMediaPath(roots: string[], id: string): Promise<string | null> {
-  const index = new MediaLibraryIndex(roots);
-  try { await index.list(true); return await index.resolve(id); } finally { await index.close(); }
 }

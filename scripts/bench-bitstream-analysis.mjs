@@ -357,7 +357,7 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                   });
                 });
                 const serverProbes = probeRanges(
-                  new URL(`/api/media/${entry.id}?v=${entry.version}`, url),
+                  new URL(`/api/media/${entry.id}/content?v=${entry.version}`, url),
                   () => rangeActive,
                 );
                 const probes = page.evaluate(async (item) => {
@@ -365,7 +365,7 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                   while (window.analysisProbeActive) {
                     const started = performance.now();
                     const r = await fetch(
-                      `/api/media/${item.id}?v=${item.version}`,
+                      `/api/media/${item.id}/content?v=${item.version}`,
                       { headers: { range: "bytes=0-1023" }, cache: "no-store" },
                     );
                     const bytes = await r.arrayBuffer();
@@ -407,7 +407,7 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
               } else {
                 let active = true;
                 const probes = probeRanges(
-                  new URL(`/api/media/${entry.id}?v=${entry.version}`, url),
+                  new URL(`/api/media/${entry.id}/content?v=${entry.version}`, url),
                   () => active,
                 );
                 try {

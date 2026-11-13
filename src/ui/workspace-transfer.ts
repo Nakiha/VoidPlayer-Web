@@ -16,7 +16,6 @@ import { LocalInputError, selectVideoInputs } from './video-input.ts';
 import { parseWorkspace, readWorkspaceFile, UnrecognizedWorkspaceFile } from '../../shared/review/workspace-file.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import { mapSharedWorkspace } from '../review/shared-workspace.ts';
-import { SavedWorkspaceClient } from '../review/saved-workspaces.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { publishMarkPreview } from './mark-preview-publish.ts';
 import { pinLibraryReference } from '../../shared/media/io/media-reference.ts';
@@ -65,8 +64,8 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   const input = document.getElementById('workspace-file') as HTMLInputElement;
   const lifetime = new AbortController(); let importing = false;
   const params = new URL(location.href).searchParams;
-  const savedId = localOnly ? null : params.get('workspace'), legacyId = localOnly ? null : params.get('share') ?? params.get('review');
-  const openingLink = /^[a-f0-9-]{36}$/.test(savedId ?? legacyId ?? '');
+  const savedId = localOnly ? null : params.get('workspace');
+  const openingLink = /^[a-f0-9-]{36}$/.test(savedId ?? '');
   document.getElementById('app')!.toggleAttribute('data-workspace-opening', openingLink);
   let saved: ReturnType<typeof installSavedWorkspaces> | undefined;
   let sharing: ReturnType<typeof installWorkspaceSharing> | undefined;
@@ -171,12 +170,6 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); });
   const finishOpening = () => { if (lifetime.signal.aborted) return; document.getElementById('app')!.removeAttribute('data-workspace-opening'); options.openingChanged?.(); };
   if (savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId)).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
-  else if (legacyId && /^[a-f0-9-]{36}$/.test(legacyId)) void options.identityReady.then(async()=>{
-    // Old share/review URLs join the same writable workspace flow.
-    const client=new SavedWorkspaceClient(lifetime.signal);
-    await client.request(`/api/${params.has('share')?'shares':'reviews'}/${legacyId}`);
-    await saved!.open(legacyId);
-  }).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
   input.addEventListener('change', () => {
     const files = Array.from(input.files ?? []); input.value = '';
     if (!files.length) return;
@@ -195,7 +188,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       const state = session.getState();
       if ((currentActor()?.id ?? 'local') !== owner || importing || saved?.isOpening() || state.busy || state.playing || state.mediaLoad?.state === 'loading' || !options.editsReady())
         throw new Error(t(msg('update.wait', '请先暂停播放，完成标注并等载入和保存结束，再刷新。')));
-      if (saved?.binding() || options.annotationScope() !== 'local' || ['workspace','share','review'].some(key => new URL(location.href).searchParams.has(key)))
+      if (saved?.binding() || options.annotationScope() !== 'local' || new URL(location.href).searchParams.has('workspace'))
         throw new Error(t(msg('update.bound', '当前工作区已连接到服务器。请保存工作区后重新打开，当前窗口可以继续使用。')));
     }
     checkReady();

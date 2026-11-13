@@ -72,7 +72,7 @@ test('trusted HTTPS serves remote media, isolation headers and identity with sam
       assert.equal(change.status, expected); if (expected === 200) assert.equal((await change.json()).actor.id, actor.id);
     }
     const listing = await service.library.list();
-    const range = await httpFetch(`${base}/api/media/${listing.entries[0].id}`, { ca, headers: { range: 'bytes=2-5', host } });
+    const range = await httpFetch(`${base}/api/media/${listing.entries[0].id}/content?v=${listing.entries[0].version}`, { ca, headers: { range: 'bytes=2-5', host } });
     assert.equal(range.status, 206); assert.equal(await range.text(), '2345');
     assert.equal((await httpFetch(base + '/data/tls/authority.json', { ca })).status, 404);
     assert.ok(await readFile(service.tls!.caFile!, 'utf8'));

@@ -18,7 +18,7 @@ db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
 const store = new FrameIndexStore(db);
 
 parentPort!.on('message', async (request: {
-  id: string; version: string; size: number; filePath: string; epoch: number; identity: MediaIndexIdentity; buildId: string;
+  id: string; version: string; fingerprint?: string; size: number; filePath: string; epoch: number; identity: MediaIndexIdentity; buildId: string;
 }) => {
   const buildStartedAt = performance.now();
   let started = false;
@@ -34,7 +34,7 @@ parentPort!.on('message', async (request: {
     if (request.identity.kind === 'mp4-playback') {
       if (store.epoch !== request.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
       const sourceVersion = `${request.id}@${request.version}`;
-      const doc = await buildMp4PlaybackDocument(request.filePath, request.size, request.version, sourceVersion,
+      const doc = await buildMp4PlaybackDocument(request.filePath, request.size, request.fingerprint ?? request.version, sourceVersion,
         progress => parentPort!.postMessage({ type: 'progress', data: { phase: 'scan', ...progress } }));
       store.commit(request.id, request.version, prepareFrameIndex(doc, request.size, request.identity, sourceVersion), request.epoch);
       parentPort!.postMessage({ value: { built: true, epoch: request.epoch } });
@@ -42,14 +42,14 @@ parentPort!.on('message', async (request: {
     }
     if(request.identity.kind==='flv'){
       if(store.epoch!==request.epoch)throw new AdminError(409,'索引缓存已被清理，请重新请求。');
-      const result=await buildFlvIndexDocument(request.filePath,request.size,request.version,progress=>parentPort!.postMessage({type:'progress',data:progress}));
+      const result=await buildFlvIndexDocument(request.filePath,request.size,request.fingerprint ?? request.version,progress=>parentPort!.postMessage({type:'progress',data:progress}));
       store.commit(request.id,request.version,prepareFrameIndex(result.document,request.size,request.identity,`${request.id}@${request.version}`,{scannedBytes:result.profile.scannedBytes}),request.epoch);
       parentPort!.postMessage({value:{built:true,epoch:request.epoch,profile:result.profile}});
       return;
     }
     if ((request.identity.kind === 'js-ts'||request.identity.kind==='js-matroska')) {
       if (store.epoch !== request.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
-      const result = await buildJsTsIndexDocument(request.filePath, request.size, request.version, `${request.id}@${request.version}`,
+      const result = await buildJsTsIndexDocument(request.filePath, request.size, request.fingerprint ?? request.version, `${request.id}@${request.version}`,
         data => parentPort!.postMessage({ type: 'progress', data: { phase: 'scan', ...data } }),undefined,request.identity.kind==='js-ts'?'ts':'matroska');
       store.commit(request.id,request.version,prepareFrameIndex(result.document,request.size,request.identity,`${request.id}@${request.version}`),request.epoch);
       parentPort!.postMessage({ value: { built: true, epoch: request.epoch, profile: result.profile } });
@@ -58,7 +58,7 @@ parentPort!.on('message', async (request: {
     if (!hasServerIndexCore(workerData.coreDir)) throw new AdminError(503, '服务端 FFmpeg WASM core 不可用。');
     if (store.epoch !== request.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
     const result = await buildFfmpegIndexDocument(
-      request.filePath, request.size, request.version, workerData.coreDir, request.identity,
+      request.filePath, request.size, request.fingerprint ?? request.version, workerData.coreDir, request.identity,
       (progress: FfmpegIndexBuildProgress) => {
         const startedAt = performance.now();
         store.updateBuildProgress(request.id, request.version, request.identity, request.buildId, progress.packets, progress.scannedBytes);

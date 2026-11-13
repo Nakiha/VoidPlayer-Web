@@ -1,3 +1,4 @@
+import {requestContext} from './logging/request-context.ts';
 import { ReportLogs } from './logging/reports.ts';
 import { serverLog } from './logging/logger.ts';
 import { DEFAULT_LOG_POLICY } from '../shared/service/logging.ts';
@@ -28,10 +29,8 @@ import { handleContentRoutes } from './routes/content.ts';
 import type { RouteContext } from './routes/context.ts';
 import type {PageChannel} from './bridge/page-channel.ts';
 
-// Narrow read-only HTTP API for the web player:
-//   GET /api/library        -> media list under the whitelisted folders
-//   GET|HEAD /api/media/<id> -> file bytes with HTTP Range support
-// plus static hosting of the built frontend (dist/) when present.
+// HTTP resources and explicit commands are documented in docs/http-api.md.
+// Media descriptions are separate from version-pinned content; static hosting is optional.
 
 export function createTrafficState() { return { sockets:new Set<import('node:net').Socket>(),activeRequests:0,completedRequests:0,abortedRequests:0,recentRequests:[] as Record<string,unknown>[] }; }
 
@@ -90,6 +89,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
     if (encryptedRequest(req) || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127\./.test(hostname)) {
       for (const [key, value] of Object.entries(ISOLATION_HEADERS)) res.setHeader(key, value);
     }
+    const resource = requestContext(req,library);
     let logged = false;
     traffic.activeRequests++;
     const ctx: RouteContext = {
@@ -102,7 +102,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
       traffic.activeRequests--; traffic.completedRequests++; if (!res.writableFinished) traffic.abortedRequests++;
       const pathname = (req.url ?? '/').split('?')[0];
       if (pathname === '/api/health' || pathname === '/api/ready') return;
-      const entry = { t: new Date().toISOString(), requestId, clientIp: ip, actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, url: pathname, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
+      const entry = { t: new Date().toISOString(), requestId, clientIp: ip, actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, ...resource, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
       logLine(entry);
       if (!pathname.startsWith('/api/admin/') || req.method !== 'GET') { recentRequests.push(entry); if (recentRequests.length > 200) recentRequests.shift(); }
     };

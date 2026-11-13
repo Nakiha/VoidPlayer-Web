@@ -183,7 +183,7 @@ test('HTTP browse and conditional polling serve cached results while shared dire
       const response = await fetch(url + `&search=${search}`, { signal: AbortSignal.timeout(2000) });
       assert.equal(response.status, 200); await response.json();
     }));
-    const range = await fetch(`${base}/api/media/${page.entries[0].id}?v=${page.entries[0].version}`,
+    const range = await fetch(`${base}/api/media/${page.entries[0].id}/content?v=${page.entries[0].version}`,
       { headers: { range: 'bytes=0-1' }, signal: AbortSignal.timeout(2000) });
     assert.equal(range.status, 206); assert.equal(await range.text(), 'vi');
     assert.deepEqual(visited, [hot], 'clients and changing keywords must share one shallow check');
@@ -203,7 +203,7 @@ test('persistent index reopens offline, preserves identities on root relocation 
   let index = new MediaLibraryIndex([{ id: 'archive', path: media }], { database });
   await index.refresh();
   const before = index.browse().entries[0];
-  assert.equal(await index.resolve(mediaId(media, 'one.mp4')), await index.resolve(before.id), 'old workspace URL alias');
+  assert.equal(await index.resolve(mediaId(media,'one.mp4')), null, 'path hashes are not asset aliases');
   assert.throws(() => new MediaLibraryIndex([{ id: 'archive', path: media }], { database }), /另一个实例/);
   await index.close();
   const moved = path.join(root, 'moved'); await rename(media, moved);
@@ -218,7 +218,7 @@ test('persistent index reopens offline, preserves identities on root relocation 
   await index.refresh();
   assert.equal(index.browse().entries[0].id, before.id);
   assert.ok(await index.resolve(before.id));
-  assert.ok(await index.resolve(mediaId(media, 'one.mp4')), 'old absolute-path-derived alias survives relocation');
+  assert.equal(await index.resolve(mediaId(media,'one.mp4')), null, 'absolute-path aliases are not accepted');
   await writeFile(path.join(moved, 'one.mp4'), 'replacement');
   assert.equal(await index.resolve(before.id, before.version), null);
   await index.refresh(); assert.notEqual(index.browse().entries[0].version, before.version);
@@ -246,7 +246,7 @@ test('index traverses beyond six levels and 5000 files with complete bounded pag
   } finally { await index.close(); }
 }));
 
-test('legacy path-based workspace IDs survive adopting an explicit root ID', async () => fixture(async (root, media) => {
+test('replacing a root identity does not silently adopt assets from an unrelated root', async () => fixture(async (root, media) => {
   await writeFile(path.join(media, 'one.mp4'), 'video');
   const database = path.join(root, 'library.sqlite');
   let index = new MediaLibraryIndex([media], { database });
@@ -254,8 +254,8 @@ test('legacy path-based workspace IDs survive adopting an explicit root ID', asy
   index = new MediaLibraryIndex([{ id: 'archive', path: media }], { database });
   try {
     await index.refresh();
-    assert.ok(await index.resolve(old.id, old.version));
-    assert.equal(index.metadata(old.id)?.id, index.browse().entries[0].id);
+    assert.equal(await index.resolve(old.id, old.version),null);
+    assert.notEqual(index.browse().entries[0].id,old.id);
   } finally { await index.close(); }
 }));
 
@@ -280,7 +280,7 @@ test('Range lookup remains available during an unfinished scan and cancellation 
     await index.refresh(); scanning = true;
     const next = index.refresh();
     const timeout = new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error('Range waited for scan')), 1000); timer.unref(); });
-    assert.ok(await Promise.race([index.resolve(mediaId(media, 'one.mp4')), timeout]));
+    assert.ok(await Promise.race([index.resolve(index.browse().entries[0].id), timeout]));
     index.cancel(); await next;
     assert.equal(index.status().job?.state, 'cancelled');
     assert.equal(index.browse().entries.length, 1);
@@ -319,7 +319,7 @@ test('four HTTP Range requests finish while a background scan is stalled', async
     blocked = true; const scan = index.refresh();
     await Promise.all(Array.from({ length: 4 }, async (_, i) => {
       const start = i * 512;
-      const response = await fetch(`${base}/api/media/${entry.id}?v=${entry.version}`, { headers: { range: `bytes=${start}-${start + 255}` }, signal: AbortSignal.timeout(2000) });
+      const response = await fetch(`${base}/api/media/${entry.id}/content?v=${entry.version}`, { headers: { range: `bytes=${start}-${start + 255}` }, signal: AbortSignal.timeout(2000) });
       assert.equal(response.status, 206); assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes.subarray(start, start + 256));
     }));
     assert.equal(index.status().scanning, true);
@@ -376,9 +376,50 @@ test('a crashed writer releases the index lock and interrupted scans can resume'
     const index = new MediaLibraryIndex([media], { database });
     try {
       assert.equal(index.status().job?.state, 'interrupted');
-      await index.refresh(); assert.ok(await index.resolve(mediaId(media, 'one.mp4')));
+      await index.refresh(); assert.ok(await index.resolve(index.browse().entries[0].id));
     } finally { await index.close(); }
   } finally {
     if (child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done; }
   }
+}));
+
+
+test('owned relocation preserves asset identity and pinned content across roots and restart', async () => fixture(async (root, media) => {
+  const other = path.join(root, 'other'); await mkdir(other);
+  await writeFile(path.join(media, 'asset.mp4'), 'original bytes');
+  const database = path.join(root, 'assets.sqlite'), roots = [{id:'a',path:media},{id:'b',path:other}];
+  let library = new MediaLibraryIndex(roots, {database,watch:false});
+  try {
+    await library.refresh();
+    const original = library.browse({rootId:'a'}).entries[0];
+    const moved = await library.mutateFiles({operation:'move',sources:[{rootId:'a',path:'asset.mp4',kind:'file',version:original.version}],target:{rootId:'b',directory:''}});
+    assert.equal(moved.results[0].ok, true);
+    assert.equal(library.metadata(original.id)?.rootId, 'b');
+    assert.equal(library.metadata(original.id)?.version, original.version);
+    assert.equal(await library.resolve(original.id, original.version), await fs.realpath(path.join(other,'asset.mp4')));
+    await writeFile(path.join(media,'asset.mp4'), 'different asset'); await library.refresh();
+    assert.notEqual(library.browse({rootId:'a'}).entries[0].id, original.id, 'reusing a path cannot steal a moved asset identity');
+    await library.close(); library = new MediaLibraryIndex(roots, {database,watch:false}); await library.refresh();
+    assert.equal(await library.resolve(original.id, original.version), await fs.realpath(path.join(other,'asset.mp4')));
+    await writeFile(path.join(other,'asset.mp4'), 'replaced content'); await library.refresh();
+    assert.equal(await library.resolve(original.id, original.version), null, 'external content changes invalidate the pinned version');
+  } finally { await library.close(); }
+}));
+
+test('a rescan between source resolution and opening cannot serve new bytes under an old version', async () => fixture(async (_root,media) => {
+  const file=path.join(media,'race.mp4');await writeFile(file,'original');
+  const library=new MediaLibraryIndex([media],{watch:false});await library.refresh();
+  const entry=library.browse().entries[0],resolve=library.resolve.bind(library);
+  let changed=false;
+  library.resolve=async(id,version)=>{
+    const result=await resolve(id,version);
+    if(result&&!changed){changed=true;await writeFile(file,'replacement bytes');await library.refresh();}
+    return result;
+  };
+  const server=createMediaServer({roots:[media],library,onLog(){}});
+  await new Promise<void>(done=>server.listen(0,'127.0.0.1',done));
+  try {
+    const response=await fetch(`http://127.0.0.1:${(server.address() as {port:number}).port}/api/media/${entry.id}/content?v=${entry.version}`);
+    assert.equal(response.status,409);assert.notEqual(await response.text(),'replacement bytes');
+  } finally {server.closeAllConnections();await new Promise<void>(done=>server.close(()=>done()));await library.close();}
 }));

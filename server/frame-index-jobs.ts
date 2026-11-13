@@ -12,6 +12,7 @@ type PendingRequest = { resolve(value: unknown): void; reject(error: Error): voi
 type BuildRequest = {
   id: string;
   version: string;
+  fingerprint?: string;
   size: number;
   filePath: string;
   epoch: number;
@@ -199,6 +200,23 @@ export class FrameIndexJobs {
     return handle.promise;
   }
 
+  private recentBuilds = new Map<string, QueuedBuild>();
+  observeBuild(request: {id:string;version:string;epoch:number;identity:MediaIndexIdentity}, options:FrameIndexBuildOptions = {}) {
+    this.available();
+    const key = request.id + ':' + request.version + ':' + request.epoch + ':' + mediaIndexIdentityKey(request.identity);
+    const job = this.builds.get(key) ?? this.recentBuilds.get(key);
+    if (!job) return;
+    if (options.onUpdate) job.updateListeners.add(options.onUpdate);
+    if (options.onProgress) {
+      job.listeners.add(options.onProgress);
+      if (job.latestProgress) options.onProgress(job.latestProgress);
+    }
+    return {buildId:job.buildId,promise:job.promise,unsubscribe:() => {
+      if (options.onUpdate) job.updateListeners.delete(options.onUpdate);
+      if (options.onProgress) job.listeners.delete(options.onProgress);
+    }};
+  }
+
   startBuild(request: Omit<BuildRequest, 'buildId'>, options: FrameIndexBuildOptions = {}) {
     this.available();
     const policy = { ...(options.policy ?? this.defaultBuildPolicy) };
@@ -226,6 +244,7 @@ export class FrameIndexJobs {
     }
     let resolve!: (value: any) => void, reject!: (error: Error) => void;
     const promise = new Promise<any>((res, rej) => { resolve = res; reject = rej; });
+    this.recentBuilds.delete(key);
     const buildId = randomUUID();
     const job: QueuedBuild = { key, request: { ...request, buildId }, promise, resolve, reject,
       listeners: new Set(), updateListeners: new Set(), buildId, policy };
@@ -259,6 +278,8 @@ export class FrameIndexJobs {
         .then(job.resolve, job.reject).finally(() => {
           this.activeBuilds--;
           if (this.builds.get(job.key) === job) this.builds.delete(job.key);
+          this.recentBuilds.set(job.key,job);
+          while (this.recentBuilds.size > 32) this.recentBuilds.delete(this.recentBuilds.keys().next().value!);
           this.notifyBuildUpdate(job);
           this.pumpBuilds();
         });
@@ -331,6 +352,7 @@ export class FrameIndexJobs {
   close() { return this.closing ??= this.closeOwned(); }
   private async closeOwned() {
     this.closed = true;
+    this.recentBuilds.clear();
     this.rejectQueued(new AdminError(503, '索引服务已关闭。'));
     for (const entry of this.pending.values()) {
       clearTimeout(entry.timer);

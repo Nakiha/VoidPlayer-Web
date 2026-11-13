@@ -107,7 +107,7 @@ export class BitstreamAnalysisService {
   private async currentBuild(source:MediaSource,preparationSequence:number,signal?:AbortSignal) {
     try {
       const url=source.info.source?new URL(source.info.source.url,location.href):new URL(coreAssetUrl('/vendor/voidplayer-analysis/manifest.json',location.href));
-      if(source.info.source)url.pathname+='/bitstream-analysis/capabilities';
+      if(source.info.source)url.pathname=url.pathname.replace(/\/content$/,'')+'/bitstream-analysis/capabilities';
       const response=await fetch(url,{signal,cache:'no-store'});
       if(!response.ok)throw new AnalysisFailure('source-changed','Analysis identity unavailable');
       const manifest=await response.json(),build=manifest.buildId ?? manifest.revision;
@@ -541,7 +541,7 @@ export class BitstreamAnalysisService {
     onProgress?: (progress: StreamProgress) => void,
   ) {
     const base = new URL(source.info.source!.url, location.href);
-    base.pathname += "/bitstream-analysis/requests";
+    base.pathname = base.pathname.replace(/\/content$/,'') + '/bitstream-analysis/requests';
     const headers = {
       "content-type": "application/json",
       "x-voidplayer-action": "bitstream-analysis",
@@ -699,7 +699,7 @@ export class BitstreamAnalysisService {
     signal: AbortSignal,
   ): Promise<AnalysisOutput> {
     const base = new URL(source.info.source!.url, location.href);
-    base.pathname += "/bitstream-analysis/requests";
+    base.pathname = base.pathname.replace(/\/content$/,'') + '/bitstream-analysis/requests';
     const headers = {
       "content-type": "application/json",
       "x-voidplayer-action": "bitstream-analysis",

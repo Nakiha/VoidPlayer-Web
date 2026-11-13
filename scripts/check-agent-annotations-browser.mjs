@@ -32,7 +32,7 @@ try {
   const cookie = identity.headers.get('set-cookie').split(';')[0];
   const headers = { cookie, origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'annotation' };
   const entries = (await (await fetch(base + '/api/library/browse?recursive=1')).json()).entries;
-  const media = entries.map(entry => ({ id: `snapshot-${entry.name[0]}`, name: entry.name, size: entry.size, lastModified: entry.lastModified, codec: probe.codec_tag_string, decoder: 'webcodecs', width: probe.width, height: probe.height, durationUs: Math.round(Number(probe.duration) * 1e6), firstPtsUs: Math.round(Number(probe.start_time) * 1e6), source: { kind: 'library', id: entry.id, url: `${base}/api/media/${entry.id}?v=${entry.version}` } }));
+  const media = entries.map(entry => ({ id: `snapshot-${entry.name[0]}`, name: entry.name, size: entry.size, lastModified: entry.lastModified, codec: probe.codec_tag_string, decoder: 'webcodecs', width: probe.width, height: probe.height, durationUs: Math.round(Number(probe.duration) * 1e6), firstPtsUs: Math.round(Number(probe.start_time) * 1e6), source: { kind: 'library', id: entry.id, url: `${base}/api/media/${entry.id}/content?v=${entry.version}` } }));
   const a = media.find(item => item.name === 'A.mp4'), b = media.find(item => item.name === 'B.mp4');
   const document = { schema: 'voidplayer-workspace', version: 1, name: 'Agent integration', generatedAt: new Date().toISOString(), serverUrl: base, positionUs: 0, tracks: [{ slot: 'A', mediaId: a.id, offsetUs: 0 }], media, marks: [], viewport: {} };
   const shared = await fetch(base + '/api/workspaces/share', { method: 'POST', headers: { ...headers, 'x-voidplayer-action': 'workspace' }, body: JSON.stringify({ name: 'Agent integration', document }) });

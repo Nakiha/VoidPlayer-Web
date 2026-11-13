@@ -31,7 +31,7 @@ test('disposing an FFmpeg index session aborts its HTTP subscriber', async () =>
     });
   }) as typeof fetch;
   const session = new FfmpegMediaIndexSession({
-    url: 'http://localhost/api/media/' + 'a'.repeat(24) + '?v=1', identity, firstPtsUs: 0, durationUs: 40_000, sink: sink(),
+    url: 'http://localhost/api/media/' + 'a'.repeat(24) + '/content?v=1', identity, firstPtsUs: 0, durationUs: 40_000, sink: sink(),
   });
   try {
     await new Promise(resolve => setImmediate(resolve));

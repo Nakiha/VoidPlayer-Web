@@ -494,7 +494,7 @@ try {
     const root = listing.entries[0];
     const history = Array.from({length:40}, (_, i) => ({name:`recent-${i}.mp4`, size:1000, lastModified:1000+i,
       libraryId:(i+100).toString(16).padStart(24,'0'), libraryRootId:root.rootId}));
-    await page.route('**/api/media/*/metadata', route => {
+    await page.route('**/api/media/*', route => {
       const id = new URL(route.request().url()).pathname.split('/')[3], item = history.find(item => item.libraryId === id);
       return item ? route.fulfill({status:200, json:{...item, id, root:root.root, rootId:root.rootId, state:'ready'}}) : route.continue();
     });
@@ -2421,12 +2421,12 @@ try {
   await check('stalled incoming loads can be cancelled or superseded without locking the add buttons', async page => {
     const entries = listing.entries.filter(entry => entry.name === 'same.mp4');
     const stalled = [];
-    await page.route(`**/api/media/${encodeURIComponent(entries[0].id)}?*`, route => { stalled.push(route); });
+    await page.route(`**/api/media/${encodeURIComponent(entries[0].id)}/content?*`, route => { stalled.push(route); });
     await page.locator('#toggle-sources').click();
     await browseLibrary(page, entries[0].rootId);
     const row = entry => page.locator(`#source-list .source-row[data-source-key=${JSON.stringify(sourceKey(entry,entry.id))}]`);
     const add = entry => row(entry).locator('.source-open');
-    const nextRequest = () => page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[0].id)}`);
+    const nextRequest = () => page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[0].id)}/content`);
     try {
       let request = nextRequest();
       await add(entries[0]).click();
@@ -2548,9 +2548,9 @@ try {
       // Workspace restoration reports loading in its badge and publishes only ready source frames.
       const workspace = await page.evaluate(() => window.voidPlayer.exportWorkspace());
       await page.locator('#remove-track-A').click();
-      const restoring = [], restoreRoute = `**/api/media/${encodeURIComponent(entries[1].id)}?*`;
+      const restoring = [], restoreRoute = `**/api/media/${encodeURIComponent(entries[1].id)}/content?*`;
       await page.route(restoreRoute, route => restoring.push(route));
-      const restoreRequest = page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[1].id)}`);
+      const restoreRequest = page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[1].id)}/content`);
       await page.evaluate(document => { window.pendingRestore = window.voidPlayer.importWorkspace(document); }, workspace);
       await page.locator('#source-activity-track-A[data-state=pending]').waitFor();
       assert.equal(await page.locator('#source-activity-track-A').getAttribute('data-state'), 'pending');
@@ -2716,8 +2716,8 @@ try {
     const original = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');
     const missingId = '0'.repeat(24), offlineId = '1'.repeat(24);
     let online = false, missingRequests = 0;
-    page.on('request', request => { if (new URL(request.url()).pathname === `/api/media/${missingId}/metadata`) missingRequests++; });
-    await page.route(`**/api/media/${offlineId}/metadata`, route => online
+    page.on('request', request => { if (new URL(request.url()).pathname === `/api/media/${missingId}`) missingRequests++; });
+    await page.route(`**/api/media/${offlineId}`, route => online
       ? route.fulfill({status:200, json:{...original, id:offlineId, name:'offline-reference.mp4'}})
       : route.fulfill({status:503, body:'{}'}));
     const history = [

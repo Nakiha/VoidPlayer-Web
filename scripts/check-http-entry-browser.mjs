@@ -34,7 +34,7 @@ try{
  const admin=await context.newPage();
  await admin.goto(remote+'/admin#caches');await chooseTestGuest(admin);await admin.locator('#cache-total-count').filter({hasText:'0 个缓存'}).waitFor();assert.equal(new URL(admin.url()).protocol,'http:');
  await admin.screenshot({path:`/tmp/voidplayer-http-admin-${name}.png`});
- for(const p of [port,alias]){const base=`http://${address}:${p}`;assert.equal((await page.request.get(base+'/llms.txt')).status(),200);assert.equal((await page.request.get(base+'/api/library')).status(),200);assert.equal((await page.request.get(base+'/admin')).status(),200);}
+ for(const p of [port,alias]){const base=`http://${address}:${p}`;assert.equal((await page.request.get(base+'/llms.txt')).status(),200);assert.equal((await page.request.get(base+'/api/library/browse?recursive=1&limit=200')).status(),200);assert.equal((await page.request.get(base+'/admin')).status(),200);}
  // Accepted and rejected certificate states use separate disposable contexts.
  const accepted=await pageFor(true);await accepted.page.goto(remote+original);await accepted.page.waitForURL(secure+original);await accepted.page.waitForFunction(()=>window.voidPlayer);assert.equal(await accepted.page.evaluate(()=>isSecureContext),true);
  assert.equal(await accepted.page.evaluate(()=>performance.getEntriesByType('navigation')[0].nextHopProtocol),'h2');

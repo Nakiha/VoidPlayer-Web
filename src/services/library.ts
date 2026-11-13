@@ -24,7 +24,7 @@ export interface LibraryEntry {
 }
 
 export function mediaUrl(id: string, version?: string): string {
-  return `/api/media/${encodeURIComponent(id)}${version ? `?v=${encodeURIComponent(version)}` : ''}`;
+  return `/api/media/${encodeURIComponent(id)}/content${version ? `?v=${encodeURIComponent(version)}` : ''}`;
 }
 
 export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpenProgress, signal?: AbortSignal, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
@@ -63,12 +63,12 @@ export async function fetchLibraryPage(query: LibraryQuery, signal?: AbortSignal
   return page;
 }
 export async function fetchLibraryItem(id: string, signal?: AbortSignal): Promise<LibraryEntry | null> {
-  const response = await fetch(`${mediaUrl(id)}/metadata`, { cache: 'no-store', signal });
+  const response = await fetch(`/api/media/${encodeURIComponent(id)}`, { cache: 'no-store', signal });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`无法读取媒体库引用（HTTP ${response.status}）。`);
   return response.json();
 }
 export async function requestLibraryScan(action: 'refresh' | 'cancel') {
-  const response = await fetch(`/api/library/scan?action=${action}`, { method: 'POST', headers: { 'x-voidplayer-action': 'scan' }, signal: AbortSignal.timeout(5000) });
+  const response = await fetch('/api/library/scan', { method: 'POST', headers: { 'x-voidplayer-action': 'scan','content-type':'application/json' }, body:JSON.stringify({action}), signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error('无法操作媒体扫描，请检查服务连接。');
 }

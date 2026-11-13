@@ -113,22 +113,22 @@ test('shared workspaces replace immutable snapshots with writable restart-safe l
   finally { store.close(); }
 }));
 
-test('old share API creates writable workspaces, anonymous reads do not create identities', () => temporary(async root => {
+test('canonical sharing creates writable workspaces and removed aliases return 404', () => temporary(async root => {
   await fs.mkdir(path.join(root,'media'));
   const config=await loadConfig(['--folder','media'],'production',root); config.port=0; config.logsDir=null;
   const service=await startService(config,false), base=`http://127.0.0.1:${(service.server.address() as {port:number}).port}`;
   try {
-    const snapshot=document(); snapshot.media[0].source={kind:'library',id:'sample',url:base+'/api/media/sample?v=0123456789abcdef01234567'};
+    const snapshot=document(); snapshot.media[0].source={kind:'library',id:'sample',url:base+'/api/media/sample/content?v=0123456789abcdef01234567'};
     const guestResponse=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'x-voidplayer-action':'identity','content-type':'application/json'},body:JSON.stringify({guest:true})});
     await guestResponse.json();
     const cookie=guestResponse.headers.get('set-cookie')!.split(';')[0];
     const headers={cookie,origin:base,'x-voidplayer-action':'workspace','content-type':'application/json'};
-    const create=(origin:string)=>fetch(base+'/api/shares',{method:'POST',headers:{...headers,origin},body:JSON.stringify(snapshot)});
+    const create=(origin:string)=>fetch(base+'/api/workspaces/share',{method:'POST',headers:{...headers,origin},body:JSON.stringify({name:'共享工作区',document:snapshot})});
     assert.equal((await create('https://other.test')).status,403);
     const response=await create(base); assert.equal(response.status,201); assert.equal(response.headers.get('set-cookie'),null);
-    const shared=await response.json(); assert.equal(shared.path,`/?workspace=${shared.id}`);
-    const read=await fetch(base+'/api/shares/'+shared.id); assert.equal(read.status,200);assert.equal((await read.json()).document.positionUs,snapshot.positionUs);assert.equal(read.headers.get('set-cookie'),null);
-    const edited=await fetch(base+'/api/shares/'+shared.id,{method:'PUT',headers:{...headers,'if-match':'"1"'},body:JSON.stringify({name:'修改',document:{...snapshot,positionUs:800}})});assert.equal(edited.status,200);
+    const shared=await response.json(); assert.ok(shared.id);
+    const read=await fetch(base+'/api/workspaces/'+shared.id); assert.equal(read.status,200);assert.equal((await read.json()).document.positionUs,snapshot.positionUs);assert.equal(read.headers.get('set-cookie'),null);
+    const edited=await fetch(base+'/api/workspaces/'+shared.id,{method:'PUT',headers:{...headers,'if-match':'"1"'},body:JSON.stringify({name:'修改',document:{...snapshot,positionUs:800}})});assert.equal(edited.status,200);
     assert.equal((await fetch(base+'/api/workspaces/'+shared.id).then(r=>r.json())).document.positionUs,800);
     assert.equal((await fetch(base+'/api/shares/00000000-0000-0000-0000-000000000000')).status,404);
     assert.equal((await (await fetch(base+'/api/workspaces',{headers:{cookie}})).json()).entries.length,1);

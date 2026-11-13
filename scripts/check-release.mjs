@@ -103,7 +103,7 @@ try {
   const portableData = path.join(folder, 'data');
   const portableConfig = JSON.parse(await readFile(path.join(portableData, 'voidplayer.config.json'), 'utf8'));
   assert.deepEqual(portableConfig.mediaRoots, []);
-  assert.equal((await (await fetch(portableBase + '/api/library')).json()).entries.length, 0);
+  assert.equal((await (await fetch(portableBase + '/api/library/browse?recursive=1&limit=200')).json()).entries.length, 0);
   const health = await fetch(portableBase + '/api/health');
   assert.equal((await health.json()).actor, null); assert.equal(health.headers.get('set-cookie'), null);
   assert.deepEqual((await (await fetch(portableBase + '/api/users')).json()).users, []);
@@ -140,7 +140,7 @@ try {
   const guideBase = `http://127.0.0.1:${guidePort}`;
   assert.equal((await fetch(guideBase)).status, 200);
   assert.equal(await (await fetch(guideBase + '/api/connection/certificate')).text(), ca);
-  assert.equal((await fetch(guideBase + '/api/library')).status, 200);
+  assert.equal((await fetch(guideBase + '/api/library/browse?recursive=1&limit=200')).status, 200);
   await verifyAgentEntry(guideBase);await verifyAgentEntry(`http://127.0.0.1:${securePort}`);
   await verifyAgentEntry(secureBase,(url,options={})=>httpFetch(url,{...options,ca,servername:'voidplayer.test',headers:{...options.headers,host:`voidplayer.test:${securePort}`}}));
   assert.equal((await fetch(`http://127.0.0.1:${securePort}/llms.txt`)).status, 200);
@@ -185,7 +185,7 @@ try {
   assert.equal(adminStatus.version, manifest.appVersion); assert.equal(adminStatus.identity.id, 'local');
   const wasm = await fetch(base + '/vendor/voidplayer-core/voidplayer-core.wasm', { method: 'HEAD' }); assert.equal(wasm.status, 200); assert.match(wasm.headers.get('content-type'), /application\/wasm/);
   await waitForEntries(entries => entries.some(entry => entry.name === '子目录/sample.mp4' && entry.state === 'ready'));
-  const listing = await (await fetch(base + '/api/library')).json(); assert.equal(listing.entries.length, 1);
+  const listing = await (await fetch(base + '/api/library/browse?recursive=1&limit=200')).json(); assert.equal(listing.entries.length, 1);
   assert.match(listing.entries[0].version, /^[0-9a-f]{24}$/);
   assert.equal((await readFile(path.join(data, 'library.sqlite'))).subarray(0, 16).toString(), 'SQLite format 3\0');
   assert.throws(() => run(['--data-dir', data, '--port', String(port)]), /另一个实例/, 'second process cannot write the same index');
@@ -199,7 +199,7 @@ try {
   const workspaceCookie = identityResponse.headers.get('set-cookie').split(';')[0];
   const workspaceTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base, cookie: workspaceCookie } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };
   const savedWorkspace = await verifySavedWorkspaces(workspaceTransport, listing.entries[0], base + '/', workspaceActor.id);
-  const url = base + '/api/media/' + listing.entries[0].id + '?v=' + listing.entries[0].version;
+  const url = base + '/api/media/' + listing.entries[0].id + '/content?v=' + listing.entries[0].version;
   const head = await fetch(url, { method: 'HEAD' }); assert.equal(head.headers.get('content-length'), String(bytes.length)); assert.equal((await head.arrayBuffer()).byteLength, 0);
   await Promise.all(Array.from({ length: 12 }, async (_, i) => {
     const start = i * 10007, end = start + 1023;
@@ -222,7 +222,9 @@ try {
   await writeFile(coldFlv, syntheticFlv());
   let flvEntry;
   await waitForEntries(entries => !!(flvEntry = entries.find(e => e.name.endsWith('cold-index.flv') && e.state === 'ready')));
-  const coldIndexUrl = `${base}/api/media/${flvEntry.id}/frame-index?v=${flvEntry.version}&kind=flv&build=1`;
+  const coldIndexUrl = `${base}/api/media/${flvEntry.id}/frame-index?v=${flvEntry.version}&kind=flv`;
+  const startedIndex=await fetch(coldIndexUrl.replace('/frame-index?','/frame-index/build?'),{method:'POST',headers:{origin:base,'x-voidplayer-action':'frame-index','content-type':'application/json'},body:'{}'});
+  assert.equal(startedIndex.status,202);
   const coldResponse = await fetch(coldIndexUrl);
   assert.equal(coldResponse.status, 200, 'packaged cold FLV build succeeds');
   const coldIndex = await coldResponse.json();
@@ -281,7 +283,7 @@ try {
   }
   const unverified = await waitForStorage(['partial', 'offline'], 'ESTORAGEUNVERIFIED');
   assert.ok(unverified.errors.some(error => error.code === 'ESTORAGEUNVERIFIED'));
-  assert.equal((await (await fetch(base + '/api/library')).json()).entries[0].id, listing.entries[0].id);
+  assert.equal((await (await fetch(base + '/api/library/browse?recursive=1&limit=200')).json()).entries[0].id, listing.entries[0].id);
   assert.equal((await fetch(url)).status, 404);
   await verifyWorkspaceRestore(workspaceTransport, savedWorkspace);
   await stop();
@@ -306,7 +308,7 @@ try {
   assert.equal(await readFile(configPath, 'utf8'), original);
   assert.deepEqual(await reportFiles(), [uploadedName]); assert.deepEqual(await readFile(path.join(data, 'logs', uploadedName)), uploadedBytes);
   await verifyWorkspaceRestore(workspaceTransport, savedWorkspace);
-  const restored = await (await fetch(base + '/api/library')).json();
+  const restored = await (await fetch(base + '/api/library/browse?recursive=1&limit=200')).json();
   assert.equal(restored.entries.length, 1, 'restored index stays queryable while storage is offline');
   assert.equal(restored.entries[0].id, listing.entries[0].id);
   assert.equal(restored.entries[0].version, listing.entries[0].version);
@@ -315,7 +317,7 @@ try {
   await renameReleased(offlineMedia, media);
   await writeFile(configPath, JSON.stringify({ ...JSON.parse(original), adminUsers: ['release.test'] }, null, 2) + '\n');
   base = await start(port, {}, ['--host', '0.0.0.0']);
-  assert.equal((await fetch(base + '/api/library')).status, 200);
+  assert.equal((await fetch(base + '/api/library/browse?recursive=1&limit=200')).status, 200);
   const selected = await fetch(base + '/api/identity', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ name: 'release.test' }) });
   const selectedActor = (await selected.json()).actor;
   const selectedCookie = selected.headers.get('set-cookie').split(';')[0];

@@ -11,7 +11,7 @@ import { MediaLibraryIndex, fileVersion } from './library.ts';
 const MiB = 1024 * 1024;
 
 
-type Job = { result: MeasurementResult; controller: AbortController; timer: ReturnType<typeof setTimeout>; at: number; reserved: number; offset: number; preparing: boolean; file?: string; data?: Buffer; done: Promise<void>; resolve: () => void };
+type Job = { result: MeasurementResult; controller: AbortController; timer: ReturnType<typeof setTimeout>; at: number; reserved: number; offset: number; preparing: boolean; file?: string; fingerprint?: string; data?: Buffer; done: Promise<void>; resolve: () => void };
 export const measurementActive = (r: MeasurementResult) => ['preparing', 'running', 'stopping'].includes(r.state);
 
 /** One bounded, explicitly started task per server. Results live for this process
@@ -48,6 +48,7 @@ export class Measurements {
   private async prepare(job: Job) {
     try {
       if (job.result.media) {
+        job.fingerprint = this.library.fingerprint(job.result.media.id,job.result.media.version);
         job.file = await this.library.resolve(job.result.media.id, job.result.media.version) ?? undefined;
         if (!job.file) throw new Error('媒体已离线或发生改变，请重新选择。');
       } else if (job.result.kind === 'download') job.data = randomBytes(MiB);
@@ -102,7 +103,7 @@ export class Measurements {
     const handle = await fs.open(job.file!, 'r');
     try {
       const stat = await handle.stat();
-      if (!stat.isFile() || fileVersion(stat) !== media.version) throw new Error('媒体已改变，停止测量。');
+      if (!stat.isFile() || fileVersion(stat) !== job.fingerprint) throw new Error('媒体已改变，停止测量。');
       const data = Buffer.allocUnsafe(length);
       let read = 0;
       while (read < length && !job.controller.signal.aborted) {
@@ -111,7 +112,7 @@ export class Measurements {
         read += part.bytesRead;
       }
       job.controller.signal.throwIfAborted();
-      if (fileVersion(await handle.stat()) !== media.version) throw new Error('媒体已改变，停止测量。');
+      if (fileVersion(await handle.stat()) !== job.fingerprint) throw new Error('媒体已改变，停止测量。');
       return data;
     } finally { await handle.close(); }
   }

@@ -86,7 +86,7 @@ try {
     const rangeTask=(async()=>{
       const entry=(await library.list()).entries.find(e=>e.name==='h264_9s_1920x1080.mp4');
       while(probe){
-        const at=performance.now(),response=await fetch(new URL(`/api/media/${entry.id}?v=${entry.version}`,url),{headers:{range:'bytes=0-65535'},signal:AbortSignal.timeout(30000)});
+        const at=performance.now(),response=await fetch(new URL(`/api/media/${entry.id}/content?v=${entry.version}`,url),{headers:{range:'bytes=0-65535'},signal:AbortSignal.timeout(30000)});
         assert.equal(response.status,206);assert.equal((await response.arrayBuffer()).byteLength,65536);
         ranges.push(performance.now()-at);await sleep(100);
       }

@@ -31,7 +31,7 @@ test('real cached AVI/PS packets match ffprobe and shared statistics; MP4/FLV/TS
   await library.refresh();
   for (const entry of library.browse().entries) {
     await t.test(entry.name, async () => {
-      const before = await (await fetch(`${base}/api/media/${entry.id}/info?v=${entry.version}`)).json(); assert.equal(before.technicalState, 'not-probed');
+      const before = await (await fetch(`${base}/api/media/${entry.id}?v=${entry.version}`)).json(); assert.equal(before.technicalState, 'not-probed');
       if (!/\.(avi|mpg)$/.test(entry.name)) { assert.deepEqual(before.indexes, []); return; }
       // Explicit test preparation builds the cache. No semantic GET invokes this.
       await library.indexJobs.buildIndex({ id: entry.id, version: entry.version!, size: entry.size, filePath: path.join(media, entry.name), epoch: 0, identity });

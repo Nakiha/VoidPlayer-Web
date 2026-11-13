@@ -62,7 +62,7 @@ test('HTTP index failures preserve server reasons and status through the MP4 ope
     status: 400, headers: { 'content-type': 'application/json' },
   })) as typeof fetch;
   try {
-    const url = `http://localhost/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}`;
+    const url = `http://localhost/api/media/${'a'.repeat(24)}/content?v=${'b'.repeat(24)}`;
     const client = new MediaIndexClient(url, 'mp4-playback', 4096, 1000, true, MP4_PLAYBACK_MEDIA_INDEX_IDENTITY);
     try {
       assert.equal(await client.read(), null);

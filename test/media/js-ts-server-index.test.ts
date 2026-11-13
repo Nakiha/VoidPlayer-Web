@@ -70,9 +70,9 @@ test('JS TS library index cold build, joined clients and durable warm restart re
     library.indexJobs.startBuild=(...args)=>{starts++;const handle=startBuild(...args);buildIds.add(handle.buildId);return handle;};
     const handler=server!.listeners('request')[0] as (req:any,res:any)=>void;
     server!.removeAllListeners('request');server!.on('request',(req,res)=>{
-      if(req.headers.range)ranges++; if(req.method==='POST')uploads++; handler(req,res);
+      if(req.headers.range)ranges++; if(req.method==='POST'&&!req.url?.includes('/frame-index/build?'))uploads++; handler(req,res);
     });
-    const sourceUrl=`${base}/api/media/${entry.id}?v=${entry.version}`;
+    const sourceUrl=`${base}/api/media/${entry.id}/content?v=${entry.version}`;
     const client=()=>{const c=new MediaIndexClient(sourceUrl,'js-ts',64*1024*1024,120000,true,JS_TS_MEDIA_INDEX_IDENTITY);clients.push(c);return c;};
     const [a,b]=await Promise.all([client().read(),client().read()]);
     assert.ok(a);assert.ok(b);assert.deepEqual(a,b);
@@ -98,13 +98,13 @@ test('JS TS library index cold build, joined clients and durable warm restart re
     const restarted=library.indexJobs.startBuild.bind(library.indexJobs);
     library.indexJobs.startBuild=(...args)=>{restartedBuilds++;return restarted(...args);};
     const restartedBase=await startServer();
-    const c=new MediaIndexClient(`${restartedBase}/api/media/${entry.id}?v=${entry.version}`,'js-ts',64*1024*1024,120000,true,JS_TS_MEDIA_INDEX_IDENTITY);clients.push(c);
+    const c=new MediaIndexClient(`${restartedBase}/api/media/${entry.id}/content?v=${entry.version}`,'js-ts',64*1024*1024,120000,true,JS_TS_MEDIA_INDEX_IDENTITY);clients.push(c);
     assert.deepEqual(await c.read(),a);assert.equal(restartedBuilds,0);
     const damaged=structuredClone(index);damaged.packets.splice(1,1);damaged.packets.forEach((p,i)=>p.au=i);damaged.completeness.packets=damaged.packets.length;
     const db=Reflect.get(library.frameIndexes,'db');
     db.prepare("UPDATE media_index_batches SET payload=? WHERE media_id=? AND media_version=? AND kind='js-ts'").run(JSON.stringify(damaged),entry.id,entry.version);
     assert.equal(library.frameIndexes.has(entry.id,entry.version!,'js-ts',JS_TS_MEDIA_INDEX_IDENTITY),false,'stored seal rejects self-consistent dropped/renumbered payload after restart');
-    const rebuilt=new MediaIndexClient(`${restartedBase}/api/media/${entry.id}?v=${entry.version}`,'js-ts',64*1024*1024,120000,true,JS_TS_MEDIA_INDEX_IDENTITY);clients.push(rebuilt);
+    const rebuilt=new MediaIndexClient(`${restartedBase}/api/media/${entry.id}/content?v=${entry.version}`,'js-ts',64*1024*1024,120000,true,JS_TS_MEDIA_INDEX_IDENTITY);clients.push(rebuilt);
     assert.deepEqual(await rebuilt.read(),a);assert.equal(restartedBuilds,1,'damaged persisted documents rebuild from the actual file');
     const upload=new TextEncoder().encode(JSON.stringify({epoch,index}));
     await assert.rejects(library.indexJobs.call('put',{id:entry.id,version:entry.version!,size:entry.size,identity:JS_TS_MEDIA_INDEX_IDENTITY,bytes:upload}),/只能由服务端/);

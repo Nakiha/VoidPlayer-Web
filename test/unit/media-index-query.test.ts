@@ -41,7 +41,7 @@ async function fixture(t: TestContext) {
   const db = openIndexDatabase(database);
   t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); db.close(); await library.close(); await rm(dir, { recursive: true, force: true }); });
   const endpoint = `${base}/api/media/${entry.id}/index-query?v=${entry.version}&${selection}`;
-  const info = `${base}/api/media/${entry.id}/info?v=${entry.version}`;
+  const info = `${base}/api/media/${entry.id}?v=${entry.version}`;
   const put = (count = 3, extra = {}, untimed = false) => library.frameIndexes.put(entry.id, entry.version!, entry.size,
     { ...metadata(entry.size), count, records: recordBytes(count, 0, untimed).toString('base64'), indexIntegrity: 'complete', ...extra }, library.frameIndexes.epoch, identity);
   const read = async (url = endpoint) => { const res = await fetch(url); const body = await res.json(); assert.equal(res.status, 200, JSON.stringify(body)); return body; };

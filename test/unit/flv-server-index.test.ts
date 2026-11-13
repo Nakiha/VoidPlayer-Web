@@ -53,10 +53,10 @@ for(const outcome of ['recovered','prefix'] as const) test(`cold library FLV ${o
  const server=createMediaServer({roots:[media],library,onLog(){}});
  let ranges=0,uploads=0,buildRequests=0;
  const handler=server.listeners('request')[0];server.removeAllListeners('request');
- server.on('request',(req,res)=>{if(req.headers.range)ranges++;if(req.method==='POST'&&req.url?.includes('frame-index'))uploads++;if(req.url?.includes('build=1'))buildRequests++;handler(req,res);});
+ server.on('request',(req,res)=>{if(req.headers.range)ranges++;if(req.method==='POST'&&req.url?.includes('frame-index?'))uploads++;if(req.method==='POST'&&req.url?.includes('/frame-index/build?'))buildRequests++;handler(req,res);});
  await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
  const base=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
- const input={url:`${base}/api/media/${entry.id}?v=${entry.version}`,size:entry.size};
+ const input={url:`${base}/api/media/${entry.id}/content?v=${entry.version}`,size:entry.size};
  const first=new FlvEngine(input),joined=new FlvEngine(input);
  const handles=new Set<string>(),startBuild=library.indexJobs.startBuild.bind(library.indexJobs);
  library.indexJobs.startBuild=(request,options)=>{const handle=startBuild(request,options);handles.add(handle.buildId);return handle;};
@@ -84,10 +84,11 @@ test('local FLV scans without a service; a failed library build never silently s
  let mediaReads=0;
  globalThis.fetch=async(input)=>{
   const url=new URL(String(input));
-  if(url.pathname.endsWith('/frame-index')){assert.equal(url.searchParams.get('build'),'1');return Response.json({epoch:0,index:null});}
+  if(url.pathname.endsWith('/build'))return Response.json({state:'accepted'},{status:202});
+  if(url.pathname.endsWith('/frame-index')){assert.equal(url.searchParams.has('build'),false);return Response.json({epoch:0,index:null});}
   mediaReads++;return new Response(bytes.subarray(0,65536),{status:206,headers:{'content-range':`bytes 0-65535/${bytes.length}`,'content-length':'65536'}});
  };
- const remote=new FlvEngine({url:'http://localhost/api/media/'+'a'.repeat(24)+'?v=1',size:bytes.length});
+ const remote=new FlvEngine({url:'http://localhost/api/media/'+'a'.repeat(24)+'/content?v=1',size:bytes.length});
  try{await remote.prepare();await assert.rejects(remote.completeIndex(),/服务端 FLV 索引未能完成/);assert.equal(mediaReads,1);assert.equal(remote.index.packets.length,1);}finally{remote.close();globalThis.fetch=original;}
 });
 
@@ -135,4 +136,27 @@ test('cold, warm and restarted FLV analysis subscribers accept complete manifest
    assert.equal(await library.indexJobs.call('has',{id:entry.id,version:entry.version!,identity}),true,'subscriber cancellation retains the shared cache');
   }
  } finally {await library.close();await rm(dir,{recursive:true,force:true});}
+});
+
+
+test('renamed assets keep versioned content readable and rebuild against their new filesystem fingerprint',async()=>{
+  const dir=await mkdtemp(path.join(tmpdir(),'vp-moved-flv-'));await writeFile(path.join(dir,'clip.flv'),syntheticFlv());
+  const library=new MediaLibraryIndex([{id:'video',path:dir}],{watch:false});await library.refresh();
+  const entry=library.browse().entries[0],server=createMediaServer({roots:[dir],library,onLog(){}});
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const base=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
+  let engine:FlvEngine|undefined;
+  try {
+    const moved=await library.mutateFiles({operation:'rename',source:{rootId:'video',path:'clip.flv',kind:'file',version:entry.version},name:'renamed.flv'});
+    assert.equal(moved.results[0].ok,true);assert.equal(library.metadata(entry.id)?.version,entry.version);
+    assert.notEqual(library.fingerprint(entry.id),entry.version);
+    const url=`${base}/api/media/${entry.id}/content?v=${entry.version}`;
+    const descriptor=await (await fetch(url.replace('/content?','?'))).json();
+    assert.equal(descriptor.version,entry.version);assert.equal(descriptor.schema,'voidplayer-media');assert.equal(descriptor.cacheQuery.version,1);
+    const content=await fetch(url);assert.equal(content.status,200);assert.deepEqual(Buffer.from(await content.arrayBuffer()),syntheticFlv());
+    assert.equal((await fetch(url.replace('/content?','/frame-index?')+'&build=1')).status,400,'GET cannot start a build');
+    assert.equal(await library.indexJobs.call('has',{id:entry.id,version:entry.version!,identity:FLV_MEDIA_INDEX_IDENTITY}),false);
+    engine=new FlvEngine({url,size:entry.size});await engine.prepare();assert.equal((await engine.completeIndex()).indexSource,'server');
+    assert.equal(engine.index.packets.length,4);
+  } finally {engine?.close();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));await library.close();await rm(dir,{recursive:true,force:true});}
 });

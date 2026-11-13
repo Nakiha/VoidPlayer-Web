@@ -177,7 +177,7 @@ test('a real failed server index rejects startup continuation instead of yieldin
   let timer: ReturnType<typeof holdBackgroundStart> | undefined;
   let iterator: AsyncGenerator<DecodedFrame> | undefined;
   try {
-    h = await harness('st', { url: `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}`, size: bytes.length });
+    h = await harness('st', { url: `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${'a'.repeat(24)}/content?v=${'b'.repeat(24)}`, size: bytes.length });
     timer = holdBackgroundStart(); h.releaseReplies(); checkPicture(await h.source.frameAt(0), 0);
     await bounded(indexRequested.promise, 'real server index was not requested');
     iterator = h.source.framesFollowing!(0);

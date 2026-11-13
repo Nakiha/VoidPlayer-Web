@@ -1,7 +1,12 @@
-import { test } from 'node:test';
+import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { openFFmpegContainerFromUrl } from '../../src/media/decoding/ffmpeg-media.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
+
+const networkFetch=globalThis.fetch;
+beforeEach(()=>{globalThis.fetch=((input:RequestInfo|URL,init?:RequestInit)=>String(input).includes('/frame-index/build?')
+  ? Promise.resolve(Response.json({state:'accepted'},{status:202})):networkFetch(input,init)) as typeof fetch;});
+afterEach(()=>{globalThis.fetch=networkFetch;});
 
 const description = rgbaDescription(1, 1);
 const originTicks = 90_000;
@@ -88,7 +93,7 @@ class DelayedIndexWorker {
 
 function openWith(worker: DelayedIndexWorker) {
   return openFFmpegContainerFromUrl(
-    'http://localhost/api/media/' + 'a'.repeat(24) + '?v=1',
+    'http://localhost/api/media/' + 'a'.repeat(24) + '/content?v=1',
     { name: 'clip.ts', size: 1_000, lastModified: 0 },
     {
       glueURL: 'https://player.test/core.js',
@@ -339,11 +344,12 @@ for (const outcome of ['acknowledge', 'reset', 'error', 'dispose'] as const) {
   test(`transport coverage waits for decoder import (${outcome})`, { timeout: 2_000 }, async () => {
     const originalFetch = globalThis.fetch;
     let controller!: ReadableStreamDefaultController<Uint8Array>;
-    globalThis.fetch = (async () => new Response(new ReadableStream<Uint8Array>({
+    globalThis.fetch = (async (input:RequestInfo|URL) => String(input).includes('/frame-index/build?')?Response.json({state:'accepted'},{status:202}):new Response(new ReadableStream<Uint8Array>({
       start(value) { controller = value; },
     }), { headers: { 'content-type': 'application/x-ndjson' } })) as typeof fetch;
     const worker = new DelayedIndexWorker(0);
     const source = await openWith(worker);
+    await new Promise<void>(resolve=>setImmediate(resolve));
     try {
       for (const event of indexStreamEvents()) controller.enqueue(new TextEncoder().encode(JSON.stringify(event) + '\n'));
       await new Promise(resolve => setImmediate(resolve));

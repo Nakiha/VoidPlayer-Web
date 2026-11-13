@@ -47,7 +47,7 @@ Tasks: ${Object.entries(AGENT_TASKS).map(([key, url]) => `[${key}](${url})`).joi
 
 const library = `# Library and original media
 
-GET /api/library lists configured mounts.
+GET /api/library/browse lists configured mounts and a bounded directory page.
 
 GET /api/library/browse?recursive=1&limit=100&offset=0
 Optional query: search (case-insensitive path substring), root (root ID),
@@ -56,13 +56,13 @@ The response contains entries, total, nextOffset, revision, ready and scanning.
 Entries contain id, name (relative path), root/rootId, size (bytes), lastModified
 (Unix milliseconds), version and state. IDs/versions are opaque. Prefer state=ready.
 GET /api/library/scan explains scanning and root errors. Do not trigger another scan
-just because a listing is incomplete. The legacy /api/library is capped at 5000.
+just because a listing is incomplete. Continue using nextOffset and the same revision.
 
 Follow nextOffset until null using unchanged filters and the first page's revision.
 On 409 discard accumulated pages and restart offset=0 without revision.
 Directory pages additionally expose directories and moreDirectories.
 
-GET /api/media/ID/info?v=VERSION returns validated file properties and up to 16
+GET /api/media/ID?v=VERSION returns validated file properties and up to 16
 cached stream identities (nextOffset continues the inventory). It never opens
 media bytes, probes codecs, migrates legacy caches or builds an index. The
 inventory covers cached streams only, not all streams in the source. Technical
@@ -122,12 +122,12 @@ cannot control any GUI or playhead and reject build=1 instead of starting work.
 Example (BASE is the service origin; ID/VERSION come from browse):
 
     curl -fsS "$BASE/api/library/browse?recursive=1&search=clip&limit=20"
-    curl -fsS "$BASE/api/media/$ID/info?v=$VERSION"
+    curl -fsS "$BASE/api/media/$ID?v=$VERSION"
     curl -fsS "$BASE/api/media/query-schema"
     curl -fsS --get "$BASE/api/media/$ID/index-query" --data-urlencode "v=$VERSION" --data-urlencode "kind=flv" --data-urlencode "stream=video:0" --data-urlencode "schema=3" --data-urlencode "indexer=flv-demux-v3"
     curl -fsS --get "$BASE/api/media/$ID/index-query" --data-urlencode "v=$VERSION" --data-urlencode "kind=ffmpeg" --data-urlencode "stream=video:0" --data-urlencode "schema=3" --data-urlencode "indexer=$BUILD" --data-urlencode "view=records" --data-urlencode "startTick=$START" --data-urlencode "endTick=$END"
 
-GET /api/media/ID?v=VERSION&download=1 returns original bytes, not a transcode.
+GET /api/media/ID/content?v=VERSION&download=1 returns original bytes, not a transcode.
 HEAD returns Content-Length, Content-Type, ETag and Accept-Ranges without a body.
 Range: bytes=0-1048575 returns 206 plus Content-Range; single/suffix ranges work,
 multipart ranges do not. Stream large files. To resume, retain v and validate
@@ -164,11 +164,9 @@ and reconcile; do not blindly overwrite. Deletion also uses If-Match.
 
 POST /api/workspaces/share accepts {id?,name,document}; supply If-Match for an
 existing workspace. It creates or updates a live, editable workspace with a shared
-annotation space. POST /api/shares is a compatibility entry accepting a workspace
-document and returning path /?workspace=ID. GET /api/shares/LEGACY_ID resolves old
-links into editable workspaces. These are not immutable snapshots.
-Sharing never uploads local media. Existing reads may migrate legacy workspace
-records/seed annotations; capability discovery itself never does this.
+annotation space. Share links use /?workspace=ID. Removed share/review HTTP aliases no longer resolve.
+These workspaces remain editable. Sharing never uploads local media.
+The explicit sharing command seeds annotations; reads and discovery do not seed objects.
 
 Use record.space for [annotations](${AGENT_TASKS.annotations}); do not infer the
 space from a filename or a window's slot. For an independent review, POST

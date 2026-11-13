@@ -45,9 +45,9 @@ test('owned moves retain ready thumbnails; pending, changed and cache-cleared fi
     }
     const original=entry('one.mp4');
     assert.equal((await move(ref('one.mp4'),'target')).results[0].ok,true);
-    const moved=verify('target/one.mp4');assert.notEqual(moved.id,original.id);
+    const moved=verify('target/one.mp4');assert.equal(moved.id,original.id);
     assert.equal((await move(ref('target/one.mp4'),'')).results[0].ok,true);
-    const returned=verify('one.mp4');assert.notEqual(returned.version,original.version,'returning to an old path does not reuse its old identity');
+    const returned=verify('one.mp4');assert.equal(returned.version,original.version,'owned moves retain the pinned content identity');
     // The existing exclusive-copy fallback needs the same handoff as hard links.
     const link=fs.link;
     fs.link=async () => {throw Object.assign(Error('cross-device'),{code:'EXDEV'});};

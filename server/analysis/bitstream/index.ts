@@ -17,7 +17,7 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
   let jsDocument:JsPacketIndex|undefined;
   let flvPrefix = 0, flvComplete = false;
   let flvDocument: import("../../../shared/media/indexing/flv-index-cache.ts").FlvIndexDocument | undefined;
-  const build = library.indexJobs.startBuild({ id, version, size: metadata.size, filePath, epoch, identity }, {
+  const build = library.indexJobs.startBuild({ id, version, fingerprint:library.fingerprint(id,version), size: metadata.size, filePath, epoch, identity }, {
     onProgress(progress) {
       // Shared FLV scanner publishes only append-only validated source packets.
       if (identity.kind === 'flv') {

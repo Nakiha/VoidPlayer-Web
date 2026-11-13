@@ -57,7 +57,7 @@ try {
   server = createMediaServer({ roots: library.roots, library, staticDir, onLog() {} });
   server.on('request', (req, res) => {
     if (req.url.startsWith('/audio-test-lifecycle?')) lifecycleTrace.push({ time: Date.now(), stage: new URL(req.url, 'http://localhost').searchParams.get('stage') });
-    if (req.url.split('?')[0] === `/api/media/${id}` || req.url.split('?')[0] === `/api/media/${second}`) {
+    if (req.url.split('?')[0] === `/api/media/${id}/content` || req.url.split('?')[0] === `/api/media/${second}/content`) {
       res.on('finish', () => traffic.push({ range: req.headers.range, bytes: Number(res.getHeader('content-length')) }));
     }
   });

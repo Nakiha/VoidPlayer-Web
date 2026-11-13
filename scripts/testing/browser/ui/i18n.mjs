@@ -215,9 +215,9 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  await page.waitForFunction(async()=>{const library=await window.voidPlayer.tools.find(t=>t.name==='list_library').execute({});return library.entries.find(e=>e.name==='sample.mp4')?.state==='ready';});
  const library=await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='list_library').execute({}));
  const sample=library.entries.find(e=>e.name==='sample.mp4');const stalled=[];
- await page.route(`**/api/media/${sample.id}?*`,route=>stalled.push(route));
+ await page.route(`**/api/media/${sample.id}/content?*`,route=>stalled.push(route));
  const sampleRow=page.locator('#source-list .source-row').filter({hasText:'sample.mp4'});
- const requested=page.waitForRequest(request=>new URL(request.url()).pathname===`/api/media/${sample.id}`);
+ const requested=page.waitForRequest(request=>new URL(request.url()).pathname===`/api/media/${sample.id}/content`);
  await sampleRow.click();await requested;
  await page.locator('#source-activity-toggle').click();
  const cancel=page.locator('#source-activity-cancel');await cancel.waitFor();
@@ -234,7 +234,7 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  assert.equal(load.state,'loading');assert.equal(load.slot,'A');
  assert.equal(await page.locator('#source-activity-track-A').getAttribute('aria-description'),stageText[load.stage]);
  await switchLanguage('zh-CN');assert.equal(await cancel.evaluate(e=>e===window.__cancel),true);await cancel.click();
- for(const route of stalled)await route.abort();await page.unroute(`**/api/media/${sample.id}?*`);
+ for(const route of stalled)await route.abort();await page.unroute(`**/api/media/${sample.id}/content?*`);
  await page.evaluate(async id=>{await window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id});},library.entries.find(e=>e.name==='sample.mp4').id);
  const workspace=await page.evaluate(()=>window.voidPlayer.exportWorkspace());delete workspace.media[0].source;
  // Missing inputs restore immediately and leave only a localized warning.

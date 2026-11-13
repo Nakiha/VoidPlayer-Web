@@ -24,7 +24,7 @@ try {
  const jpeg=await page.screenshot({type:'jpeg',quality:50});
  annotations=new AnnotationStore(path.join(config.dataDir,'annotations.sqlite'));
  for(let i=0;i<53;i++){
-  const id=`mark-${i}`,document={media:[{id:'media',name:i===0?'极长的媒体名称_'.repeat(18)+'.flv':'现场拍摄_镜头03.flv',size:flv.length,lastModified:1,codec:'avc1',decoder:'webcodecs',width:320,height:180,durationUs:1000000,firstPtsUs:0,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}?v=${entry.version}`}}],mark:{id,text:i===0?'留意这里的光影，调整下一版调色':'检查边缘细节与画面色彩',severity:3,origin:'human',createdAt:'2026-09-08',slot:'A',mediaId:'media',frame:{ptsUs:0,sourcePtsUs:0,durationUs:40000},comparison:[],region:null,drawings:[]}};
+  const id=`mark-${i}`,document={media:[{id:'media',name:i===0?'极长的媒体名称_'.repeat(18)+'.flv':'现场拍摄_镜头03.flv',size:flv.length,lastModified:1,codec:'avc1',decoder:'webcodecs',width:320,height:180,durationUs:1000000,firstPtsUs:0,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}/content?v=${entry.version}`}}],mark:{id,text:i===0?'留意这里的光影，调整下一版调色':'检查边缘细节与画面色彩',severity:3,origin:'human',createdAt:'2026-09-08',slot:'A',mediaId:'media',frame:{ptsUs:0,sourcePtsUs:0,durationUs:40000},comparison:[],region:null,drawings:[]}};
   annotations.mutate('default',{operationId:`create-${id}`,id,revision:0,action:'put',document},{id:'reviewer',name:'剪辑师'});annotations.putPreview('default',id,1,jpeg);
  }
  const before=await page.request.get(base+'/api/admin/caches').then(r=>r.json());assert.equal(before.count,54);assert.ok(before.volume.availableBytes>0);assert.ok(before.types.every(t=>t.location.startsWith(config.dataDir)));

@@ -96,7 +96,7 @@ function notice(message: LocalizedValue, error = false) {
   dismissNotice = value ? toasts.show(message, {kind}) : undefined;
 }
 async function api<T>(url: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}, signal = life.signal): Promise<T> {
-  const response = await fetch(url, { method, cache: 'no-store', headers: { ...(method !== 'GET' ? { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
+  const response = await fetch(url, { method, cache: 'no-store', headers: { ...(method !== 'GET' ? { 'x-voidplayer-action': url.startsWith('/api/library/scan') ? 'scan' : 'admin', 'content-type': 'application/json' } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
   const value = await response.json();
   if (!response.ok) throw apiError(response.status, value);
   return value;
@@ -133,7 +133,7 @@ function rootRow(root: Root) {
     if (scan.getAttribute('aria-disabled')==='true') return;
     postingScans.add(root.id); renderRootStates();
     try {
-      scanStatus=await api<LibraryScanStatus>('/api/admin/scan','POST',{action:'refresh',rootId:root.id});
+      scanStatus=await api<LibraryScanStatus>('/api/library/scan','POST',{action:'refresh',rootId:root.id});
       rootStates=scanStatus.roots;
       scanCadence.reset(); await loadScan();
     } finally { postingScans.delete(root.id); renderRootStates(); }
@@ -263,7 +263,7 @@ async function loadRequests(target = logPages.requests.page, pageSize = logPages
 }
 async function loadScan() {
   const sequence = ++scanSequence;
-  const value = await api<Scan>(`/api/admin/scan?offset=${errorsOffset}`);
+  const value = await api<Scan>(`/api/library/scan?offset=${errorsOffset}`);
   if (sequence !== scanSequence) return;
   scanStatus=value; rootStates = value.roots; renderRootStates();
   scanCadence.observe([value.ready, value.scanning, value.job?.state, value.job?.files, value.job?.errors,
@@ -342,7 +342,12 @@ function renderRequests() {
       index++; continue;
     }
     const row = document.createElement('div'); row.className = 'admin-request-row';
-    const cells = () => [`${formatDate(String(request.t))} · ${userNames.get(String(request.actorId)) ?? (request.actorId === 'local' ? t(msg("admin.localUser", "本机用户")) : request.actorId ?? t(msg("admin.anonymous", "匿名")))} · ${request.clientIp ?? '—'}`, `${request.method} ${request.url}`, String(request.status), `${request.ms} ms`];
+    const media = request.media as {rootId?:string;path?:string;version?:string} | undefined;
+    const query = request.query as Record<string,string> | undefined;
+    const target = [media?.rootId,media?.path].filter(Boolean).join('/');
+    const details = [target,media?.version?`v=${media.version}`:'',request.range,query?new URLSearchParams(query).toString():''].filter(Boolean).join(' · ');
+    row.title = details;
+    const cells = () => [`${formatDate(String(request.t))} · ${userNames.get(String(request.actorId)) ?? (request.actorId === 'local' ? t(msg("admin.localUser", "本机用户")) : request.actorId ?? t(msg("admin.anonymous", "匿名")))} · ${request.clientIp ?? '—'}`, `${request.method} ${request.url}${details?` · ${details}`:''}`, String(request.status), `${request.ms} ms`];
     for (let i=0; i<4; i++) { const span = document.createElement('span'); localizedText(span, () => cells()[i]); row.append(span); }
     row.dataset.id = id; list.insertBefore(row, list.children[index++] ?? null);
   }

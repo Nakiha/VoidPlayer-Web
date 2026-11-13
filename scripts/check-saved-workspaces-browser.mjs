@@ -77,7 +77,7 @@ try {
   const sourceGate = new Promise(resolve => { releaseSource = resolve; });
   await second.route(base + '/api/workspaces/' + id, async route => { await workspaceGate; await route.continue(); });
   const delayedMedia = record.document.media.find(media => media.id === record.document.tracks[1].mediaId);
-  await second.route('**/api/media/' + delayedMedia.source.id + '/metadata*', async route => { await sourceGate; await route.continue(); });
+  await second.route('**/api/media/' + delayedMedia.source.id + '*', async route => { await sourceGate; await route.continue(); });
   await second.goto(base+'/?workspace='+id);
   await second.waitForFunction(() => !!window.voidPlayer?.tools);
   assert.equal(await second.locator('#start-panel').isVisible(), false, 'workspace links enter the workbench while the document is still downloading');

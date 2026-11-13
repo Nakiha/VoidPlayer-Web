@@ -34,7 +34,7 @@ async function records(directory: string) {
 test('request history pages survive rotation and restart and discard expired segments', async () => fixture(async directory => {
   const policy = { ...runtimePolicy, maxBytes: 2 * 1024 ** 2 };
   const old = segment(Date.now() - 1000, '');
-  const oldRequest = { event: 'http-request', requestId: 'oldest', t: new Date().toISOString(), url: '/api/library', method: 'GET' };
+  const oldRequest = { event: 'http-request', requestId: 'oldest', t: new Date().toISOString(), url: '/api/library/browse?recursive=1&limit=200', method: 'GET' };
   await fs.writeFile(path.join(directory, old), JSON.stringify(oldRequest) + '\n');
   let logs = new RuntimeLog(directory, policy);
   await logs.start();

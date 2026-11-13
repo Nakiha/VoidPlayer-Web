@@ -26,7 +26,7 @@ test('HTTP and HTTPS share pages and APIs, with a certificate-matching player de
     assert.match(cert.headers.get('content-disposition')!, /attachment/);
     assert.equal((await fetch(base + info.certificateUrl, { method: 'HEAD' })).status, 200);
     for(const origin of [base,`http://127.0.0.1:${(service.server.address() as {port:number}).port}`]){
-      for(const url of ['/api/library','/api/health','/api/admin/status','/api/workspaces','/llms.txt'])assert.equal((await fetch(origin+url)).status,200,url);
+      for(const url of ['/api/library/browse?recursive=1&limit=200','/api/health','/api/admin/status','/api/workspaces','/llms.txt'])assert.equal((await fetch(origin+url)).status,200,url);
       for(const url of ['/data/tls/authority.json','/data/tls/server.json'])assert.equal((await fetch(origin+url)).status,404,url);
       assert.match(await (await fetch(origin+'/llms.txt')).text(),/HTTP and HTTPS both/);
       assert.equal((await fetch(origin+'/api/connection/probe')).status,409);

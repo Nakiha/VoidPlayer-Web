@@ -271,7 +271,7 @@ test('remote cold and cached summary transport validates and publishes atomicall
   Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'http://localhost/' } });
   const target = { mode: 'stream' as const, product: 'summary' as const, sourceVersion: 'media@version', firstPtsUs: 100, durationUs: 80000,
     window: { startUs: 0, endUs: 80000, axis: 'pts' as const } };
-  const source = { info: { source: { url: 'http://localhost/api/media/media?v=version' } } } as any;
+  const source = { info: { source: { url: 'http://localhost/api/media/media/content?v=version' } } } as any;
   const summaries = [0, 1].map(au => summaryOf({ ...result(), sourcePtsUs: 100 + au * 40000, sourceDtsUs: null,
     picture: { ...result().picture, sourceVersion: target.sourceVersion, au }, gop: { startAu: 0, endAu: 2, configuration: 0, anchor: 'closed' },
     nalus: [{ offset: 0, size: 1, type: 5, temporalId: 0, layer: 0 }] }));
@@ -279,6 +279,7 @@ test('remote cold and cached summary transport validates and publishes atomicall
   let mode = 'valid', downloads = 0;
   globalThis.fetch = async (input, init) => {
     const url = String(input);
+    assert.equal(new URL(url).pathname.includes('/content/'),false,'analysis subresources are siblings of content');
     if (init?.method === 'DELETE') return Response.json({ ok: true });
     if (url.includes('capabilities')) return Response.json({ buildId: 'test' });
     if (init?.method === 'POST') return Response.json({ requestId: 'request' });

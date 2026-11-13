@@ -7,31 +7,23 @@ import { LibraryAccessError } from '../../shared/media/io/source-access.ts';
 import { libraryAccessMessage } from '../../src/ui/source-access-message.ts';
 const id = 'a'.repeat(24), version = 'b'.repeat(24), base = 'https://media.example/player';
 const entry = { id, name: 'clip.mp4', root: 'archive', size: 12, lastModified: 12345, version, state: 'ready' };
-const info = (url = `/api/media/${id}`) => ({ name: entry.name, size: entry.size, lastModified: entry.lastModified, source: { kind: 'library', id, url } }) as MediaInfo;
+const info = (url = `/api/media/${id}/content?v=${version}`) => ({ name: entry.name, size: entry.size, lastModified: entry.lastModified, source: { kind: 'library', id, url } }) as MediaInfo;
 const reply = (body = entry) => (async () => Response.json(body)) as typeof fetch;
 
 test('versioned media actions preserve the version and attach paths before query parameters', () => {
-  const source = `/api/media/${id}?v=${version}`;
-  assert.equal(mediaActionUrl(source, 'download', base), `https://media.example/api/media/${id}?v=${version}&download=1`);
+  const source = `/api/media/${id}/content?v=${version}`;
+  assert.equal(mediaActionUrl(source, 'download', base), `https://media.example/api/media/${id}/content?v=${version}&download=1`);
   assert.equal(mediaActionUrl(source, 'reveal', base), `https://media.example/api/media/${id}/reveal?v=${version}`);
 });
-test('legacy workspace references acquire a version when size still matches, warning on mtime drift', async () => {
-  const pinned = await pinLibraryReference(info(), base, reply());
-  assert.equal(pinned.url, `https://media.example/api/media/${id}?v=${version}`);
-  assert.equal(pinned.mtimeChanged, false);
-  const drifted = await pinLibraryReference(info(), base, reply({ ...entry, lastModified: 12346 }));
-  assert.equal(drifted.url, `https://media.example/api/media/${id}?v=${version}`);
-  assert.equal(drifted.mtimeChanged, true);
-  await assert.rejects(pinLibraryReference(info(), base, reply({ ...entry, size: 13 })), /大小 12 → 13/);
-});
-test('pinned references survive version rotation with identical bytes, still refuse replacement', async () => {
-  const pinned = info(`/api/media/${id}?v=${version}`);
-  const rotated = await pinLibraryReference(pinned, base, reply({ ...entry, version: 'c'.repeat(24) }));
-  assert.equal(rotated.url, `https://media.example/api/media/${id}?v=${'c'.repeat(24)}`);
-  assert.equal(rotated.mtimeChanged, false);
-  await assert.rejects(pinLibraryReference(pinned, base, reply({ ...entry, size: 13 })), /已发生变化/);
-  await assert.rejects(pinLibraryReference(pinned, base, reply({ ...entry, state: 'pending' })), /仍在写入/);
-  assert.equal((await pinLibraryReference(pinned, base, reply({ ...entry, id: 'd'.repeat(24) }))).id, 'd'.repeat(24));
+test('pinned references survive renames but reject changed assets and content versions', async () => {
+  const pinned = info();
+  const renamed = await pinLibraryReference(pinned,base,reply({...entry,name:'renamed.mp4',lastModified:12346}));
+  assert.equal(renamed.id,id);assert.equal(renamed.url,`https://media.example/api/media/${id}/content?v=${version}`);
+  await assert.rejects(pinLibraryReference(pinned,base,reply({...entry,version:'c'.repeat(24)})),/已发生变化/);
+  await assert.rejects(pinLibraryReference(pinned,base,reply({...entry,id:'d'.repeat(24)})),/已发生变化/);
+  await assert.rejects(pinLibraryReference(pinned,base,reply({...entry,size:13})),/已发生变化/);
+  await assert.rejects(pinLibraryReference(pinned,base,reply({...entry,state:'pending'})),/仍在写入/);
+  await assert.rejects(pinLibraryReference(info(`/api/media/${id}`),base,reply()),/固定版本/);
 });
 test('history preserves versions and refuses a same-size same-time replacement after reload', () => {
   const catalog = new SourceCatalog(); catalog.setLibrary([entry]); catalog.remember(entry, id);

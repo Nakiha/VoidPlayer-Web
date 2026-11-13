@@ -89,8 +89,6 @@ export async function sendFfmpegRecordStream(
   identity: MediaIndexIdentity,
   after: number,
   requestedBuildId: string | undefined,
-  startBuild: boolean,
-  filePath?: string,
   size?: number,
 ): Promise<void> {
   let wakeListener: (() => void) | undefined;
@@ -103,10 +101,8 @@ export async function sendFfmpegRecordStream(
   let build: ReturnType<RouteContext['library']['indexJobs']['startBuild']> | undefined;
   let buildError: Error | undefined;
   let buildAlreadyPresent = false;
-  if (startBuild) {
-    if (!filePath || size === undefined) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
-    build = library.indexJobs.startBuild({ id, version, size, filePath,
-      epoch: await library.indexJobs.call('epoch'), identity }, { onUpdate: wake });
+  build = library.indexJobs.observeBuild({id,version,epoch:await library.indexJobs.call('epoch'),identity},{onUpdate:wake});
+  if (build) {
     void build.promise.then((value: { built?: boolean }) => { if (!value?.built) buildAlreadyPresent = true; wake(); }, error => {
       buildError = error instanceof Error ? error : new Error(String(error)); wake();
     });

@@ -227,7 +227,7 @@ test('library FLV frontier uses validated scanner progress and a parsed final do
   const source = await reader('fixtures/flv-analysis/legacy-h264.flv');
   const index = await demuxFlv(source);
   let onProgress: any, done = false, unsubscribed = false;
-  const library: any = { metadata: () => ({ version: 'v', size: source.size }), resolve: async () => 'file',
+  const library: any = { fingerprint: () => 'physical-fingerprint', metadata: () => ({ version: 'v', size: source.size }), resolve: async () => 'file',
     indexJobs: { startBuild(_request: any, options: any) { onProgress = options.onProgress; return { promise: Promise.resolve(), unsubscribe() { unsubscribed = true; } }; },
       async call(op: string) {
         if (op === 'epoch') return 1;

@@ -6,17 +6,17 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 export type MediaRoot = string | { id: string; path: string; name?: string };
-export interface RootRecord { id: string; path: string; name: string; index: number; seed: string }
+export interface RootRecord { id: string; path: string; name: string; index: number }
 export function mediaId(root: string, relative: string) { return createHash('sha256').update(`${root}\n${relative}`).digest('hex').slice(0, 24); }
 export function normalizeRoots(roots: MediaRoot[]): RootRecord[] {
   const normalized = roots.map((root, index) => {
     const directory = path.resolve(typeof root === 'string' ? root : root.path);
-    return { id: typeof root === 'string' ? mediaId('root', directory) : root.id, path: directory, name: typeof root === 'string' ? path.basename(directory) : root.name || path.basename(directory), index, seed: typeof root === 'string' ? directory : `root:${root.id}` };
+    return { id: typeof root === 'string' ? mediaId('root', directory) : root.id, path: directory, name: typeof root === 'string' ? path.basename(directory) : root.name || path.basename(directory), index };
   });
   if (new Set(normalized.map(r => r.id)).size !== normalized.length || new Set(normalized.map(r => r.path)).size !== normalized.length) throw new Error('媒体根目录的 ID 和路径不能重复。');
   return normalized;
 }
-export interface StoredMedia { id: string; root_id: string; path: string; size: number; modified: number; version: string; state: string; generation: number; observed_at: number }
+export interface StoredMedia { id: string; root_id: string; path: string; size: number; modified: number; version: string; fingerprint: string; state: string; generation: number; observed_at: number }
 // A separate SQLite transaction is a crash-released OS file lock. It avoids
 // stale PID files and never blocks readers of the actual metadata database.
 export function lockDatabase(file: string): () => void {
@@ -40,7 +40,9 @@ export class LibraryStore {
       this.db = connection = openIndexDatabase(file);
       this.db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;');
       const version = this.db.prepare('PRAGMA user_version').get() as { user_version: number };
-      if (version.user_version > 8) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
+      if (version.user_version > 9) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
+      const mediaColumns = this.db.prepare('PRAGMA table_info(media)').all() as {name:string}[];
+      const addFingerprint = mediaColumns.length > 0 && !mediaColumns.some(column => column.name === 'fingerprint');
       const mediaIndexColumns = this.db.prepare('PRAGMA table_info(media_index_manifests)').all() as { name: string }[];
       const addMediaIndexBuildIdColumn = !mediaIndexColumns.some(column => column.name === 'build_id');
       const addMediaIndexMetadataColumn = !mediaIndexColumns.some(column => column.name === 'metadata_json');
@@ -58,9 +60,11 @@ export class LibraryStore {
           checked_at INTEGER, attempted_at INTEGER, failed INTEGER NOT NULL DEFAULT 0,
           next_check_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(root_id,path));
         CREATE INDEX IF NOT EXISTS library_directory_due ON library_directory_checks(next_check_at,root_id,path);
-        CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, root_id TEXT NOT NULL REFERENCES roots(id), path TEXT NOT NULL, parent TEXT NOT NULL, size INTEGER NOT NULL, modified INTEGER NOT NULL, version TEXT NOT NULL, state TEXT NOT NULL, generation INTEGER NOT NULL, observed_at INTEGER NOT NULL, UNIQUE(root_id,path));
+        CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, root_id TEXT NOT NULL REFERENCES roots(id), path TEXT NOT NULL, parent TEXT NOT NULL, size INTEGER NOT NULL, modified INTEGER NOT NULL, version TEXT NOT NULL, fingerprint TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, generation INTEGER NOT NULL, observed_at INTEGER NOT NULL, UNIQUE(root_id,path));
         CREATE INDEX IF NOT EXISTS media_parent ON media(root_id,parent,path);
-        CREATE TABLE IF NOT EXISTS aliases (id TEXT PRIMARY KEY, media_id TEXT NOT NULL REFERENCES media(id));
+        ${addFingerprint ? "ALTER TABLE media ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';" : ''}
+        UPDATE media SET fingerprint=version WHERE fingerprint='';
+        DROP TABLE IF EXISTS aliases;
         CREATE TABLE IF NOT EXISTS scan_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, state TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, visited INTEGER NOT NULL DEFAULT 0, files INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, current_root TEXT, current_path TEXT);
         CREATE TABLE IF NOT EXISTS scan_errors (job_id INTEGER NOT NULL REFERENCES scan_jobs(id), root_id TEXT NOT NULL, path TEXT NOT NULL, code TEXT NOT NULL, message TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS library_revision (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
@@ -68,7 +72,8 @@ export class LibraryStore {
         ${version.user_version < 2 ? "INSERT OR IGNORE INTO root_storage(root_id,path,platform,fs_type) SELECT id,path,'','' FROM roots;" : ''}
         INSERT OR IGNORE INTO library_revision VALUES(1,0);
         CREATE TRIGGER IF NOT EXISTS media_added AFTER INSERT ON media BEGIN UPDATE library_revision SET revision=revision+1; END;
-        CREATE TRIGGER IF NOT EXISTS media_changed AFTER UPDATE ON media WHEN old.version!=new.version OR old.state!=new.state BEGIN UPDATE library_revision SET revision=revision+1; END;
+        DROP TRIGGER IF EXISTS media_changed;
+        CREATE TRIGGER media_changed AFTER UPDATE ON media WHEN old.version!=new.version OR old.state!=new.state OR old.root_id!=new.root_id OR old.path!=new.path BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS directory_added AFTER INSERT ON directories BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS directory_removed AFTER DELETE ON directories BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS root_changed AFTER UPDATE ON roots WHEN old.active!=new.active OR old.path!=new.path OR old.name!=new.name BEGIN UPDATE library_revision SET revision=revision+1; END;
@@ -162,7 +167,7 @@ export class LibraryStore {
         INSERT OR IGNORE INTO thumbnail_epoch VALUES(1,0);
         CREATE TRIGGER IF NOT EXISTS thumbnail_changed AFTER UPDATE ON media WHEN old.version!=new.version OR new.state='missing' BEGIN DELETE FROM media_thumbnails WHERE media_id=new.id; END;
         CREATE TRIGGER IF NOT EXISTS thumbnail_root_changed AFTER UPDATE ON roots WHEN old.path!=new.path BEGIN DELETE FROM media_thumbnails WHERE media_id IN (SELECT id FROM media WHERE root_id=new.id); END;
-        PRAGMA user_version=8;
+        PRAGMA user_version=9;
         COMMIT;
       `);
       this.db.prepare("UPDATE scan_jobs SET state='interrupted', finished_at=? WHERE state='running'").run(Date.now());
@@ -188,6 +193,6 @@ export class LibraryStore {
       this.db.exec('COMMIT');
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  find(id: string) { return this.db.prepare('SELECT media.* FROM media JOIN roots ON roots.id=media.root_id WHERE roots.active=1 AND (media.id=? OR media.id=(SELECT media_id FROM aliases WHERE id=?))').get(id, id) as unknown as StoredMedia | undefined; }
+  find(id: string) { return this.db.prepare('SELECT media.* FROM media JOIN roots ON roots.id=media.root_id WHERE roots.active=1 AND media.id=?').get(id) as unknown as StoredMedia | undefined; }
   close() { try { this.db.close(); } finally { this.unlock(); if (this.temporary) rmSync(this.temporary, { recursive: true, force: true }); } }
 }

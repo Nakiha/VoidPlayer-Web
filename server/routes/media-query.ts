@@ -31,7 +31,7 @@ function json(req: IncomingMessage, res: ServerResponse, status: number, body: u
   if (req.method === 'HEAD') res.end(); else res.end(payload);
 }
 export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
-  const match = /^\/api\/media\/([0-9a-f]{24})\/(info|index-query)$/.exec(url.pathname);
+  const match = /^\/api\/media\/([0-9a-f]{24})(?:\/(index-query))?$/.exec(url.pathname);
   if (!match && url.pathname !== MEDIA_QUERY_DICTIONARY) return false;
   const links = { describedBy: MEDIA_QUERY_DICTIONARY, help: '/agent/library.md', browse: '/api/library/browse?recursive=1' };
   const cancellation = new SharedArrayBuffer(4);
@@ -39,16 +39,21 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
   res.once('close', cancel);
   let completeHandling: (() => void) | undefined;
   try {
-    if (req.method !== 'GET' && req.method !== 'HEAD') throw new AdminError(405, 'This endpoint is read-only.', 'method-not-allowed');
+    if (req.method !== 'GET' && req.method !== 'HEAD') {res.setHeader('allow','GET, HEAD');throw new AdminError(405, 'This endpoint is read-only.', 'method-not-allowed');}
     if (!match) { json(req, res, 200, MEDIA_QUERY_FIELDS); return true; }
-    const allowed = match[2] === 'info' ? ['v', 'offset'] : ['v', 'kind', 'stream', 'schema', 'indexer', 'view', 'axis', 'startTick', 'endTick', 'limit', 'byteBudget', 'cursor'];
+    const allowed = !match[2] ? ['v', 'offset'] : ['v', 'kind', 'stream', 'schema', 'indexer', 'view', 'axis', 'startTick', 'endTick', 'limit', 'byteBudget', 'cursor'];
     for (const key of url.searchParams.keys()) {
       if (!allowed.includes(key) || url.searchParams.getAll(key).length !== 1) throw new AdminError(400, 'Unknown or duplicate query parameter.', 'invalid-index-query');
     }
+    const {library} = ctx, id = match[1], entry = library.metadata(id);
+    if (!entry) throw new AdminError(404,'Media is not in the configured library.','media-not-found');
+    if (!match[2] && !url.searchParams.has('v')) {
+      if (url.searchParams.has('offset')) throw new AdminError(400,'缓存清单分页需要固定媒体版本。','media-version-required');
+      json(req,res,200,{schema:'voidplayer-media',schemaVersion:1,...entry,path:entry.name,links:{...links,content:`/api/media/${id}/content?v=${entry.version}`}});
+      return true;
+    }
     const version = url.searchParams.get('v');
     if (!version || !/^[0-9a-f]{24}$/.test(version)) throw new AdminError(400, 'Pin the media version from library browse.', 'media-version-required');
-    const { library } = ctx, id = match[1], entry = library.metadata(id);
-    if (!entry) throw new AdminError(404, 'Media is not in the configured library.', 'media-not-found');
     if (entry.version !== version) throw new AdminError(409, 'Media version changed; browse again.', 'media-version-changed');
     if (res.destroyed) return true;
     completeHandling = admit(library, res);
@@ -56,11 +61,12 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
     if (!await library.resolve(id, version)) throw new AdminError(409, 'Media is offline, changed or outside the configured roots.', 'media-unavailable');
     if (res.destroyed) return true;
     let body: unknown;
-    if (match[2] === 'info') {
+    if (!match[2]) {
       const rawOffset = url.searchParams.get('offset') ?? '0';
       if (!/^(?:0|[1-9][0-9]{0,6})$/.test(rawOffset)) throw new AdminError(400, 'Invalid inventory offset.', 'invalid-index-query');
       const cached = await library.indexJobs.call('cached-indexes', { id, version, offset: Number(rawOffset) });
-      body = { ...cached, source: { id, version }, file: { name: entry.name, size: entry.size, lastModified: entry.lastModified, status: 'known', provenance: 'file-stat' },
+      const {schema:cacheSchema,version:cacheVersion,...inventory}=cached;
+      body = {schema:'voidplayer-media',schemaVersion:1,...inventory,...entry,path:entry.name,cacheQuery:{schema:cacheSchema,version:cacheVersion},source: { id, version }, file: { name: entry.name, size: entry.size, lastModified: entry.lastModified, status: 'known', provenance: 'file-stat' },
         technicalState: cached.indexes.length ? 'cached-streams-only' : Number(rawOffset) ? 'end-of-inventory' : 'not-probed',
         streamInventoryComplete: false, links };
     } else {

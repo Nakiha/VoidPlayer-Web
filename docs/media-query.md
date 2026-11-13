@@ -6,19 +6,19 @@
 ## HTTP 工作流
 
 1. `GET /api/library/browse?recursive=1&search=clip&limit=20`：按既有路径/文件名检索。分页携带同一 revision，冲突后从头开始。
-2. `GET /api/media/ID/info?v=VERSION`：验证媒体仍在允许根目录、在线且版本匹配；读取文件属性及最多 16 个缓存流。`nextOffset` 续读缓存身份清单。每请求独立快照，清单变化时可重读；不是完整源流枚举。
+2. `GET /api/media/ID?v=VERSION`：验证媒体仍在允许根目录、在线且版本匹配；读取文件属性及最多 16 个缓存流。`nextOffset` 续读缓存身份清单。每请求独立快照，清单变化时可重读；不是完整源流枚举。
 3. 复制某项 `identity` 为 `kind`、`stream`（streamKey）、`schema`（schemaVersion）、`indexer`（indexerBuild）：
    `GET /api/media/ID/index-query?v=VERSION&kind=ffmpeg&stream=video:0&schema=3&indexer=BUILD`
 4. 查看 `overview.capabilities.records.ready`、时基与覆盖，再加 `view=records&axis=pts&startTick=0&endTick=90000&limit=100&byteBudget=65536`。区间为原始流 ticks 的半开区间；endTick 可用 9223372036854775808 包含最大有符号 64 位时间戳；只有时基 1/90000 时 90000 ticks 才代表一秒。`axis=dts` 也可用。
 5. 携带 `nextCursor` 和相同源、版本、流身份、axis、时间范围续读。空结果页仍可能有下一页。逐页累加 `summary` 才能形成该快照的范围统计；`exhausted` 不代表媒体覆盖完成。
 
-所有接口支持 GET/HEAD；不创建身份，无需 GUI，沿用部署的读取权限与根目录边界。它们只做 stat/realpath 与缓存读取，不读取媒体内容、不迁移旧索引、不扫描/解码，不触碰当前播放头。未知参数（含 `build=1`）、重复参数及非法整数直接拒绝。原 `/metadata`、紧凑 `/frame-index` 与 GUI 行为不变。
+所有接口支持 GET/HEAD；不创建身份，无需 GUI，沿用部署的读取权限与根目录边界。它们只做 stat/realpath 与缓存读取，不读取媒体内容、不迁移旧索引、不扫描/解码，不触碰当前播放头。未知参数（含 `build=1`）、重复参数及非法整数直接拒绝。媒体描述统一在 `/api/media/ID`；不带 v 时读取当前库条目，固定 v 时读取已验证的描述与缓存信息。播放索引由 GET `/frame-index` 读取，构建由 POST `/frame-index/build` 显式发起。
 
-可执行的 curl 示例见内嵌 `/agent/library.md`。缺缓存时返回缺口，不提供会悄悄启动工作的链接；现有 GUI/显式旧建索引入口维持原行为。带持久任务记录和准入的新 probe/build 接口待后续实现。
+可执行的 curl 示例见内嵌 `/agent/library.md`。缺缓存时返回缺口，不提供会悄悄启动工作的链接；GUI 先显式提交构建命令，再订阅读取索引。带持久任务记录和准入的新 probe/build 接口待后续实现。
 
 ## 语义与边界
 
-- `schema=voidplayer-media-query, version=1, describedBy=/api/media/query-schema`。每页包含源版本、流身份、时基、覆盖、字段状态及分页上下文。
+- 索引查询使用 `schema=voidplayer-media-query, version=1`。媒体描述使用 `schema=voidplayer-media, schemaVersion=1`，根字段 `version` 为媒体内容版本；缓存查询协议身份放在 `cacheQuery.schema/version`，避免覆盖内容版本。字段说明为 `/api/media/query-schema`。每页包含源版本及对应缓存上下文。
 - 文件 size 是字节，lastModified 是 Unix 毫秒。技术字段来自特定缓存流，有 value/status/source/reason；未知为 null。FFmpeg 的 codec、索引器报告的 width/height、时基与流号可用。新 FLV/TS 提交还提供容器、TS PID、初始配置头可解析的 coded/visible 尺寸；色彩标签、profile、SAR、rotation、位深、帧率性质等没有缓存证据就不推测。
 - 包记录保留原 PTS、DTS、duration 和 decodeOrdinal。64 位整数用十进制字符串避免精度损失。归一化 PTS 仅在 originVerified 时计算，取整与共享 FFmpeg 统计适配器一致。缺时间戳不替换成零或平均帧率。
 - FFmpeg 记录按缓存 PTS 序（未知 PTS 尾部）返回；FLV/TS 按原包数组顺序返回，包括 DTS 条件查询。`overview.recordSemantics` 明示排序、原始值过滤、时钟模数与未验证连续性；decodeOrdinal 保留解码序，重复 PTS 不合并。时间条件不包含缺该 axis 的记录，`inspectedUntimed` 只统计本页检查到的缺失值。
@@ -60,7 +60,7 @@
 普通 HTTP 示例（先从 browse 获得 ID/VERSION）：
 
 ```sh
-curl -fsS "$BASE/api/media/$ID/info?v=$VERSION"
+curl -fsS "$BASE/api/media/$ID?v=$VERSION"
 curl -fsS --get "$BASE/api/media/$ID/index-query" \
   --data-urlencode "v=$VERSION" --data-urlencode 'kind=flv' \
   --data-urlencode 'stream=video:0' --data-urlencode 'schema=3' \

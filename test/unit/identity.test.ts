@@ -117,7 +117,7 @@ test('intranet HTTP explicitly chooses cookie identity, lists users and atomical
     assert.equal((await identify(cookie, '')).status, 400);
     assert.equal((await identify(cookie, 'bad', 'https://other.test')).status, 403);
     assert.equal((await fetch(base + '/api/workspaces', { headers: { cookie, 'x-voidplayer-actor': next.id } })).status, 409);
-    assert.equal((await fetch(base + '/api/library')).status, 200);
+    assert.equal((await fetch(base + '/api/library/browse?recursive=1&limit=200')).status, 200);
   } finally { await service.close(); await rm(root, { recursive: true, force: true }); }
 });
 

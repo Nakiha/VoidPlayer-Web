@@ -84,7 +84,7 @@ test('four-lane media transfer reads real blocks and remains separate from ordin
   const blocks = Array.from({ length: 4 }, (_, i) => data.subarray(i * MiB, (i + 1) * MiB));
   for (const part of results) { const index = blocks.findIndex(block => block.equals(part)); assert.notEqual(index, -1); blocks.splice(index, 1); }
   assert.equal(blocks.length, 0);
-  const range = await fetch(`${base}/api/media/${media.id}?v=${media.version}`, { headers: { range: 'bytes=128-255' } });
+  const range = await fetch(`${base}/api/media/${media.id}/content?v=${media.version}`, { headers: { range: 'bytes=128-255' } });
   assert.equal(range.status, 206); assert.deepEqual(Buffer.from(await range.arrayBuffer()), data.subarray(128, 256));
   const result = await until(() => admin.measurements.status().job, r => r.activeRequests === 0);
   assert.equal(result.bytes, 4 * MiB); assert.equal(result.concurrency, 4);

@@ -202,7 +202,7 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
    await tool('seek_review').execute({ptsUs:2000000});
    const before=window.voidPlayer.getState();window.joinBefore=before;
    const lib=await tool('list_library').execute({});const item=lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm');
-   const response=await fetch(`/api/media/${item.id}?v=${item.version}`);
+   const response=await fetch(`/api/media/${item.id}/content?v=${item.version}`);
    await window.voidPlayer.loadFile('B',new File([await response.blob()],'local-comparison.webm'));
  });
  const joined=await page.evaluate(()=>({before:window.joinBefore,after:window.voidPlayer.getState()}));

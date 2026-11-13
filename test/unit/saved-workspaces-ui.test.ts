@@ -42,7 +42,7 @@ function workspace(name: string): WorkspaceFile {
   return { schema: 'voidplayer-workspace', version: 1, name, generatedAt: '2026-10-02T00:00:00Z', serverUrl: 'http://example.test/', positionUs: 0,
     tracks: [{ slot: 'A', mediaId: 'sample', offsetUs: 0 }], marks: [], viewport: new Viewport().snapshot(),
     media: [{ id: 'sample', name: 'sample.mp4', size: 100, lastModified: 10, codec: 'h264', decoder: 'webcodecs', width: 100, height: 100, durationUs: 1000, firstPtsUs: 0,
-      source: { kind: 'library', id: 'sample', url: 'http://example.test/api/media/sample' } }] };
+      source: { kind: 'library', id: '1'.repeat(24), url: 'http://example.test/api/media/'+'1'.repeat(24)+'/content?v='+'2'.repeat(24) } }] };
 }
 function record(name = 'A', revision = 1, space: string | null = null): WorkspaceRecord {
   return { id: name, name, revision, space, document: workspace(name), owner: 'alice', updatedBy: 'alice', ownerName: 'Alice',
@@ -71,7 +71,7 @@ async function harness(t: TestContext, shared = false) {
     calls.push(call);
     const response = intercept?.(call); if (response) return response;
     if (url.startsWith('/api/workspaces?')) return json({ entries: [], next: null });
-    if (url.endsWith('/metadata')) return json({ id: '1'.repeat(24), version: '2'.repeat(24), name: 'sample.mp4', size: 100, lastModified: 10, state: 'ready' });
+    if (url === 'http://example.test/api/media/'+'1'.repeat(24)) return json({ id: '1'.repeat(24), version: '2'.repeat(24), name: 'sample.mp4', size: 100, lastModified: 10, state: 'ready' });
     if (method === 'GET') return json(record('A', 1, shared ? 'space-A' : null));
     return json({ ...record(call.body?.name ?? 'A', method === 'PUT' ? 2 : 1), document: call.body?.document });
   };
@@ -185,7 +185,7 @@ test('switching actors away and back invalidates an in-flight save even with the
 });
 
 for (const status of [200, 404]) test(`shared preparation ${status} after detach cannot send or report an old save`, async t => {
-  const h = await harness(t, true), pending = h.block(call => call.url.endsWith('/metadata'));
+  const h = await harness(t, true), pending = h.block(call => call.url === 'http://example.test/api/media/'+'1'.repeat(24));
   h.save(); await pending.started; h.detach();
   pending.resolve(status === 200 ? json({ id: '1'.repeat(24), version: '2'.repeat(24), name: 'sample.mp4', size: 100, lastModified: 10, state: 'ready' }) : json({ error: 'old media missing' }, status));
   await h.idle(); h.assertDetached();
@@ -231,7 +231,7 @@ for (const status of [200, 500]) test(`late post-save list ${status} cannot repl
 });
 
 test('shared saves preserve their original name, target and revision through preparation', async t => {
-  const h = await harness(t, true), pending = h.block(call => call.url.endsWith('/metadata'));
+  const h = await harness(t, true), pending = h.block(call => call.url === 'http://example.test/api/media/'+'1'.repeat(24));
   h.save(); await pending.started; h.el('name').value = 'A different input value';
   pending.resolve(json({ id: '1'.repeat(24), version: '2'.repeat(24), name: 'sample.mp4', size: 100, lastModified: 10, state: 'ready' })); await h.idle();
   const request = h.calls.find(call => call.method === 'PUT');

@@ -10,7 +10,7 @@ test('first decoded frame precedes a server build; completed indexes are persist
   const f = await startupFixture(true);
   const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
   const deps = { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), forceWasm: true };
-  const input = { url: `${f.base}/api/media/${f.entry.id}?v=${f.entry.version}`, size: f.entry.size };
+  const input = { url: `${f.base}/api/media/${f.entry.id}/content?v=${f.entry.version}`, size: f.entry.size };
   const drawn: number[] = [], startupPixels: Buffer[] = [];
   const session = new ReviewSession((_slot, frame) => {
     drawn.push(frame.sourcePtsUs);
@@ -86,7 +86,7 @@ test('joining a remote FLV at 2.5 seconds waits only for its prefix and never re
   try {
     await session.load('A', () => openFlvMedia({ file: local }, local, deps)); await session.seek(2500000);
     const before = session.getState().tracks[0].frame, count = draws.filter(d => d.slot === 'A').length;
-    const joining = session.load('B', () => openFlvMedia({ url: `${f.base}/api/media/${f.entry.id}?v=${f.entry.version}`, size: f.entry.size }, f.entry, deps));
+    const joining = session.load('B', () => openFlvMedia({ url: `${f.base}/api/media/${f.entry.id}/content?v=${f.entry.version}`, size: f.entry.size }, f.entry, deps));
     const deadline = Date.now() + 5000;
     while (!f.counts().delayed && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
     assert.ok(f.counts().delayed); assert.equal(session.getState().mediaLoad?.stage, 'index');

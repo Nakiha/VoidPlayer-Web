@@ -76,7 +76,7 @@ test('schema 1 upgrade preserves media and waits for an unchanged original befor
   await index.refresh(); assert.equal(index.status().roots[0].state, 'ready'); assert.deepEqual(index.browse().entries, before);
   await index.close();
   const upgraded = openIndexDatabase(database);
-  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 8);
+  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 9);
   assert.equal(upgraded.prepare('SELECT fs_type FROM root_storage').get()?.fs_type, '101'); upgraded.close();
 }));
 
@@ -91,7 +91,7 @@ test('schema 6 migration repairs a partially present FFmpeg stream manifest', as
   assert.ok(columns.some(column => column.name === 'build_id'));
   assert.ok(columns.some(column => column.name === 'metadata_json'));
   assert.ok(columns.some(column => column.name === 'packets'));
-  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 8);
+  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 9);
   upgraded.close();
 }));
 
@@ -107,7 +107,7 @@ test('schema 7 upgrade seeds durable directory work without replacing cached med
   while (true) {
     const check = openIndexDatabase(database);
     const completed = check.prepare('SELECT COUNT(*) AS count FROM library_directory_checks WHERE checked_at IS NOT NULL').get()?.count;
-    assert.equal(check.prepare('PRAGMA user_version').get()?.user_version, 8); check.close();
+    assert.equal(check.prepare('PRAGMA user_version').get()?.user_version, 9); check.close();
     if (completed === 2 && !index.status().scanning) break;
     assert.ok(Date.now() < deadline, 'upgraded directory work did not complete'); await new Promise(r => setTimeout(r, 20));
   }

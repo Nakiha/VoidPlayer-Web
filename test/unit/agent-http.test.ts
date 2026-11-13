@@ -82,7 +82,7 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     const headers = { ...writeHeaders, cookie, 'x-voidplayer-actor': actor.id };
     const entry = (await (await fetch(base + '/api/library/browse?recursive=1')).json()).entries[0];
     const operation: AnnotationOperation = { operationId: 'http-create', id: 'events', revision: 0, action: 'put', client: { kind: 'agent', id: 'headless-test' }, document: {
-      media: [{ id: 'snapshot-B', name: entry.name, size: entry.size, lastModified: entry.lastModified, codec: 'fixture-description', decoder: 'webcodecs', width: 320, height: 180, durationUs: 1000000, firstPtsUs: 0, source: { kind: 'library', id: entry.id, url: `${base}/api/media/${entry.id}?v=${entry.version}` } }],
+      media: [{ id: 'snapshot-B', name: entry.name, size: entry.size, lastModified: entry.lastModified, codec: 'fixture-description', decoder: 'webcodecs', width: 320, height: 180, durationUs: 1000000, firstPtsUs: 0, source: { kind: 'library', id: entry.id, url: `${base}/api/media/${entry.id}/content?v=${entry.version}` } }],
       mark: { id: 'events', text: 'Headless review', severity: 3, origin: 'agent', createdAt: '2026-10-23T00:00:00Z', slot: 'H', mediaId: 'snapshot-B', frame: { ptsUs: 0, sourcePtsUs: 0, durationUs: 40000 }, comparison: [], region: null },
     } };
     const submit = (body: unknown, extra: Record<string, string> = {}) => fetch(endpoint, { method: 'POST', headers: { ...headers, ...extra }, body: JSON.stringify(body) });
@@ -147,10 +147,14 @@ test('removed discovery, task and scoring APIs are absent while normal library a
     const media = 'a'.repeat(24);
     for (const path of ['/api/quality/psnr-pair', '/api/quality/jobs', '/api/quality/ranges', '/api/quality/correspondence-plans',
       '/api/quality/reference-relations', '/api/quality/vmaf/capability', '/api/quality/xpsnr/jobs', '/api/quality/cambi/jobs',
+      '/api/library','/api/library?refresh=1','/api/admin/scan','/api/admin/frame-indexes','/api/shares',
+      `/api/reviews/${'0'.repeat(36)}`,`/api/media/${media}/metadata`,`/api/media/${media}/info`,`/api/media/${media}/playback-container`,
       '/api/tasks', '/api/library/discovery', '/api/library/preparations', '/api/library/technical-filter',
       `/api/media/${media}/discovery`, `/api/media/${media}/psnr-index`, '/api/admin/quality-resources']) {
       for (const method of ['GET', 'POST']) assert.equal((await fetch(base + path, { method })).status, 404, method + ' ' + path);
     }
+    for (const suffix of ['content','container','location','thumbnail','thumbnail-status','frame-index','bitstream-analysis/capabilities'])
+      assert.equal((await fetch(`${base}/api/media/${media}/${suffix}`)).status,400,`missing version: ${suffix}`);
     assert.equal((await fetch(base + '/api/health')).status, 200);
     assert.equal((await fetch(base + '/api/library/browse')).status, 200);
     assert.equal(agentTask('quality.single'), null);

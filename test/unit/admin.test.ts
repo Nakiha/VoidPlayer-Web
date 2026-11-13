@@ -117,8 +117,8 @@ test('admin trusts all users while requiring same-origin mutations', async () =>
     assert.equal(status.identity.id, 'local'); assert.equal(status.version, 'test-version'); assert.ok(status.memory.rss > 0); assert.ok(status.http.connections > 0);
     const rebound = await new Promise<number>(resolve => { const req = request(base + '/api/admin/status', { headers: { host: 'attacker.example' } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode!)); }); req.end(); });
     assert.equal(rebound, 200);
-    assert.equal((await fetch(base + '/api/admin/scan', mutation('https://attacker.example', 'POST', { action: 'cancel' }))).status, 403);
-    assert.equal((await fetch(base + '/api/admin/scan', { method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: '{}' })).status, 403);
+    assert.equal((await fetch(base + '/api/library/scan', mutation('https://attacker.example', 'POST', { action: 'cancel' }))).status, 403);
+    assert.equal((await fetch(base + '/api/library/scan', { method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: '{}' })).status, 403);
   });
   await fixture(async ({ base, admin }) => {
     const actor = admin.workspaces.identify(undefined, 'not-allowlisted');
@@ -126,18 +126,18 @@ test('admin trusts all users while requiring same-origin mutations', async () =>
     assert.equal((await fetch(base + '/api/admin/status', { headers: { host: 'intranet.test' } })).status, 200);
     const response = await fetch(base + '/api/admin/status', { headers });
     assert.equal(response.status, 200); assert.equal((await response.json()).identity.id, actor.id);
-    assert.equal((await fetch(base + '/api/admin/scan', mutation('https://intranet.test', 'POST', { action: 'cancel' }, headers))).status, 403);
-    assert.equal((await fetch(base + '/api/admin/scan', mutation('http://intranet.test', 'POST', { action: 'cancel' }, headers))).status, 202);
+    assert.equal((await fetch(base + '/api/library/scan', mutation('https://intranet.test', 'POST', { action: 'cancel' }, headers))).status, 403);
+    assert.equal((await fetch(base + '/api/library/scan', mutation('http://intranet.test', 'POST', { action: 'cancel' }, {...headers,'x-voidplayer-action':'scan'}))).status, 202);
   });
 });
 
 test('root scan requests validate the selected root and dispatch only its scoped command', async () => fixture(async ({base,library}) => {
   const requested:string[]=[];
   library.refreshRoot=rootId => {requested.push(rootId);return Promise.resolve();};
-  const scan=await fetch(base+'/api/admin/scan',mutation(base,'POST',{action:'refresh',rootId:'archive'}));
+  const scan=await fetch(base+'/api/library/scan',{...mutation(base,'POST',{action:'refresh',rootId:'archive'}),headers:{origin:base,'x-voidplayer-action':'scan','content-type':'application/json'}});
   assert.equal(scan.status,202);assert.deepEqual(requested,['archive']);
   for (const rootId of ['unknown','../archive',42,null]) {
-    const response=await fetch(base+'/api/admin/scan',mutation(base,'POST',{action:'refresh',rootId}));
+    const response=await fetch(base+'/api/library/scan',{...mutation(base,'POST',{action:'refresh',rootId}),headers:{origin:base,'x-voidplayer-action':'scan','content-type':'application/json'}});
     assert.equal(response.status,400);
   }
   assert.deepEqual(requested,['archive'],'invalid roots cannot dispatch or fall back to a full scan');
@@ -278,4 +278,20 @@ test('analysis settings persist, hot-apply across listeners and reject stale or 
     assert.equal(admin.analysis.resources().concurrency, 32);
   } finally { await new Promise<void>(r => second.close(() => r())); }
   assert.equal(admin.analysis.resources().concurrency, 32, 'closing one listener leaves the shared scheduler alive');
+}));
+
+
+test('request history retains bounded library and media context without credentials',async()=>fixture(async({base,library,logs})=>{
+  const entry=library.browse().entries[0];
+  const response=await fetch(`${base}/api/media/${entry.id}/content?v=${entry.version}`,{headers:{range:'bytes=0-2'}});
+  assert.equal(response.status,206);await response.text();
+  const record=logs.at(-1)!;
+  assert.deepEqual(record.media,{id:entry.id,rootId:entry.rootId,root:entry.root,path:entry.name,version:entry.version,requestedVersion:entry.version});
+  assert.equal(record.range,'bytes=0-2');assert.deepEqual(record.query,{v:entry.version});
+  const browse=await fetch(base+'/api/library/browse?root=archive&directory=&search=one&token=secret');await browse.text();
+  assert.deepEqual(logs.at(-1)!.query,{root:'archive',directory:'',search:'one'});
+  const history=await (await fetch(base+'/api/admin/requests')).json();
+  const retained=history.recentRequests.find((item:{requestId:string})=>item.requestId===record.requestId);
+  assert.deepEqual(retained.media,record.media);assert.equal(retained.range,record.range);
+  assert.equal(JSON.stringify(history).includes('secret'),false);
 }));

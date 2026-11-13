@@ -157,8 +157,8 @@ test('frame-index HTTP failures finish before the deadline and release request r
       Reflect.set(library.indexJobs, 'activeBuilds', 1);
       Reflect.set(library.indexJobs, 'buildQueue', Array(8).fill(null));
       try {
-        await busy(endpoint + `&kind=ffmpeg&stream=video%3A0&schema=3&indexer=${indexerBuild}&build=1`,
-          { headers: { accept: 'application/x-ndjson' } }, '索引构建队列已满，请稍后重试。');
+        await busy(endpoint.replace('/frame-index?', '/frame-index/build?') + `&kind=ffmpeg&stream=video%3A0&schema=3&indexer=${indexerBuild}`,
+          post, '索引构建队列已满，请稍后重试。');
       } finally {
         Reflect.set(library.indexJobs, 'activeBuilds', 0);
         Reflect.set(library.indexJobs, 'buildQueue', []);
@@ -179,9 +179,10 @@ test('frame-index HTTP failures finish before the deadline and release request r
       release.forEach(done => done());
     });
     await t.test('post-header failure remains a terminated NDJSON error', async () => {
-      const mocked = t.mock.method(library.indexJobs, 'buildIndex', async () => { throw new AdminError(503, 'injected build failure'); });
+      const failed=Promise.reject(new AdminError(503,'injected build failure'));void failed.catch(()=>{});
+      const mocked=t.mock.method(library.indexJobs,'observeBuild',()=>({buildId:'11111111-1111-4111-8111-111111111111',promise:failed,unsubscribe(){}}));
       try {
-        const streamed = await response(endpoint + '&build=1', { headers: { accept: 'application/x-ndjson' } });
+        const streamed = await response(endpoint, { headers: { accept: 'application/x-ndjson' } });
         assert.equal(streamed.result.status, 200);
         assert.equal(streamed.result.headers.get('retry-after'), null);
         assert.deepEqual(streamed.body.trim().split('\n').map(line => JSON.parse(line).type), ['manifest', 'error']);

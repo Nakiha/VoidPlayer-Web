@@ -13,7 +13,7 @@ import { parseWorkspace } from '../../shared/review/workspace-file.ts';
 import { applyMarkEdit } from '../../shared/review/marks.ts';
 import { Viewport } from '../../shared/presentation/viewport.ts';
 const alice={id:'alice',name:'Alice'},bob={id:'bob',name:'Bob'};
-const document=()=>parseWorkspace({schema:'voidplayer-workspace',version:1,name:'评审',generatedAt:new Date().toISOString(),serverUrl:'http://example.test/',positionUs:0,viewport:new Viewport().snapshot(),tracks:[{slot:'A',mediaId:'video',offsetUs:0}],media:[{id:'video',name:'sample.mp4',size:100,lastModified:10,codec:'h264',decoder:'webcodecs',width:100,height:100,durationUs:1000,firstPtsUs:0,source:{kind:'library',id:'a'.repeat(24),url:`http://example.test/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}`}}],marks:[{id:'mark',slot:'A',mediaId:'video',text:'画面问题',severity:3,origin:'human',createdAt:new Date().toISOString(),frame:{ptsUs:0,sourcePtsUs:0,durationUs:33333},comparison:[],region:null}]});
+const document=()=>parseWorkspace({schema:'voidplayer-workspace',version:1,name:'评审',generatedAt:new Date().toISOString(),serverUrl:'http://example.test/',positionUs:0,viewport:new Viewport().snapshot(),tracks:[{slot:'A',mediaId:'video',offsetUs:0}],media:[{id:'video',name:'sample.mp4',size:100,lastModified:10,codec:'h264',decoder:'webcodecs',width:100,height:100,durationUs:1000,firstPtsUs:0,source:{kind:'library',id:'a'.repeat(24),url:`http://example.test/api/media/${'a'.repeat(24)}/content?v=${'b'.repeat(24)}`}}],marks:[{id:'mark',slot:'A',mediaId:'video',text:'画面问题',severity:3,origin:'human',createdAt:new Date().toISOString(),frame:{ptsUs:0,sourcePtsUs:0,durationUs:33333},comparison:[],region:null}]});
 
 test('sharing rejects unsyncable annotations before creating a workspace', () => {
   const store = new WorkspaceStore(':memory:');
@@ -95,25 +95,12 @@ test('shared workspace HTTP allows recipients to save, preserves live deletions 
   }finally{await service.close();await rm(root,{recursive:true,force:true});}
 });
 
-test('v4 data and old URLs migrate to writable workspaces without reviving a deleted workspace',async()=>{
-  const root=await mkdtemp(path.join(os.tmpdir(),'vp-shared-workspace-migration-')),file=path.join(root,'workspaces.sqlite');
-  const oldShare=randomUUID(),oldReview=randomUUID(),doc=document(),db=openIndexDatabase(file);
-  db.exec(`CREATE TABLE workspaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,owner TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,updated_by TEXT NOT NULL,revision INTEGER NOT NULL,bytes INTEGER NOT NULL,tracks INTEGER NOT NULL,marks INTEGER NOT NULL,document TEXT NOT NULL);
-    CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,kind TEXT NOT NULL);
-    CREATE TABLE workspace_shares(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,owner TEXT NOT NULL,document TEXT NOT NULL);
-    CREATE TABLE reviews(id TEXT PRIMARY KEY,space TEXT NOT NULL UNIQUE,owner TEXT NOT NULL,revision INTEGER NOT NULL,creation_hash TEXT NOT NULL);
-    CREATE TABLE review_versions(review TEXT NOT NULL,revision INTEGER NOT NULL,name TEXT NOT NULL,updated_at TEXT NOT NULL,updated_by TEXT NOT NULL,document TEXT NOT NULL,PRIMARY KEY(review,revision)); PRAGMA user_version=4;`);
-  db.prepare('INSERT INTO workspace_shares VALUES(?,?,?,?)').run(oldShare,new Date().toISOString(),alice.id,JSON.stringify(doc));
-  db.prepare('INSERT INTO reviews VALUES(?,?,?,?,?)').run(oldReview,`review-${oldReview}`,alice.id,2,'old');
-  db.prepare('INSERT INTO review_versions VALUES(?,?,?,?,?,?)').run(oldReview,2,'旧评审',new Date().toISOString(),alice.id,JSON.stringify({...doc,positionUs:500}));db.close();
-  const store=new WorkspaceStore(file);
-  try{
-    const shared=store.fromLegacy(oldShare,'share');assert.equal(shared.record.id,oldShare);assert.equal(shared.seeds!.document.marks.length,1);
-    store.update(oldShare,'"1"',{name:'可修改',document:{...doc,positionUs:300}},bob);
-    assert.equal(store.fromLegacy(oldShare,'share').record.revision,2);
-    store.remove(oldShare,'"2"',bob);assert.throws(()=>store.fromLegacy(oldShare,'share'),/已被删除/);
-    const review=store.fromLegacy(oldReview,'review');assert.equal(review.record.space,`review-${oldReview}`);assert.equal(review.seeds,undefined);
-    assert.equal(store.read(oldReview,bob).document.positionUs,500);store.update(oldReview,'"1"',{name:'同一工作区',document:doc},bob);
-    assert.equal(store.list(bob,true).entries.length,1);
-  }finally{store.close();await rm(root,{recursive:true,force:true});}
+test('removed share/review stores do not become current workspaces implicitly',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'vp-retired-shares-'));
+  const store=new WorkspaceStore(path.join(root,'workspaces.sqlite'));
+  try {
+    const alice=store.identify(undefined,'Alice','create');
+    assert.deepEqual(store.list(alice,true).entries,[]);
+    assert.throws(()=>store.read('00000000-0000-0000-0000-000000000000',alice),/不存在/);
+  } finally {store.close();await rm(root,{recursive:true,force:true});}
 });

@@ -26,7 +26,7 @@ test('cold and warm server corruption prefixes import the same decode boundary a
     await library.refresh();
     const entry = library.browse().entries[0];
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${entry.id}?v=${entry.version}`;
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${entry.id}/content?v=${entry.version}`;
     let boundary: number | undefined, duration: number | undefined;
     for (const phase of ['cold', 'warm']) {
       const origin=new URL(url).origin;

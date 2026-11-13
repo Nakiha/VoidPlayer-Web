@@ -91,7 +91,7 @@ test('HTTP/2 through the production gateway supports identity writes, Range/HEAD
     assert.equal((await write(`http://${host}`)).status, 403);
     assert.equal((await write('https://other.test')).status, 403);
     assert.equal((await get('/api/health', { host: 'localhost' })).status, 400, 'Host cannot override a conflicting :authority');
-    const listing = await service.library.list(), media = '/api/media/' + listing.entries[0].id;
+    const listing = await service.library.list(), media = '/api/media/' + listing.entries[0].id + '/content?v=' + listing.entries[0].version;
     const range = await get(media, { range: 'bytes=2-5' });
     assert.equal(range.status, 206);
     assert.equal(range.headers['content-range'], 'bytes 2-5/10');

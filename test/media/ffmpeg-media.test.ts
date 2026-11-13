@@ -74,7 +74,7 @@ for (const backend of ['packet', 'container'] as const) test(`${backend}: releas
       await library.refresh();
       const entry = library.browse().entries[0];
       await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-      const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${entry.id}?v=${entry.version}`;
+      const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${entry.id}/content?v=${entry.version}`;
       source = await openFFmpegContainerFromUrl(url, { name: file.name, size: file.size, lastModified: file.lastModified }, deps);
     }
     await source.ensureIndexed?.();

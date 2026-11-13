@@ -12,7 +12,7 @@ test('a source-bound HTTP index never follows a redirect to another index author
  await new Promise<void>(resolve=>foreign.listen(0,'127.0.0.1',resolve));
  const redirect=createServer((_req,res)=>res.writeHead(302,{location:`http://127.0.0.1:${(foreign.address() as {port:number}).port}/forged`}).end());
  await new Promise<void>(resolve=>redirect.listen(0,'127.0.0.1',resolve));
- const client=new MediaIndexClient(`http://127.0.0.1:${(redirect.address() as {port:number}).port}/api/media/${ID}?v=1`,'js-matroska',10000,1000,true);
+ const client=new MediaIndexClient(`http://127.0.0.1:${(redirect.address() as {port:number}).port}/api/media/${ID}/content?v=1`,'js-matroska',10000,1000,true);
  try{assert.equal(await client.read(),null);assert.equal(foreignRequests,0);}finally{client.close();for(const server of [redirect,foreign]){server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}}
 });
 
@@ -66,7 +66,7 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
     return ndjsonResponse(events(Number(after)));
   }) as typeof fetch;
 
-  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 5000, false, { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) }, progress => scanProgress.push(progress));
+  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '/content?v=1', 'ffmpeg', 200_000, 5000, false, { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) }, progress => scanProgress.push(progress));
   try {
     assert.deepEqual(await client.read(), expected);
     assert.deepEqual(cursors, ['-1', '0']);
@@ -109,9 +109,9 @@ test('FFmpeg record batches are incrementally validated and delivered before str
       identity, metadata: { ...metadata, count: 2, indexIntegrity: 'prefix', indexTruncatedAt: 2048, indexEndDts: '90000' }, recordBytes: FFMPEG_INDEX_RECORD_BYTES, lastSeq: 0 },
     { type: 'complete', buildId, lastSeq: 0, frames: 2, stablePresentationUs: 33_333 },
   ].map(event => JSON.stringify(event));
-  globalThis.fetch = (async () => ndjsonResponse(lines)) as typeof fetch;
+  globalThis.fetch = (async (input:RequestInfo|URL) => String(input).includes('/build?')?Response.json({state:'accepted'},{status:202}):ndjsonResponse(lines)) as typeof fetch;
   const manifests: any[] = [], batches: any[] = [], completed: any[] = [];
-  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 5000, true,
+  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '/content?v=1', 'ffmpeg', 200_000, 5000, true,
     identity, undefined, manifest => manifests.push(manifest), batch => batches.push(batch), (manifest, frames) => completed.push({ manifest, frames }));
   try {
     const result = await client.read() as any;
@@ -158,6 +158,7 @@ test('FFmpeg record streams resume the same build after the last accepted batch'
   const requestUrls: URL[] = [];
   globalThis.fetch = (async input => {
     const url = new URL(String(input));
+    if (url.pathname.endsWith('/build')) return Response.json({state:'accepted'},{status:202});
     requestUrls.push(url);
     const after = Number(url.searchParams.get('after'));
     if (requestUrls.length === 1) return ndjsonResponse([
@@ -175,7 +176,7 @@ test('FFmpeg record streams resume the same build after the last accepted batch'
     ]);
   }) as typeof fetch;
   const batches: number[] = [];
-  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 5000, true,
+  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '/content?v=1', 'ffmpeg', 200_000, 5000, true,
     identity, undefined, undefined, record => batches.push(record.seq));
   try {
     const result = await client.read() as any;
@@ -213,7 +214,7 @@ test('active index streams may outlast the per-request idle timeout', async () =
     { type: 'batch', buildId, seq: 0, count: 1, safePresentationUs: 0, data: Buffer.from(records).toString('base64') },
     { type: 'complete', buildId, lastSeq: 0, frames: 1, stablePresentationUs: 0 },
   ].map(event => encoder.encode(JSON.stringify(event) + '\n'));
-  globalThis.fetch = (async () => new Response(new ReadableStream<Uint8Array>({
+  globalThis.fetch = (async (input:RequestInfo|URL) => String(input).includes('/build?')?Response.json({state:'accepted'},{status:202}):new Response(new ReadableStream<Uint8Array>({
     async pull(controller) {
       if (lines.length) {
         const line = lines.shift()!;
@@ -222,7 +223,7 @@ test('active index streams may outlast the per-request idle timeout', async () =
       } else controller.close();
     },
   }), { headers: { 'content-type': 'application/x-ndjson' } })) as typeof fetch;
-  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 25, true, identity);
+  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '/content?v=1', 'ffmpeg', 200_000, 25, true, identity);
   try {
     const result = await client.read() as any;
     assert.equal(result.streamed, true);

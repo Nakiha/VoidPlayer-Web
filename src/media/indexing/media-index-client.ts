@@ -19,6 +19,7 @@ function sameManifest(a: any, b: any): boolean {
 export class MediaIndexClient {
   private controller = new AbortController();
   private endpoint?: string;
+  private requestBuild = false;
   private lookup: Promise<ServerIndexResult | null>;
   private serverFailure?: IndexStreamFailure;
   private transport: IndexStreamTransport;
@@ -39,8 +40,8 @@ export class MediaIndexClient {
     if (url) {
       try {
         const source = new URL(url, globalThis.location?.href);
-        if (/^\/api\/media\/[0-9a-f]{24}$/.test(source.pathname) && source.searchParams.has('v')) {
-          source.pathname += '/frame-index';
+        if (/^\/api\/media\/[0-9a-f]{24}\/content$/.test(source.pathname) && source.searchParams.has('v')) {
+          source.pathname = source.pathname.replace(/\/content$/, '/frame-index');
           source.searchParams.set('kind', kind);
           const resolvedIdentity = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
           if (resolvedIdentity) {
@@ -48,7 +49,7 @@ export class MediaIndexClient {
             source.searchParams.set('schema', String(resolvedIdentity.schemaVersion));
             source.searchParams.set('indexer', resolvedIdentity.indexerBuild);
           }
-          if (requestBuild) source.searchParams.set('build', '1');
+          this.requestBuild = requestBuild;
           this.endpoint = source.href;
         }
       } catch { /* local files and arbitrary URLs have no cache API */ }
@@ -59,6 +60,17 @@ export class MediaIndexClient {
 
   private async load(): Promise<ServerIndexResult | null> {
     if (!this.endpoint) return null;
+    if (this.requestBuild) {
+      const command = new URL(this.endpoint); command.pathname += '/build';
+      const response = await fetch(command,{method:'POST',headers:{origin:command.origin,'x-voidplayer-action':'frame-index','content-type':'application/json'},body:'{}',
+        signal:AbortSignal.any([this.controller.signal,AbortSignal.timeout(15000)]),redirect:'error',cache:'no-store'});
+      if (!response.ok) {
+        const failure = await response.json().catch(() => null);
+        this.serverFailure = {status:response.status,code:failure?.code,message:failure?.error ?? `索引构建请求失败（${response.status}）。`};
+        return null;
+      }
+      await response.body?.cancel();
+    }
     let manifest: any;
     let buildingManifest: any;
     let transferBytes = new Uint8Array(0);

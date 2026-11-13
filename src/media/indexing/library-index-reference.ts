@@ -15,10 +15,10 @@ export async function verifyLibraryIndexReference(url:string,version:string,size
   signal.throwIfAborted();
   const origin=globalThis.location?.origin,source=new URL(url,globalThis.location?.href);
   if(!origin||reference.origin!==origin||source.origin!==origin||source.username||source.password
-    ||!/^[0-9a-f]{24}$/.test(reference.id)||!reference.version||source.pathname!==`/api/media/${reference.id}`
+    ||!/^[0-9a-f]{24}$/.test(reference.id)||!reference.version||source.pathname!==`/api/media/${reference.id}/content`
     ||source.searchParams.get('v')!==reference.version||version!==`${reference.id}@${reference.version}`)
     throw new MediaOpenError('input','JS index authority is not the application library source');
-  source.pathname+='/metadata';
+  source.pathname=source.pathname.replace(/\/content$/, '');
   const response=await fetch(source,{cache:'no-store',credentials:'same-origin',redirect:'error',signal});
   if(!response.ok||new URL(response.url).origin!==origin)throw new MediaOpenError('input','Library source metadata unavailable');
   const metadata=await response.json();signal.throwIfAborted();
@@ -30,7 +30,7 @@ export async function verifyLibraryIndexReference(url:string,version:string,size
 export function libraryIndexReferenceFromUrl(url: string): LibraryIndexReference | undefined {
   const origin = globalThis.location?.origin;
   if (!origin) return;
-  const source = new URL(url, origin), id = /^\/api\/media\/([0-9a-f]{24})$/.exec(source.pathname)?.[1], version = source.searchParams.get('v');
+  const source = new URL(url, origin), id = /^\/api\/media\/([0-9a-f]{24})\/content$/.exec(source.pathname)?.[1], version = source.searchParams.get('v');
   if (!id) return;
   if (source.origin !== origin || !version || source.username || source.password)
     throw new MediaOpenError('input', '媒体库播放需要当前服务提供的版本化链接。');
@@ -42,7 +42,7 @@ export async function loadLibraryPlaybackContainer(url: string, size: number, re
   if (!own || own.id !== reference.id || own.version !== reference.version || own.origin !== reference.origin)
     throw new MediaOpenError('input', '媒体库播放引用无效。');
   const source = new URL(url, own.origin);
-  source.pathname += '/playback-container';
+  source.pathname = source.pathname.replace(/\/content$/, '/container');
   const response = await fetch(source, { cache: 'no-store', credentials: 'same-origin', redirect: 'error', signal });
   if (!response.ok) throw new MediaOpenError('input', `服务端媒体识别失败（${response.status}）。`);
   const value = await response.json();

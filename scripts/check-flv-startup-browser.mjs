@@ -90,7 +90,7 @@ async function run() {
   assert.ok((await page.locator('#subtrack-ruler').textContent()).endsWith(expectedDuration), 'ruler follows the server index duration');
   assert.match(complete.tracks[0].indexWarning, /尾部不完整/);
   assert.match(await page.locator('#meta-A').textContent(), /尾部不完整/);
-  await page.waitForFunction(async () => (await (await fetch('/api/admin/frame-indexes')).json()).count === 1);
+  await page.waitForFunction(async () => (await (await fetch('/api/admin/caches/frame-indexes')).json()).count === 1);
   await call('remove_review_track', { slot: 'A' }); const before = fixture.counts().ranges;
   await call('load_library_item', { id: fixture.entry.id, slot: 'A' }); const reused = await call('seek_review', { ptsUs: 2500000 });
   assert.equal(reused.tracks[0].indexSource, 'server'); assert.match(reused.tracks[0].indexWarning, /尾部不完整/); assert.ok(fixture.counts().ranges - before < 10);

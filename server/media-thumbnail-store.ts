@@ -87,18 +87,6 @@ export class MediaThumbnailStore {
 
   /** Called inside the scanner's metadata transaction, with an owned move's
    * verified versions. Clearing the cache during the operation wins. */
-  copyRelocated(sourceId:string, sourceVersion:string, id:string, version:string, epoch:number) {
-    if (epoch!==this.epoch) return;
-    const inserted=this.db.prepare(`INSERT OR IGNORE INTO media_thumbnails
-      (media_id,media_version,stream_selector,recipe_version,source_pts_us,width,height,mime,bytes,data,created_at,accessed_at)
-      SELECT ?,?,stream_selector,recipe_version,source_pts_us,width,height,mime,bytes,data,created_at,?
-      FROM media_thumbnails WHERE media_id=? AND media_version=? AND stream_selector=? AND recipe_version=?
-      AND EXISTS(SELECT 1 FROM media JOIN roots ON media.root_id=roots.id
-        WHERE media.id=? AND version=? AND media.state='ready' AND roots.active=1)`)
-      .run(id,version,Date.now(),sourceId,sourceVersion,STREAM_SELECTOR,THUMB_RECIPE_VERSION,id,version);
-    if (inserted.changes) this.trim();
-  }
-
   private trim() {
     let total = Number(this.db.prepare('SELECT coalesce(sum(bytes),0) AS bytes FROM media_thumbnails').get()!.bytes);
     while (total > THUMB_CACHE_LIMIT_BYTES) {

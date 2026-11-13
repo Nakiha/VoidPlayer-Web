@@ -1,3 +1,5 @@
+import {requireMediaVersion} from '../../routes/media-version.ts';
+import {AdminError} from '../../admin-error.ts';
 import { requestAuthority } from '../../http.ts';
 import { isProduct, encodeProduct, PRODUCT_SCHEMA } from '../../../shared/analysis/bitstream/products.ts';
 import type { IncomingMessage, ServerResponse } from '../../http.ts';
@@ -72,7 +74,7 @@ export async function handleAnalysisRoutes(
       } else sendJson(res, 405, { error: "Method not allowed" });
       return true;
     }
-    const version = url.searchParams.get("v");
+    const version = requireMediaVersion(url);
     if (
       !version ||
       !/^[a-f0-9]{24}$/.test(version) ||
@@ -185,6 +187,7 @@ export async function handleAnalysisRoutes(
     }
     sendJson(res, 405, { error: "Method not allowed" });
   } catch (error) {
+    if (error instanceof AdminError) {sendJson(res,error.status,{error:error.message,code:error.code,requestId:ctx.requestId});return true;}
     const reason = failureInfo(error);
     sendJson(
       res,

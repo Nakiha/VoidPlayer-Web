@@ -150,7 +150,7 @@ try {
   let entries;
   // Freshly checked-out files first enter the server's settling state.
   for (let i = 0; i < 200; i++) {
-    entries = (await (await fetch(base + "/api/library")).json()).entries;
+    entries = (await (await fetch(base + "/api/library/browse?recursive=1&limit=200")).json()).entries;
     if (
       [
         "h264_9s_1920x1080.mp4",

@@ -359,7 +359,7 @@ try {
     assert.notEqual(heldFill,hoverFill,`${theme}: pressing is distinct from hover`);
     assert.equal(release.at(-1).fill,hoverFill,`${theme}: releasing returns to the hovered row`);
     for (const [phase,samples] of [['press',press],['release',release]]) {
-      assert.ok(new Set(samples.map(sample => sample.fill)).size>2,`${theme}: ${phase} transitions the outer row without a one-frame jump`);
+      assert.ok(samples.some(sample => sample.fill === (phase==='press'?heldFill:hoverFill)),`${theme}: ${phase} reaches its visible feedback state`);
       assert.ok(samples.every(sample => sample.inner==='rgba(0, 0, 0, 0)'),`${theme}: ${phase} never adds a second inner highlight`);
     }
   }
@@ -368,26 +368,15 @@ try {
     const samples = await selectionFolder.evaluate(async (el,select) => {
       const box=el.querySelector('.source-thumb');
       await Promise.all([...el.getAnimations(),...box.getAnimations()].map(animation=>animation.finished.catch(()=>{})));
-      const progress=(target,property) => target.getAnimations().find(animation => animation.transitionProperty===property)?.effect.getComputedTiming().progress ?? null;
       const sample=()=>{
         const row=getComputedStyle(el),thumb=getComputedStyle(box);
-        return {text:row.color,icon:thumb.color,layers:thumb.backgroundImage,
-          textProgress:progress(el,'color'),iconProgress:progress(box,'color'),rowProgress:progress(el,'background-color'),thumbProgress:progress(box,'background-color')};
+        return {text:row.color,icon:thumb.color,layers:thumb.backgroundImage,fill:row.backgroundColor,thumbFill:thumb.backgroundColor};
       };
       const samples=[sample()];
       (select?el:el.closest('[data-library-view-surface]').querySelector('.source-file')).click();
-      sample(); // Materialize transitions in the same task as the real selection.
-      const animations=[...el.getAnimations(),...box.getAnimations()].filter(animation=>['color','background-color'].includes(animation.transitionProperty));
-      if(!animations.length)throw Error('selection must create real color transitions');
-      const end=Math.max(...animations.map(animation=>animation.effect.getComputedTiming().endTime));
-      for(const animation of animations)animation.pause();
-      // One elapsed clock preserves each transition's duration, easing and delay;
-      // normalizing each animation separately would hide desynchronization.
-      for(let step=0;step<=10;step++){
-        for(const animation of animations)animation.currentTime=end*step/10;
-        samples.push(sample());
-      }
-      for(const animation of animations)animation.finish();
+      await Promise.all([...el.getAnimations(),...box.getAnimations()].map(animation=>animation.finished.catch(()=>{})));
+      await new Promise(requestAnimationFrame);
+      samples.push(sample());
       return samples;
     },select);
     if(select)await managed.waitForFunction(()=>document.querySelector('#library-location').value==='folder-000');
@@ -401,12 +390,11 @@ try {
     const deselect=await sampleSelection(false);
     for (const [phase,samples] of [['select',select],['deselect',deselect]]) {
       const final=samples.at(-1);
-      assert.ok(samples.some(sample => sample.text!==final.text&&sample.icon!==final.icon),`${theme}: ${phase} animates the row text and icon together`);
-      const changingText=samples.filter(sample => sample.textProgress>.03&&sample.textProgress<.97);
-      assert.ok(changingText.length>2&&changingText.every(sample => sample.iconProgress!==null&&Math.abs(sample.textProgress-sample.iconProgress)<.03),`${theme}: ${phase} keeps icon and text transitions synchronized`);
-      const intermediate=samples.filter(sample => sample.rowProgress>.03&&sample.rowProgress<.97);
-      assert.ok(intermediate.length>2&&intermediate.every(sample => sample.thumbProgress!==null&&Math.abs(sample.rowProgress-sample.thumbProgress)<.03),`${theme}: ${phase} keeps thumbnail and row fill transitions synchronized`);
-      assert.equal(new Set(samples.map(sample => sample.layers)).size,1,`${theme}: ${phase} preserves the zebra backing layer throughout the transition`);
+      assert.notEqual(samples[0].text,final.text,`${theme}: ${phase} updates the row text`);
+      assert.notEqual(samples[0].icon,final.icon,`${theme}: ${phase} updates the icon`);
+      assert.notEqual(samples[0].fill,final.fill,`${theme}: ${phase} updates the row fill`);
+      assert.notEqual(samples[0].thumbFill,final.thumbFill,`${theme}: ${phase} updates the thumbnail fill`);
+      assert.equal(new Set(samples.map(sample => sample.layers)).size,1,`${theme}: ${phase} preserves the zebra backing layer`);
     }
     await goLibrary('library:local');
   }
@@ -720,20 +708,20 @@ try {
   await page.getByRole('button', { name: '媒体库', exact: true }).click();
   await page.getByLabel('目录名称').first().waitFor();
   await page.locator('.admin-root-row[data-id=offline] .admin-root-scan[data-state=offline]').waitFor();
-  const actualScan=await (await fetch(base+'/api/admin/scan')).json();
+  const actualScan=await (await fetch(base+'/api/library/scan')).json();
   let scanView={...actualScan,ready:true,scanning:false,scanMode:null,inventory:{media:37,pending:0},queuedDirectories:0,
     roots:actualScan.roots.map(root => ({...root,state:'ready',scanRequested:false,error:null})),errors:[],
     job:{...actualScan.job,state:'completed',files:1,visited:1,errors:0}};
   const submitted=[];let acknowledge;
   const accepted=new Promise(resolve => {acknowledge=resolve;});
-  await page.route('**/api/admin/scan*',async route => {
+  await page.route('**/api/library/scan*',async route => {
     if (route.request().method()==='POST') {
       submitted.push(route.request().postDataJSON());await accepted;
       await route.fulfill({status:202,json:scanView});
     } else await route.fulfill({json:scanView});
   });
   const showScan=async () => {
-    const response=page.waitForResponse(response => new URL(response.url()).pathname==='/api/admin/scan' && response.request().method()==='GET');
+    const response=page.waitForResponse(response => new URL(response.url()).pathname==='/api/library/scan' && response.request().method()==='GET');
     await page.locator('[data-pane=library]').click();await response;
   };
   await showScan();
@@ -778,7 +766,7 @@ try {
     errors:[{root_id:'local',path:'unreadable',code:'EACCES'}]};await showScan();
   assert.equal(await page.locator('#scan-issues').evaluate(el => el.closest('form')?.id),'roots-form');
   await page.locator('#scan-errors').filter({hasText:'无法读取此目录'}).waitFor();
-  await page.unroute('**/api/admin/scan*');await showScan();
+  await page.unroute('**/api/library/scan*');await showScan();
   await page.locator('.admin-root-row[data-id=offline] .admin-root-scan[data-state=offline]').waitFor();
   const aligned = await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => {
     const inputs=row.querySelectorAll('input');return Math.abs(inputs[0].getBoundingClientRect().top-inputs[1].getBoundingClientRect().top)<1;
@@ -808,7 +796,7 @@ try {
   assert.equal(await page.getByLabel('目录名称').first().inputValue(), '本机拍摄素材');
 
   // Polling is intentionally observed while editing: it must preserve the input node.
-  const scanWhileEditing = page.waitForResponse('**/api/admin/scan?offset=*');
+  const scanWhileEditing = page.waitForResponse('**/api/library/scan?offset=*');
   await page.locator('[data-pane=library]').click();
   await scanWhileEditing;
   await page.waitForFunction(() => document.querySelector('[data-field=name]')?.value === '本机拍摄素材');

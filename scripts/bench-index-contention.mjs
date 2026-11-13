@@ -34,7 +34,7 @@ if (process.argv.includes('--server')) {
     const index = { schema: 2, size: entry.size, codec: 'h264', description: [1, 100, 0, 31, 255, 224, 0],
       packets: Array.from({ length: count }, (_, i) => [13 + i * 16, 10, i * 40000, i * 40000, +(i % 25 === 0)]) };
     const body = JSON.stringify({ epoch: 0, index });
-    const url = base + '/api/media/' + entry.id + '?v=' + entry.version;
+    const url = base + '/api/media/' + entry.id + '/content?v=' + entry.version;
     async function probe(n) {
       const durations = [];
       for (let i = 0; i < n; i++) {

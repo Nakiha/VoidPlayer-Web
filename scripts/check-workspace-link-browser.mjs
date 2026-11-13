@@ -14,7 +14,7 @@ try{
   vite=await createServer({configFile:false,cacheDir:path.join(root,'vite-cache'),optimizeDeps:{noDiscovery:true},server:{host:'127.0.0.1',port:0,proxy:{'/api':{target:`http://127.0.0.1:${service.server.address().port}`,changeOrigin:false}}}});await vite.listen();
   browser=await webkit.launch();const page=await browser.newPage({locale:'zh-CN'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/controls.html',route=>route.fulfill({contentType:'text/html',body:'<body></body>'}));
-  await page.route('**/api/media/*/metadata*',route=>route.fulfill({json:{id:'a'.repeat(24),version:'b'.repeat(24),size:100,lastModified:10,state:'ready'}}));
+  await page.route('**/api/media/*',route=>route.fulfill({json:{id:'a'.repeat(24),version:'b'.repeat(24),size:100,lastModified:10,state:'ready'}}));
   await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/controls.html`);
   await page.evaluate(async()=>{
     const {savedWorkspaceShell,installSavedWorkspaces}=await import('/src/ui/saved-workspaces.ts');
@@ -22,7 +22,7 @@ try{
     const {chooseIdentity}=await import('/src/services/identity.ts');const {Viewport}=await import('/shared/presentation/viewport.ts');const {installToasts}=await import('/src/ui/toast.ts');
     document.body.innerHTML=`<header class="topbar"><button id="workspace-share"></button></header><div id="settings"><div id="settings-pane-workspace">${savedWorkspaceShell()}</div></div>`;
     await chooseIdentity({name:'测试用户',mode:'create'});const life=new AbortController();
-    const snapshot=()=>({schema:'voidplayer-workspace',version:1,name:saved.name(),generatedAt:new Date().toISOString(),serverUrl:location.origin,positionUs:0,tracks:[{slot:'A',mediaId:'sample',offsetUs:0}],media:[{id:'sample',name:'sample.mp4',size:100,lastModified:10,codec:'h264',decoder:'webcodecs',width:100,height:100,durationUs:1000,firstPtsUs:0,source:{kind:'library',id:'a'.repeat(24),url:`${location.origin}/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}`}}],marks:[],viewport:new Viewport().snapshot()});
+    const snapshot=()=>({schema:'voidplayer-workspace',version:1,name:saved.name(),generatedAt:new Date().toISOString(),serverUrl:location.origin,positionUs:0,tracks:[{slot:'A',mediaId:'sample',offsetUs:0}],media:[{id:'sample',name:'sample.mp4',size:100,lastModified:10,codec:'h264',decoder:'webcodecs',width:100,height:100,durationUs:1000,firstPtsUs:0,source:{kind:'library',id:'a'.repeat(24),url:`${location.origin}/api/media/${'a'.repeat(24)}/content?v=${'b'.repeat(24)}`}}],marks:[],viewport:new Viewport().snapshot()});
     let sharing;
     const saved=installSavedWorkspaces({signal:life.signal,snapshot,open:async()=>{window.openCount=(window.openCount??0)+1;return true;},copyLink:id=>sharing.copySaved(id),canSave:()=>true,report:e=>{throw e;}});
     Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:async value=>{window.copied=value;}});

@@ -132,14 +132,14 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
       let handoff: string | null = null;
       try { handoff = sessionStorage.getItem(updateKey); } catch {}
       if (requested && id === previousId && checkpoint?.id === `${id}:${actor}` && handoff === JSON.stringify([checkpoint.id, requested])
-        && !session.getState().tracks.length && !['share', 'workspace', 'review'].some(key => url.searchParams.has(key))) {
+        && !session.getState().tracks.length && !url.searchParams.has('workspace')) {
         sessionStorage.removeItem(updateKey);
         try {
           if (await options.restore(checkpoint.document, true)) { active = true; schedule(); return; }
         } catch (error) { options.toasts.show(String(error), { kind: 'warning' }); }
       }
       const restorable = checkpoint?.document.tracks.some(track => supportsFileHandles() || checkpoint.document.media.find(media => media.id === track.mediaId)?.source);
-      if (restorable && checkpoint && !session.getState().tracks.length && !url.searchParams.has('share') && !url.searchParams.has('workspace')) {
+      if (restorable && checkpoint && !session.getState().tracks.length && !url.searchParams.has('workspace')) {
         recovery.replaceChildren(recoveryCard(checkpoint.document, async () => {
           try {
             const ok = await options.restore(checkpoint.document);

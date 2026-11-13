@@ -40,7 +40,7 @@ export async function generatedLibrary(directory) {
     const expected = fixture.entries.find(e => e.rootId === entry.rootId && e.name === entry.name); assert.ok(expected);
     const root = roots.find(r => r.id === entry.rootId);
     const bytes = await readFile(path.join(root.path, entry.name)), end = Math.min(start + 4095, bytes.length - 1);
-    const response = await fetch(`${base}/api/media/${entry.id}?v=${entry.version}`, { headers: { Range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout(10000) });
+    const response = await fetch(`${base}/api/media/${entry.id}/content?v=${entry.version}`, { headers: { Range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout(10000) });
     assert.equal(response.status, 206); assert.equal(response.headers.get('content-range'), `bytes ${start}-${end}/${bytes.length}`);
     assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes.subarray(start, end + 1));
   }
@@ -92,7 +92,7 @@ export async function generatedLibrary(directory) {
       const state = await idle(); assert.equal(state.roots.find(r => r.id === rootToMove.id).state, 'offline');
       const cached = await json(`/api/library/browse?root=${rootToMove.id}&recursive=1&search=level-12`);
       assert.equal(cached.entries[0].id, selected[0].id);
-      assert.equal((await fetch(`${base}/api/media/${selected[0].id}?v=${selected[0].version}`)).status, 404);
+      assert.equal((await fetch(`${base}/api/media/${selected[0].id}/content?v=${selected[0].version}`)).status, 404);
       await range(selected[1]); // Other roots remain readable during the outage.
     },
     async reconnect() {
@@ -108,7 +108,7 @@ export async function generatedLibrary(directory) {
         await copyFile(safePath('masters/h264-1.mp4'), file); await refresh(); await idle();
         const changed = (await json('/api/library/browse?root=archive&recursive=1&search=level-12')).entries[0];
         assert.equal(changed.id, entry.id); assert.notEqual(changed.version, entry.version);
-        assert.equal((await fetch(`${base}/api/media/${entry.id}?v=${entry.version}`)).status, 409);
+        assert.equal((await fetch(`${base}/api/media/${entry.id}/content?v=${entry.version}`)).status, 409);
         console.log('PASS generated library: replacement preserves media ID and rejects stale version URL');
       } finally { await copyFile(safePath('masters/' + original.master), file); }
     },

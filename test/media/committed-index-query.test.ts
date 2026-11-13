@@ -93,7 +93,7 @@ test('real FLV and JS-TS commit headers agree with ffprobe and shared statistics
         const pts = probe.packets.filter((p: any) => p.pts !== undefined).map((p: any) => p.pts * factor);
         assert.equal(o.coverage.pts.minTick, String(Math.min(...pts))); assert.equal(o.coverage.pts.maxTick, String(Math.max(...pts)));
       }
-      const info = await (await fetch(`${base}/api/media/${entry.id}/info?v=${entry.version}`)).json(); assert.deepEqual(info.indexes[0], o);
+      const info = await (await fetch(`${base}/api/media/${entry.id}?v=${entry.version}`)).json(); assert.deepEqual(info.indexes[0], o);
       const head = await fetch(endpoint, { method: 'HEAD' }); assert.equal(await head.text(), ''); assert.equal(Number(head.headers.get('content-length')), Buffer.byteLength(JSON.stringify(page)));
       const compact = await (await fetch(`${base}/api/media/${entry.id}/frame-index?${new URLSearchParams({ v: entry.version!, kind: identity.kind, stream: identity.streamKey, schema: String(identity.schemaVersion), indexer: identity.indexerBuild })}`)).json();
       assert.deepEqual(compact.index, doc, 'GUI compact index remains identical');

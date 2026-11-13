@@ -61,9 +61,9 @@
 
 - `GET /api/library/browse`：`root`、`directory`、`search`、`recursive=1`、`limit`（1–200）、`offset`；立即返回当前目录的已收录媒体与子目录、扫描状态及下一页位置，后台观察该路径。递归搜索不返回目录行。
 - `GET /api/library/scan`：任务状态、根目录状态和本次错误详情。响应不包含根目录绝对路径。
-- `POST /api/library/scan?action=refresh|cancel`：返回 202，不等待扫描；要求同源 `Origin` 与 `X-VoidPlayer-Action: scan`。
-- `GET /api/media/<id>/metadata`：查询已存元数据，支持旧 ID 别名，最近片源因此不依赖当前目录页。
-- 旧 `GET /api/library` 仅保留为兼容接口，最多 5000 项，超过返回 `truncated`。当前 UI 与 Agent 均改用分页接口，不再调用它。
+- `POST /api/library/scan`，JSON `{action:"refresh",rootId?}` 或 `{action:"cancel"}`：返回 202，不等待扫描；要求同源 `Origin` 与 `X-VoidPlayer-Action: scan`。
+- `GET /api/media/<id>`：查询已存元数据，支持旧 ID 别名，最近片源因此不依赖当前目录页。
+- 媒体清单统一使用分页 browse；不存在旧列表或 GET refresh 扫描开关。
 
 分页响应携带 `revision`，后续页和轮询带回该值。文件或目录集合变化时返回 409，页面提示并回到第一页，避免静默跳项。无变化扫描不会使分页失效；集合变化后客户端静默重新取页并保留当前浏览范围。每页最多 60 个媒体及 60 个子目录，当前目录与全库搜索在服务端执行；本地文件/最近记录在浏览器内过滤。
 
