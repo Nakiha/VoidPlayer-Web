@@ -27,7 +27,9 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
   let grant:{token:string;epoch:string;scopes:PageScope[];binding:string;clientClaim:unknown}|undefined;
   let generation=0,refreshSequence=0,inFlight=0,connecting=false,stopped=false,descriptor:unknown,reviewedRevision:number|undefined,reviewedReady=false;
   let controller=new AbortController();
-  const binding=()=>JSON.stringify([location.search,currentActor()?.id??null,session.getState().tracks.map(x=>[x.slot,x.id,x.sourceGen])]);
+  // URI view parameters change during authorized seek/pan operations. The
+  // grant follows this document's actual identity and opened source generations.
+  const binding=()=>JSON.stringify([location.pathname,currentActor()?.id??null,session.getState().tracks.map(x=>[x.slot,x.id,x.sourceGen])]);
   const workspaceLabel=()=>session.getState().tracks.map(x=>`${x.slot}: ${x.name}`).join(' / ')||t(msg('pageBridge.empty','空工作区'));
   const workspace=()=>`${pageId} · ${workspaceLabel()}`.slice(0,300);
   const note=(s:string)=>{$('status').textContent=s;};

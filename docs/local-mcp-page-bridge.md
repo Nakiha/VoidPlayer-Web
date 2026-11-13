@@ -55,6 +55,8 @@ The page closes its grant on context/actor/source changes; an old in-progress
 operation may finish, but reconnect is disabled until it settles. Late replies
 are fenced by document, grant epoch and command correlation. Backend HTTP jobs
 do not depend on this page channel, and revoking it never cancels such jobs.
+Automatic URI updates for time, viewport or layout retain the grant. Binding
+uses the actual loaded source generations and actor, rather than the full query string.
 
 ## An already-open normal loopback page
 

@@ -79,7 +79,9 @@ try{
   ackRelease.resolve();await ackCdp.send('Fetch.disable');await ackCdp.detach();sessions.splice(sessions.indexOf(ackCdp),1);
   phase='view-and-annotation';
   await call('seek_review',{ptsUs:500000},'seek-1');
+  await pageA.waitForFunction(()=>new URL(location.href).searchParams.get('t')==='0.5');
   const state=await call('get_review_session');check('exact seek through real MCP',state.positionUs===500000&&state.tracks[0].frame.ptsUs===500000);
+  check('view-only URI updates retain the explicitly granted source',(await client.call('get_bridge_status')).connected);
   const markInput={slot:'A',text:'MCP visible ROI',severity:3,drawings:[{tool:'rect',points:[{x:.2,y:.2},{x:.6,y:.6}]}]};
   const mark=await call('add_review_mark',markInput,'mark-1');check('real visible annotation created',typeof mark.id==='string');
   assert.deepEqual(await call('add_review_mark',markInput,'mark-1'),mark);

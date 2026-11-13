@@ -7,6 +7,7 @@ import { webkit, chromium } from './testing/browser-engines.mjs';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 import { AnnotationStore } from '../server/annotations.ts';
+import { annotationTarget } from '../shared/review/annotation-target.ts';
 import { syntheticFlv } from '../test/flv-fixture.ts';
 import { demuxFlv, FlvReader } from '../shared/media/containers/flv-demux.ts';
 import { serializeFlvIndex } from '../shared/media/indexing/flv-index-cache.ts';
@@ -22,10 +23,11 @@ try {
  service.library.frameIndexes.put(entry.id,entry.version,entry.size,index,0);
  browser=await(name==='chromium'?chromium:webkit).launch({headless:true});const context=await browser.newContext({locale:'zh-CN', viewport:{width:1512,height:850},colorScheme:'dark'}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const jpeg=await page.screenshot({type:'jpeg',quality:50});
+ const space=await annotationTarget({source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}/content?v=${entry.version}`}},base);
  annotations=new AnnotationStore(path.join(config.dataDir,'annotations.sqlite'));
  for(let i=0;i<53;i++){
   const id=`mark-${i}`,document={media:[{id:'media',name:i===0?'极长的媒体名称_'.repeat(18)+'.flv':'现场拍摄_镜头03.flv',size:flv.length,lastModified:1,codec:'avc1',decoder:'webcodecs',width:320,height:180,durationUs:1000000,firstPtsUs:0,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}/content?v=${entry.version}`}}],mark:{id,text:i===0?'留意这里的光影，调整下一版调色':'检查边缘细节与画面色彩',severity:3,origin:'human',createdAt:'2026-09-08',slot:'A',mediaId:'media',frame:{ptsUs:0,sourcePtsUs:0,durationUs:40000},comparison:[],region:null,drawings:[]}};
-  annotations.mutate('default',{operationId:`create-${id}`,id,revision:0,action:'put',document},{id:'reviewer',name:'剪辑师'});annotations.putPreview('default',id,1,jpeg);
+  annotations.mutate(space,{operationId:`create-${id}`,id,revision:0,action:'put',document},{id:'reviewer',name:'剪辑师'});annotations.putPreview(space,id,1,jpeg);
  }
  const before=await page.request.get(base+'/api/admin/caches').then(r=>r.json());assert.equal(before.count,54);assert.ok(before.volume.availableBytes>0);assert.ok(before.types.every(t=>t.location.startsWith(config.dataDir)));
  assert.equal((await page.request.delete(base+'/api/admin/caches/annotation-previews',{data:{all:true}})).status(),403);
@@ -62,13 +64,13 @@ try {
  await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');await page.screenshot({path:`/tmp/voidplayer-caches-narrow-${name}.png`});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow');
  await page.setViewportSize({width:1512,height:850});
  // A stale single-entry deletion must not remove a newly generated preview.
- await page.locator('.cache-row button').first().click();const target=await page.locator('.cache-row').first().getAttribute('data-cache-id');const current=annotations.read('default',target);
- annotations.mutate('default',{operationId:'edit-preview',id:target,revision:1,action:'put',document:{...current.document,mark:{...current.document.mark,text:'更新后的标注'}}},{id:'reviewer',name:'剪辑师'});annotations.putPreview('default',target,2,jpeg);
- await page.locator('#cache-confirm-clear').click();await page.locator('.admin-toast-stack .toast-message').filter({hasText:'预览已更新'}).waitFor();assert.ok(annotations.preview('default',target,2));await page.locator('#cache-cancel').click();
+ await page.locator('.cache-row button').first().click();const target=await page.locator('.cache-row').first().getAttribute('data-cache-id');const current=annotations.read(space,target);
+ annotations.mutate(space,{operationId:'edit-preview',id:target,revision:1,action:'put',document:{...current.document,mark:{...current.document.mark,text:'更新后的标注'}}},{id:'reviewer',name:'剪辑师'});annotations.putPreview(space,target,2,jpeg);
+ await page.locator('#cache-confirm-clear').click();await page.locator('.admin-toast-stack .toast-message').filter({hasText:'预览已更新'}).waitFor();assert.ok(annotations.preview(space,target,2));await page.locator('#cache-cancel').click();
  const epoch=annotations.previewEpoch;await page.locator('#cache-clear').click();await page.locator('#cache-confirm-clear').click();await page.getByText('暂无标注预览缓存',{exact:true}).waitFor();
- assert.equal(annotations.list('default').count,53);assert.equal(service.library.frameIndexes.list().count,1);assert.throws(()=>annotations.putPreview('default',target,2,jpeg,epoch),/已被清理/);
+ assert.equal(annotations.list(space).count,53);assert.equal(service.library.frameIndexes.list().count,1);assert.throws(()=>annotations.putPreview(space,target,2,jpeg,epoch),/已被清理/);
  await page.locator('[data-cache-kind=frame-indexes]').click();await page.locator('.cache-row').waitFor();await page.locator('.cache-row button').click();await page.locator('#cache-confirm-clear').click();await page.getByText('暂无帧索引缓存',{exact:true}).waitFor();
- assert.equal(service.library.browse().entries.length,1);assert.equal(annotations.list('default').count,53);assert.throws(()=>service.library.frameIndexes.put(entry.id,entry.version,entry.size,index,0),/已被清理/);
+ assert.equal(service.library.browse().entries.length,1);assert.equal(annotations.list(space).count,53);assert.throws(()=>service.library.frameIndexes.put(entry.id,entry.version,entry.size,index,0),/已被清理/);
  const after=await page.request.get(base+'/api/admin/caches').then(r=>r.json());assert.equal(after.bytes,0);assert.equal(after.count,0);assert.ok(after.types.every(t=>t.databaseBytes+t.journalBytes>0));assert.deepEqual(errors,[]);
  console.log(`PASS ${name}: cache overview, real disk usage, locations, pagination/search, stale deletion, isolated clears, uploads and responsive screenshots`);
 }finally{annotations?.close();await browser?.close();await service?.close();await rm(temp,{recursive:true,force:true});}

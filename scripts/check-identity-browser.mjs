@@ -51,7 +51,16 @@ try {
   // a test-induced aborted fetch as a page error. The stalled-list case below
   // deliberately does not wait before guest entry; it drains only afterwards.
   const settled = (...pages) => Promise.all(pages.map(p => p.waitForLoadState('networkidle')));
-  const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); await settled(p); if ((await p.locator('#identity-current').innerText()) !== '访客') { await p.locator('#identity-users').click(); await p.locator('#identity-users-menu [data-value=rename]').click(); } };
+  const settings = async p => {
+    // Reload now restores URI state after identity confirmation. Drain that
+    // navigation before opening a modal the restoration is allowed to close.
+    await settled(p);
+    await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click();
+    await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); await settled(p);
+    if ((await p.locator('#identity-current').innerText()) !== '访客') {
+      await p.locator('#identity-users').click(); await p.locator('#identity-users-menu [data-value=rename]').click();
+    }
+  };
   if (insecure) await routeInsecureTestOrigin(page);
   const guidePlayerRequests = [];
   if (insecure) page.on('request', request => { if (/\/assets\/main-[^/]+\.js/.test(request.url())) guidePlayerRequests.push(request.url()); });
