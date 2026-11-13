@@ -71,6 +71,15 @@ export default defineConfig(({ mode }) => {
       return {code:code.replace("'__EN_CATALOG_URL__'",englishCatalogRef ? `import.meta.ROLLUP_FILE_URL_${englishCatalogRef}` : "'/src/i18n/generated/en.js'"),map:null};
     },
   }, { name: 'voidplayer-i18n-descriptors', enforce: 'pre', transform: lowerDescriptors }, {
+    name: 'voidplayer-dev-favicon',
+    apply: 'serve',
+    transformIndexHtml(html) {
+      return html.replace(/(href="[^"?]*\/)(favicon\.(?:ico|svg))\?no-inline"/g, (_match, prefix, file) => {
+        const version = createHash('sha256').update(readFileSync(resolve(publicDirectory, file))).digest('hex').slice(0, 16);
+        return `${prefix}${file}?no-inline&v=${version}"`;
+      });
+    },
+  }, {
     name: 'voidplayer-admin-entry',
     configureServer(server) {
       if (sites) return;

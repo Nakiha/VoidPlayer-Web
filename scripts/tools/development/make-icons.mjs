@@ -45,16 +45,8 @@ try {
   <rect width="1024" height="1024" rx="224" fill="${background}"/>
 ${artwork}
 </svg>\n`;
-  const faviconArt = `  <defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
-    <feDropShadow dx="0" dy="12" stdDeviation="10" flood-opacity="0.12"/>
-  </filter></defs>
-  <g filter="url(#shadow)">
-${layers}
-  </g>`;
-  await writeFile(new URL('favicon.svg', publicDir), vector(32, faviconArt, backing));
-
-  // Give the standalone mark a close, square viewBox so it fits an in-app icon slot.
-  const foreground = await page.evaluate(artwork => {
+  // Fit the foreground and tab icon to the artwork without a white backing or shadow.
+  const { foreground, faviconSvg } = await page.evaluate(artwork => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.innerHTML = '<title>VoidPlayer</title>\n' + artwork + '\n';
     document.body.appendChild(svg);
@@ -64,9 +56,13 @@ ${layers}
     svg.setAttribute('width', side);
     svg.setAttribute('height', side);
     svg.remove();
-    return new XMLSerializer().serializeToString(svg) + '\n';
+    const foreground = new XMLSerializer().serializeToString(svg) + '\n';
+    svg.setAttribute('width', '32');
+    svg.setAttribute('height', '32');
+    return { foreground, faviconSvg: new XMLSerializer().serializeToString(svg) + '\n' };
   }, layers);
   await writeFile(new URL('icon-foreground.svg', publicDir), foreground);
+  await writeFile(new URL('favicon.svg', publicDir), faviconSvg);
 
   // Keep the original two-frame motion study reproducible apart from the shipping icon.
   const studies = new URL('studies/', designDir);
@@ -77,11 +73,14 @@ ${layers}
   const motion = `  <style>\n${motionCss}  </style>\n${frameLayers}`;
   await writeFile(new URL('VoidPlayer-motion.svg', studies), vector(256, motion, '#e5ebf3'));
 
-  const { images, maskable } = await page.evaluate(async ({ png, backing }) => {
+  const { images, maskable } = await page.evaluate(async ({ png, faviconSvg, backing }) => {
     const image = new Image();
     image.src = 'data:image/png;base64,' + png;
     await image.decode();
-    function render(size, opaque = false) {
+    const favicon = new Image();
+    favicon.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(faviconSvg);
+    await favicon.decode();
+    function render(image, size, opaque = false) {
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = size;
       const ctx = canvas.getContext('2d');
@@ -90,9 +89,9 @@ ${layers}
       ctx.drawImage(image, 0, 0, size, size);
       return canvas.toDataURL('image/png').split(',')[1];
     }
-    return { images: [16, 32, 48, 180, 192, 512].map(size => ({ size, png: render(size, size === 180) })),
-      maskable: render(512, true) };
-  }, { png: (await readFile(master)).toString('base64'), backing });
+    return { images: [16, 32, 48, 180, 192, 512].map(size => ({ size, png: render(size <= 48 ? favicon : image, size, size === 180) })),
+      maskable: render(image, 512, true) };
+  }, { png: (await readFile(master)).toString('base64'), faviconSvg, backing });
   const favicon = images.filter(image => image.size <= 48).map(image => ({ ...image, bytes: Buffer.from(image.png, 'base64') }));
   // ICO directory with embedded PNG entries: keeps alpha at each native size.
   const directory = Buffer.alloc(6 + favicon.length * 16);
