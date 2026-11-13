@@ -22,16 +22,16 @@
 .source-row { position: relative; display: flex; align-items: center; min-height: var(--source-row-height); gap: var(--control-gap); padding: 4px; border: 0; border-radius: 0; width: 100%; text-align: left; font-weight: 400; background: var(--library-row-plain, transparent); }
 .source-row.source-striped { background: var(--library-row-striped, var(--surface-stripe)); }
 .source-row:hover { background: var(--surface-hover); }
+.source-row, .source-row button, .source-row > .source-thumb, .library-root-group > summary,
+.source-tools button, .source-tools .library-manage, .source-tools .library-navigation, .library-path-item { transition: none !important; }
 .source-row[aria-disabled=true], .source-open[aria-disabled=true] { cursor: default; }
 .source-open { display: flex; flex: 1; min-width: 0; min-height: 40px; justify-content: flex-start; padding: 0; border: 0; border-radius: 0; font-weight: inherit; text-align: left; }
 .source-row .source-open, .source-row .source-open:hover, .source-row .source-open:active { background: transparent !important; box-shadow: none !important; }
 .source-file:has(.source-open:active:not([aria-disabled=true])) { background: var(--button-press-fill, color-mix(in srgb, var(--accent) 22%, var(--surface-panel))) !important; }
 :root[data-keyboard-navigation] .source-file:has(.source-open:focus-visible) { background: var(--button-focus-fill) !important; }
-.source-row > .source-remove { position: absolute; inset-block: 0; right: 2px; margin-block: auto; padding: 2px; opacity: 0; pointer-events: none; background: transparent; color: var(--text-secondary); }
+.source-row > .source-remove { position: absolute; inset-block: 0; right: 2px; margin-block: auto; padding: 2px; background: transparent; color: var(--text-secondary); }
 .source-remove:hover { color: var(--action-danger); background: var(--action-danger-fill); }
-.source-row:hover .source-remove, .source-row:focus-within .source-remove { opacity: 1; pointer-events: auto; }
 .source-file, .library-mount, .library-path-item { -webkit-touch-callout: none; }
-@media (hover: none) { .source-row .source-remove { opacity: 1; pointer-events: auto; } }
 .source-thumb { width: 40px; height: 40px; flex: 0 0 40px; border-radius: var(--radius-small); overflow: hidden; background: var(--surface-control); display: flex; align-items: center; justify-content: center; color: var(--text-subtle, var(--text-secondary)); }
 .source-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; background: transparent; }
 .source-info { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); }
@@ -40,7 +40,7 @@
 .source-track-badges .slot { flex: none; width: 18px; min-width: 18px; height: 18px; min-height: 18px; font-size: 11px; border-radius: 4px; }
 .source-title .filename { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-file.in-use .source-title { padding-right: var(--button-size); }
-.source-file.in-use:is(:hover, :focus-within) .source-meta-columns { margin-right: var(--button-size); }
+.source-file.in-use .source-meta-columns { margin-right: var(--button-size); }
 .source-file .source-meta-columns { flex-wrap: wrap; align-content: flex-start; height: 18px; column-gap: 6px; row-gap: 4px; font-variant-numeric: tabular-nums; }
 .source-meta-columns > * { height: 18px; line-height: 18px; }
 .source-meta-size { flex: 0 0 7em; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
@@ -49,7 +49,7 @@
 .source-meta-time { flex: none; margin-left: auto; text-align: right; }
 /* Recent rows keep size and time on one line. The source uses the space between them. */
 .source-recent-info { container: recent-info / inline-size; }
-.source-recent-info .source-meta-columns { flex-wrap: nowrap; align-items: center; }
+.source-recent-info .source-meta-columns { flex-wrap: nowrap; align-items: center; container: recent-meta / inline-size; }
 .source-recent-info .source-meta-size { flex: none; min-width: 4.25em; }
 .source-recent-info .source-meta-origin { flex: 1 1 0; }
 .source-recent-info .source-track-badges { max-width: 35%; overflow: hidden; }
@@ -61,6 +61,9 @@
 @container recent-info (max-width: 13em) {
   .source-meta-time .recent-time-minutes { display: none; }
   .source-meta-time .recent-time-short { display: inline; }
+}
+@container recent-meta (max-width: 10.5em) {
+  .source-meta-time { display: none; }
 }
 .source-row .source-thumb { background: var(--library-row-striped, linear-gradient(var(--surface-stripe), var(--surface-stripe)), var(--surface-panel)); }
 .source-row.source-striped .source-thumb { background: var(--library-row-plain, var(--surface-panel)); }
@@ -148,7 +151,8 @@
 [data-library-density=compact] .source-row { min-height: 28px; padding: 4px; }
 [data-library-density=compact] .source-open { min-height: 20px; }
 [data-library-density=compact] .source-meta { display: none; }
-[data-library-density=compact] .source-file.in-use { --button-size: 20px; gap: 4px; padding-right: calc(var(--button-size) + 6px); }
+[data-library-density=compact] .source-file.in-use { --button-size: 28px; gap: 4px; padding-right: calc(var(--button-size) + 4px); }
+[data-library-density=compact] .source-row > .source-remove { inset: 0 0 0 auto; margin: 0; padding: 0; width: 28px; height: 100%; border-radius: var(--radius-control); }
 [data-library-density=compact] .source-remove > .icon { width: 14px; height: 14px; }
 /* Keep the existing badges in the compact title line for both recent and directory rows. */
 [data-library-density=compact] .source-file.in-use .source-info { flex-direction: row; align-items: center; gap: 4px; }

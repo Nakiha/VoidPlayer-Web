@@ -112,6 +112,7 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
       e.preventDefault();
       pan = { pointer: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
       activePanPointer = e.pointerId;
+      document.documentElement.classList.add('panning-viewport');
       suppressPanContextMenu = true;
       clearTimeout(contextMenuExpiry);
       contextMenuExpiry = undefined;
@@ -140,6 +141,7 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
       flushPendingView();
       pan = null;
       activePanPointer = null;
+      document.documentElement.classList.remove('panning-viewport');
       if (suppressPanContextMenu) {
         contextMenuExpiry = setTimeout(clearPanContextMenuSuppression, 500);
       }

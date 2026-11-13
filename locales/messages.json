@@ -440,6 +440,10 @@
     "source": "通用",
     "params": {}
   },
+  "admin.goToPage": {
+    "source": "跳转",
+    "params": {}
+  },
   "admin.guestId": {
     "source": "访客 · {id}",
     "params": {
@@ -475,6 +479,12 @@
     "source": "{n, plural, other {# 条}}",
     "params": {
       "n": "number"
+    }
+  },
+  "admin.itemsPerPage": {
+    "source": "{count} 条 / 页",
+    "params": {
+      "count": "string | number"
     }
   },
   "admin.journalSize": {
@@ -539,6 +549,10 @@
   },
   "admin.logJson": {
     "source": "日志 JSON",
+    "params": {}
+  },
+  "admin.logPagination": {
+    "source": "日志翻页",
     "params": {}
   },
   "admin.logPlaceholder": {
@@ -771,9 +785,25 @@
       "total": "string | number"
     }
   },
+  "admin.pageNumber": {
+    "source": "页码",
+    "params": {}
+  },
+  "admin.pageSize": {
+    "source": "每页条目数",
+    "params": {}
+  },
   "admin.pageTitle": {
     "source": "管理 · VoidPlayer",
     "params": {}
+  },
+  "admin.paginationSummary": {
+    "source": "第 {page} / {pages} 页，共 {total} 条",
+    "params": {
+      "page": "string | number",
+      "pages": "string | number",
+      "total": "string | number"
+    }
   },
   "admin.preferencesTitle": {
     "source": "首选项",
@@ -839,9 +869,11 @@
     "source": "最近 60 秒",
     "params": {}
   },
-  "admin.recentRequests": {
-    "source": "最近 200 条请求，服务重启后清空",
-    "params": {}
+  "admin.recordCount": {
+    "source": "{total} 条",
+    "params": {
+      "total": "string | number"
+    }
   },
   "admin.refreshCaches": {
     "source": "刷新缓存",

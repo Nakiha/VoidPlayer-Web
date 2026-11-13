@@ -11,6 +11,7 @@ import { AdminController } from '../../server/admin.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { RuntimeLog } from '../../server/logging/runtime.ts';
 import { attachRuntimeLog } from '../../server/logging/logger.ts';
+import { logPolicy } from '../../shared/service/logging.ts';
 import { gunzipSync } from 'node:zlib';
 
 type Fixture = { root: string; media: string; base: string; library: MediaLibraryIndex; admin: AdminController; config: Awaited<ReturnType<typeof loadConfig>>; logs: Record<string,unknown>[] };
@@ -21,13 +22,16 @@ async function fixture(run: (f: Fixture) => Promise<void>, clientAddress?: () =>
   const config = await loadConfig([], 'production', root); await fs.mkdir(config.dataDir);
   const library = new MediaLibraryIndex(config.mediaRoots, { database: path.join(config.dataDir, 'library.sqlite'), watch: false });
   library.start(); await library.refresh();
-  const admin = new AdminController(config, library, { version: 'test-version', revision: 'test-revision' });
+  const runtime = new RuntimeLog(path.join(config.dataDir, 'runtime-logs'), logPolicy(config.logging).runtime);
+  await runtime.start();
+  const admin = new AdminController(config, library, { version: 'test-version', revision: 'test-revision' }, runtime);
   const logs: Record<string,unknown>[] = [];
-  const server = createMediaServer({ roots: library.roots, library, admin, logsDir: config.logsDir!, clientAddress, onLog: entry => logs.push(entry) });
+  const server = createMediaServer({ roots: library.roots, library, admin, logsDir: config.logsDir!, clientAddress,
+    onLog: entry => { logs.push(entry); runtime.write({ ...entry, event: 'http-request' }); } });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   try { await run({ root, media, base, library, admin, config, logs }); }
-  finally { await new Promise<void>(r => server.close(() => r())); await admin.close(); await library.close(); await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+  finally { await new Promise<void>(r => server.close(() => r())); await admin.close(); await library.close(); await runtime.close(); await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 }
 const mutation = (base: string, method: string, value?: unknown, extra = {}) => ({ method, headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'admin', ...extra }, body: value === undefined ? undefined : JSON.stringify(value) });
 
@@ -75,6 +79,36 @@ test('overview omits request history and the independent request snapshot suppor
   await fetch(base + '/api/library/browse');
   const changed = await fetch(base + '/api/admin/requests', { headers: { 'if-none-match': etag } });
   assert.equal(changed.status, 200); assert.notEqual(changed.headers.get('etag'), etag);
+}));
+
+test('request pages include more than 200 records, validate page numbers and isolate validators by page', async () => fixture(async ({ base }) => {
+  const ids = [];
+  for (let i = 0; i < 205; i++) {
+    const response = await fetch(base + '/api/library/browse?private=' + i);
+    await response.text(); ids.push(response.headers.get('x-request-id'));
+  }
+  const first = await fetch(base + '/api/admin/requests?page=1'), etag = first.headers.get('etag')!;
+  const value = await first.json();
+  assert.equal(value.total, 205); assert.equal(value.pages, 6); assert.equal(value.pageSize, 40);
+  assert.deepEqual(value.recentRequests.map((entry: any) => entry.requestId), ids.slice(-40));
+  const last = await fetch(base + '/api/admin/requests?page=6', { headers: { 'if-none-match': etag } });
+  assert.equal(last.status, 200);
+  const oldest = await last.json();
+  assert.equal(oldest.page, 6); assert.deepEqual(oldest.recentRequests.map((entry: any) => entry.requestId), ids.slice(0, 5));
+  assert.ok(oldest.recentRequests.every((entry: any) => !entry.url.includes('?')));
+  assert.equal((await (await fetch(base + '/api/admin/requests?page=999')).json()).page, 6);
+  for (const pageSize of [20, 100]) {
+    const resized = await (await fetch(base + '/api/admin/requests?page=2&pageSize=' + pageSize)).json();
+    assert.equal(resized.pageSize, pageSize); assert.equal(resized.pages, Math.ceil(205 / pageSize));
+    assert.deepEqual(resized.recentRequests.map((entry: any) => entry.requestId), ids.slice(-2 * pageSize, -pageSize));
+  }
+  for (const pageSize of ['0', '-1', '101', '1.5', 'NaN']) for (const endpoint of ['requests', 'logs']) {
+    assert.equal((await fetch(base + '/api/admin/' + endpoint + '?pageSize=' + pageSize)).status, 400);
+  }
+  for (const page of ['0', '-1', 'NaN', '1.5', 'Infinity']) {
+    assert.equal((await fetch(base + '/api/admin/requests?page=' + page)).status, 400);
+    assert.equal((await fetch(base + '/api/admin/logs?page=' + page)).status, 400);
+  }
 }));
 
 test('admin trusts all users while requiring same-origin mutations', async () => {

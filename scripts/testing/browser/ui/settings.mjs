@@ -55,6 +55,28 @@ async function checkSettingsScrollbar(page, width, artifact) {
  await page.mouse.move(body.x+body.width/2,body.y+body.height/2);await page.mouse.wheel(0,-180);
  await page.waitForFunction(before=>document.querySelector('#settings-pane-shortcuts').scrollTop<before,before);
 }
+async function checkMenuAnchor(page) {
+ const viewport = page.viewportSize();
+ await page.setViewportSize({...viewport, height: 400});
+ const pane = page.locator('#settings-pane-appearance'), trigger = page.locator('#language-choice'), menu = page.locator('#language-choice-menu');
+ await trigger.scrollIntoViewIfNeeded();
+ await trigger.click();
+ await menu.waitFor({state: 'visible'});
+ const before = await pane.evaluate(el => el.scrollTop), body = await pane.boundingBox();
+ await page.mouse.move(body.x + 12, body.y + body.height / 2);
+ await page.mouse.wheel(0, 50);
+ await page.waitForFunction(before => document.querySelector('#settings-pane-appearance').scrollTop > before, before);
+ await page.waitForFunction(() => {
+  const menu = document.querySelector('#language-choice-menu'), button = document.querySelector('#language-choice');
+  const a = menu.getBoundingClientRect(), b = button.getBoundingClientRect();
+  return menu.matches(':popover-open') && Math.min(Math.abs(a.top - b.bottom - 4), Math.abs(b.top - a.bottom - 4)) < 1;
+ });
+ assert.equal(await menu.evaluate(el => el.matches(':popover-open')), true, 'a visible anchor keeps its menu open while the pane scrolls');
+ await pane.evaluate(el => { el.scrollTop = 0; });
+ await page.waitForFunction(() => !document.querySelector('#language-choice-menu').matches(':popover-open'));
+ assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'scrolling the anchor out of its pane dismisses the menu');
+ await page.setViewportSize(viewport);
+}
 await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { viewport: { width: 1280, height: 700 }, colorScheme: 'dark' } }, async ({ page, newContext, ready, artifact }) => {
  const errors=[];let uploads=0, originalSession='';
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/logs'))uploads++;});
@@ -105,6 +127,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   for(const check of sectionSpacing) assert.ok(Math.abs(check.gap-(check.kind==='section'?12:6))<1,`${pane} ${check.kind} spacing: ${check.gap}`);
   if(process.env.SETTINGS_SCREENSHOTS) await page.locator('#settings').screenshot({path:`${process.env.SETTINGS_SCREENSHOTS}-${pane}.png`});
   if(pane==='appearance') {
+   await checkMenuAnchor(page);
    const help=page.locator('button[aria-labelledby=viewport-wheel-hint]');
    await help.hover();
    await page.locator('#control-tooltip').filter({hasText:'捏合或 Ctrl 加滚轮始终缩放'}).waitFor();

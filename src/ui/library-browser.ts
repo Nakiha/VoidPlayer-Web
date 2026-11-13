@@ -6,6 +6,7 @@ import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
 import { installContextMenu } from './context-menu.ts';
 import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';
+import { normalizeWheelDelta } from '../../shared/presentation/viewport.ts';
 
 export type LibraryBrowserElements = { list: HTMLElement; tools: HTMLElement; foot: HTMLElement; visible(): boolean; manage?: boolean; trailing?: HTMLElement; nearEnd?(): boolean };
 
@@ -65,6 +66,12 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   if (elements.trailing) tools.append(elements.trailing);
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
   foot.prepend(pathbar);
+  pathbar.addEventListener('wheel', event => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.deltaX || !Number.isFinite(event.deltaY)
+      || !event.deltaY || pathbar.scrollWidth <= pathbar.clientWidth) return;
+    event.preventDefault();
+    pathbar.scrollLeft += normalizeWheelDelta(event.deltaY, event.deltaMode);
+  }, { signal, passive: false });
   pathbar.addEventListener('click', event => {
     const target = (event.target as Element).closest('li')?.querySelector<HTMLButtonElement>('button[data-root]');
     if (target && !target.hasAttribute('aria-current')) navigate(target.dataset.root ?? '', target.dataset.directory ?? '');

@@ -38,6 +38,10 @@ export type RootConfiguration = {
     reason: null | string;
 };
 export type LogPage = {
+    page?: number;
+    pages?: number;
+    pageSize?: number;
+    total?: number;
     storage?: LogStorageOverview;
     entries: ({
         name: string;
@@ -47,6 +51,13 @@ export type LogPage = {
     })[];
     next: null | string;
     enabled: boolean;
+};
+export type RequestPage = {
+    recentRequests: Record<string, unknown>[];
+    page: number;
+    pages: number;
+    pageSize: number;
+    total: number;
 };
 export type LogDocument = {
     name: string;

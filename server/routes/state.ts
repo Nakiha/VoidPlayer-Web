@@ -192,7 +192,14 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
           ...(url.searchParams.get('view') === 'overview' ? {} : { recentRequests }) }); return true;
       }
       if (url.pathname === '/api/admin/requests' && req.method === 'GET') {
-        sendSnapshot(req, res, { recentRequests }, identity.id); return true;
+        const requested = Number(url.searchParams.get('page') ?? 1);
+        const pageSize = Number(url.searchParams.get('pageSize') ?? 40);
+        if (!Number.isSafeInteger(requested) || requested < 1) throw new AdminError(400, '请求页码无效。');
+        if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new AdminError(400, '每页条目数须为 1–100。');
+        const history = await admin.requests(requested, pageSize);
+        const pages = Math.max(1, Math.ceil(recentRequests.length / pageSize)), page = Math.min(requested, pages);
+        sendSnapshot(req, res, history ?? { recentRequests: recentRequests.slice().reverse().slice((page - 1) * pageSize, page * pageSize).reverse(),
+          page, pages, pageSize, total: recentRequests.length }, identity.id); return true;
       }
       if (url.pathname === '/api/admin/analysis') {
         if (req.method === 'GET') { sendJson(res, 200, await admin.analysisSettings()); return true; }
@@ -222,7 +229,13 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
           sendJson(res, 202, library.status()); return true;
         }
       }
-      if (url.pathname === '/api/admin/logs' && req.method === 'GET') { sendJson(res, 200, await admin.logs(url.searchParams.get('before') ?? '')); return true; }
+      if (url.pathname === '/api/admin/logs' && req.method === 'GET') {
+        const page = url.searchParams.has('page') ? Number(url.searchParams.get('page')) : undefined;
+        const pageSize = Number(url.searchParams.get('pageSize') ?? 40);
+        if (page !== undefined && (!Number.isSafeInteger(page) || page < 1)) throw new AdminError(400, '日志页码无效。');
+        if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new AdminError(400, '每页条目数须为 1–100。');
+        sendJson(res, 200, await admin.logs(url.searchParams.get('before') ?? '', pageSize, page)); return true;
+      }
       const log = /^\/api\/admin\/logs\/([^/]+)$/.exec(url.pathname);
       if (log) {
         const name = decodeURIComponent(log[1]);

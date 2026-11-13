@@ -93,19 +93,23 @@ export class ReportLogs {
       return { ok: true, name };
     });
   }
-  list(before = '', limit = 40): Promise<LogPage> {
+  list(before = '', limit = 40, requestedPage?: number): Promise<LogPage> {
     return this.run(async () => {
       if (before && !reportName(before)) throw new AdminError(400, '日志分页位置无效。');
       const storage = await this.scan(), names: string[] = [];
       if (this.directory) for await (const file of logFiles(this.directory, reportName)) if (!before || file.name < before) {
-        names.push(file.name); names.sort((a, b) => b.localeCompare(a)); if (names.length > limit + 1) names.pop();
+        names.push(file.name);
       }
+      names.sort((a, b) => b.localeCompare(a));
+      const pages = Math.max(1, Math.ceil(names.length / limit)), page = Math.min(requestedPage ?? 1, pages);
+      const offset = (page - 1) * limit;
       const entries = [];
-      for (const name of names.slice(0, limit)) {
+      for (const name of names.slice(offset, offset + limit)) {
         const { stat } = await this.file(name, null);
         entries.push({ name, size: stat.size, receivedAt: stat.mtime.toISOString(), version: fileVersion(stat) });
       }
-      return { entries, next: names.length > limit ? names[limit - 1] : null, enabled: !!this.directory,
+      return { entries, next: names.length > offset + limit ? names[offset + limit - 1] : null, enabled: !!this.directory,
+        page, pages, pageSize: limit, total: names.length,
         storage: { reports: storage, runtime: null } };
     });
   }

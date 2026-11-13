@@ -6,7 +6,7 @@
 
 只读媒体库 `GET /api/library/browse` 支持私有 ETag 条件读取。校验身份绑定实例、查询范围、分页、库修订、数据库变化、缩略图 epoch 和完整扫描/根目录状态；先验证参数及指定 revision，再在 COUNT/行排序之前判断 304。错误继续 `no-store`，旧客户端无需发送条件头。缩略图在核验源可访问性和版本后按 JPEG 内容响应 ETag，已清除或换源不能由旧标签返回 304。浏览器在当前视图持有对应响应，不跨查询替换缓存。
 
-管理概览可用 `GET /api/admin/status?view=overview` 省略请求历史，默认 status 保留旧 wire。`GET /api/admin/requests` 单独返回最多 200 条最近请求，支持绑定当前 actor 的私有条件读取；只在请求记录视图观察。CPU、运行时间等动态状态不使用整包 ETag。GUI 的空闲退避只调度自动读取，不改变 Agent 的显式读取、持久提交或服务执行。
+管理概览可用 `GET /api/admin/status?view=overview` 省略请求历史，默认 status 保留旧 wire。`GET /api/admin/requests?page=1&pageSize=40` 查询保留的运行日志，返回 `recentRequests`、`page`、`pages`、`pageSize`（默认 40，范围 1–100）和 `total`；单页记录仍按时间正序，管理页倒序展示。支持绑定当前 actor 和页内容的私有条件读取；管理 GET 不列入记录。`GET /api/admin/logs?page=1&pageSize=40` 同样支持页码、总页数、总条数，原 `before` 游标调用继续可用。页码须为正安全整数，越过末页时返回最后一页。GUI 仅在请求视图首页自动观察，旧页由翻页或刷新主动读取。CPU、运行时间等动态状态不使用整包 ETag。GUI 的空闲退避只调度自动读取，不改变 Agent 的显式读取、持久提交或服务执行。
 
 HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/annotations/spaces/SPACE` 提交 `AnnotationOperation`。必须提供与服务匹配的 `Origin`、对应的 `X-VoidPlayer-Action` 和 JSON Content-Type。用户名与 `client` 是可信内网下的归属声明，不是身份认证；既有同源保护保持不变。
 

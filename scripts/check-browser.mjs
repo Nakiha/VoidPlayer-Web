@@ -295,6 +295,25 @@ try {
       await target.click(); assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'), null);
       assert.equal(await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
     }
+    const nested = listing.entries.find(entry => entry.name === 'review/shots/path-tooltip.mp4');
+    await browseLibrary(page, nested.rootId, 'review/shots');
+    const pathbar = page.locator('#library-pathbar');
+    await pathbar.evaluate(el => { el.style.maxWidth = '160px'; el.scrollLeft = 0; });
+    assert.ok(await pathbar.evaluate(el => el.scrollWidth > el.clientWidth));
+    const pathBox = await pathbar.boundingBox();
+    await page.mouse.move(pathBox.x + pathBox.width / 2, pathBox.y + pathBox.height / 2);
+    await page.mouse.wheel(0, 100);
+    await page.waitForFunction(() => document.querySelector('#library-pathbar').scrollLeft > 0);
+    await pathbar.evaluate(el => { el.scrollLeft = 0; });
+    await page.mouse.wheel(80, 0);
+    await page.waitForFunction(() => document.querySelector('#library-pathbar').scrollLeft > 0);
+    const preserved = await pathbar.evaluate(el => {
+      el.scrollLeft = 0;
+      const event = new WheelEvent('wheel', {deltaY: 100, ctrlKey: true, bubbles: true, cancelable: true});
+      el.dispatchEvent(event);
+      return {prevented: event.defaultPrevented, scroll: el.scrollLeft};
+    });
+    assert.deepEqual(preserved, {prevented: false, scroll: 0}, 'Ctrl wheel retains browser zoom');
   });
 
   await check('press feedback respects links, tabs and close colors; one field searches the current folder', async page => {
@@ -334,7 +353,7 @@ try {
       for (const selector of ['#library-mounts > summary', '#library-recents > summary']) {
         const feedback = await press(selector);
         assert.notEqual(feedback.held.background, feedback.hover.background, `${theme}: summary press differs from hover`);
-        assert.equal(feedback.held.transition, '0.24s, 0.24s', 'summary uses the shared press and release transition');
+        assert.equal(feedback.held.transition, '0s', 'library group feedback reacts immediately');
       }
     }
     const materials = await page.locator('#source-tools').evaluate(tools =>
@@ -1499,8 +1518,8 @@ try {
     assert.match(await page.locator('#source-activity-size').textContent(),/1920×1080/);
     assert.equal(await placeholder.isVisible(), false);
     const eye = page.locator('[data-track-drag="A"] .track-visibility');
-    const eyeBox = await eye.boundingBox(), laneBox = await page.locator('[data-track-drag="A"] .track-lane').boundingBox();
-    assert.ok(eyeBox.x >= laneBox.x + laneBox.width, 'visibility belongs at the right edge of the track row');
+    const eyeBox = await eye.boundingBox(), offsetBox = await page.locator('.subtrack-row[data-track-drag="A"] .track-offset').boundingBox();
+    assert.ok(eyeBox.x + eyeBox.width <= offsetBox.x, 'visibility sits to the left of the offset field');
     assert.equal(await page.locator('.subtrack-row[data-track-drag="A"] .remove-track').count(), 0);
     await eye.click(); await settle(page);
     assert.equal(await page.locator('.video-card[data-slot="A"]').isVisible(), false);
@@ -2406,7 +2425,7 @@ try {
     await page.locator('#toggle-sources').click();
     await browseLibrary(page, entries[0].rootId);
     const row = entry => page.locator(`#source-list .source-row[data-source-key=${JSON.stringify(sourceKey(entry,entry.id))}]`);
-    const add = entry => row(entry);
+    const add = entry => row(entry).locator('.source-open');
     const nextRequest = () => page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[0].id)}`);
     try {
       let request = nextRequest();
@@ -2575,7 +2594,11 @@ try {
     await browseLibrary(page, entries[0].rootId);
     const firstRow = page.locator(`#source-list .source-row[data-source-key=${JSON.stringify(sourceKey(entries[0],entries[0].id))}]`);
     async function checkLoadedRowDensity() {
+      await page.emulateMedia({reducedMotion: 'no-preference'});
+      await page.mouse.move(0, 0);
+      assert.equal(await firstRow.locator('.source-remove').evaluate(el => getComputedStyle(el).opacity), '1');
       await firstRow.hover();
+      assert.equal(await firstRow.evaluate(el => getComputedStyle(el).transitionDuration), '0s', 'row hover reacts immediately with motion enabled');
       const button = firstRow.locator('.source-remove'), normal = await button.boundingBox();
       const row = await firstRow.boundingBox();
       assert.ok(Math.abs(normal.y + normal.height / 2 - row.y - row.height / 2) < 1, 'comfortable remove button is centered');
@@ -2586,8 +2609,14 @@ try {
       const thumb = await firstRow.locator('.source-thumb').boundingBox(), name = await firstRow.locator('.filename').boundingBox();
       assert.ok(badge && Math.abs(badge.x - thumb.x - thumb.width - 4) < 1 && badge.x + badge.width <= name.x,
         'compact track badge sits between the thumbnail and filename with a 4px thumbnail gap');
-      assert.ok(small.height < normal.height && small.y > compact.y && small.y + small.height < compact.y + compact.height,
-        'compact remove button fits inside the row');
+      assert.ok(Math.abs(small.height - compact.height) < 1 && Math.abs(small.y - compact.y) < 1
+        && Math.abs(small.x + small.width - compact.x - compact.width) < 1, 'compact remove fills the row height and meets the right edge');
+      assert.equal(await button.evaluate(el => getComputedStyle(el).padding), '0px');
+      assert.equal(await page.evaluate(({x, y}) => !!document.elementFromPoint(x, y)?.closest('.source-remove'),
+        {x: compact.x + compact.width - 1, y: compact.y + compact.height / 2}), true, 'the right edge is a usable remove target');
+      await page.mouse.move(0, 0);
+      assert.equal(await button.evaluate(el => getComputedStyle(el).opacity), '1', 'remove remains visible without row hover');
+      assert.ok(await button.evaluate(el => parseFloat(getComputedStyle(el).borderRadius) > 0), 'compact remove keeps rounded corners');
     }
     await checkLoadedRowDensity();
     await page.locator('#library-compact').click();
@@ -2604,7 +2633,7 @@ try {
     await firstRow.click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2);
     await browseLibrary(page);
-    for (const [width, detail] of [[420,'full'],[270,'minutes'],[240,'minutes'],[180,'short'],[420,'full']]) {
+    for (const [width, detail] of [[420,'full'],[270,'minutes'],[240,'minutes'],[180,'hidden'],[420,'full']]) {
       await page.locator('#sources-panel').evaluate((el,width) => {el.style.width = `${width}px`;}, width);
       const columns = await page.locator('#library-recents .source-meta-columns').evaluateAll(rows => rows.map(row => {
         const rect = el => {const r=el.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
@@ -2614,8 +2643,10 @@ try {
       }));
       assert.equal(columns.length, 2);
       for (const item of columns) {
-        assert.deepEqual(item.visible, [`recent-time-${detail}`], 'show one timestamp at the appropriate precision');
-        assert.ok(Math.abs(item.value.left-item.meta.left)<1 && Math.abs(item.time.right-item.meta.right)<1, 'size and time anchor the two ends');
+        assert.deepEqual(item.visible, detail === 'hidden' ? [] : [`recent-time-${detail}`], 'show a complete timestamp or hide it when controls leave insufficient room');
+        assert.ok(Math.abs(item.value.left-item.meta.left)<1, 'size starts at the metadata edge');
+        if (detail === 'hidden') { assert.ok(item.origin.right <= item.meta.right + 1); continue; }
+        assert.ok(Math.abs(item.time.right-item.meta.right)<1, 'time ends at the metadata edge');
         assert.ok(item.time.top>=item.meta.top-1 && item.time.bottom<=item.meta.bottom+1, 'time stays on the metadata line');
         assert.ok(item.origin.left>=item.value.right && item.origin.right<=item.time.left, 'source fits between size and time');
       }
@@ -2811,7 +2842,9 @@ try {
     await page.locator('#settings').waitFor({ state: 'hidden' });
     const picture = await page.locator('#image-A').boundingBox(), x = picture.x + picture.width / 2, y = picture.y + picture.height / 2;
     await page.mouse.move(x, y); await page.mouse.down({ button: 'right' });
+    assert.equal(await page.locator('#stage-A .image-wrap').evaluate(el => getComputedStyle(el).cursor), 'grabbing');
     await page.mouse.move(x + 20, y + 10, { steps: 3 }); await page.mouse.up({ button: 'right' });
+    assert.notEqual(await page.locator('#stage-A .image-wrap').evaluate(el => getComputedStyle(el).cursor), 'grabbing');
     await page.mouse.wheel(2, 3);
     await page.waitForFunction(() => window.voidPlayer.getViewport().offsetY !== 10);
     const applied = await page.locator('#stage-A').evaluate(el => {

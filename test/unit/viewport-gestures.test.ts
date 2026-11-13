@@ -14,6 +14,7 @@ class ElementStub extends EventTarget {
 }
 
 class DocumentStub extends EventTarget {
+  documentElement = { classList: { add() {}, remove() {} } };
   querySelectorAll() { return []; }
   querySelector() { return null; }
 }

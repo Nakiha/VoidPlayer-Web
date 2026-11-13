@@ -988,13 +988,13 @@ try {
   const held = new Promise(resolve => { deliverRequests = resolve; });
   const started = new Promise(resolve => { requestStarted = resolve; });
   const delayFirstHistory = async route => { requestStarted(); await held; await route.continue(); };
-  await page.route('**/api/admin/requests', delayFirstHistory);
+  await page.route('**/api/admin/requests?*', delayFirstHistory);
   await page.locator('[data-log-mode=requests]').click(); await started;
   assert.ok(await page.locator('#uploads-view').isVisible(), 'keep reports on screen until the first history snapshot arrives');
   await page.locator('[data-log-mode=uploads]').click();
   deliverRequests(); await page.waitForLoadState('networkidle');
   assert.ok(await page.locator('#uploads-view').isVisible(), 'a late response cannot switch away from reports');
-  await page.unroute('**/api/admin/requests', delayFirstHistory);
+  await page.unroute('**/api/admin/requests?*', delayFirstHistory);
   await page.locator('[data-log-mode=requests]').click();
   await page.waitForLoadState('networkidle'); await page.waitForTimeout(6500);
   assert.ok(requestReads.some(read => read.status === 304 && read.conditional), 'unchanged request history sends a validator and reuses the current actor snapshot');

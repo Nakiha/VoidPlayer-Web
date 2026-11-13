@@ -44,9 +44,9 @@ export function installTrackDrag(session: ReviewSession) {
     preview!.style.transform = `translate3d(${e.clientX - offset.x}px, ${e.clientY - offset.y}px, 0)`;
     const hit = document.elementFromPoint(e.clientX, e.clientY);
     let target = hit?.closest<HTMLElement>('[data-track-drag]');
-    const dock = hit?.closest('.subtrack-scroll');
+    const dock = hit?.closest('.subtrack-scroll, .track-selector');
     if (!target && dock) {
-      const rows = [...dock.querySelectorAll<HTMLElement>('.subtrack-row')];
+      const rows = [...dock.querySelectorAll<HTMLElement>('.subtrack-row, .track-choice')];
       target = rows[nearestTrackIndex(e.clientY, rows.map(row => row.getBoundingClientRect()))];
     }
     document.querySelectorAll('.track-drop-target').forEach(el => el.classList.remove('track-drop-target'));
@@ -81,9 +81,10 @@ export function installTrackDrag(session: ReviewSession) {
     const order = session.getState().tracks.map(t => t.slot), from = order.indexOf(slot);
     const to = Math.max(0, Math.min(order.length - 1, from + (['ArrowLeft', 'ArrowUp'].includes(e.key) ? -1 : 1)));
     if (from >= 0 && from !== to) {
-      const inDock = !!e.target.closest('.subtrack-row');
+      const surface = e.target.closest('.subtrack-row') ? '.subtrack-row [data-drag-surface]'
+        : e.target.closest('.track-selector') ? '.track-selector [data-drag-surface]' : '.card-heading [data-drag-surface]';
       order.splice(from, 1); order.splice(to, 0, slot); session.reorderTracks(order);
-      document.querySelector<HTMLElement>(`${inDock ? '.subtrack-row' : '.card-heading'} [data-drag-surface="${slot}"]`)?.focus();
+      document.querySelector<HTMLElement>(`${surface}[data-drag-surface="${slot}"]`)?.focus();
     }
   }, { signal: life.signal });
   return () => { clear(); life.abort(); };

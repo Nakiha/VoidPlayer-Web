@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { logFiles } from './files.ts';
+import { RequestHistory } from './request-history.ts';
 import { lockDatabase } from '../library-store.ts';
 import type { RuntimeLogPolicy, LogStorageStatus } from '../../shared/service/logging.ts';
 
@@ -34,6 +35,27 @@ export class RuntimeLog {
   private maintenance = false;
   private unlock?: () => void;
   private rescan = false;
+  private io: Promise<unknown> = Promise.resolve();
+  private history = new RequestHistory();
+  private queries = 0;
+  private exclusive<T>(work: () => Promise<T>) {
+    const result = this.io.then(work);
+    this.io = result.catch(() => {});
+    return result;
+  }
+  requests(page: number, pageSize = 40) {
+    if (this.closed) return Promise.reject(Error('Runtime log storage is closing'));
+    if (this.queries >= 8) return Promise.reject(Error('Runtime log storage is busy'));
+    this.queries++;
+    return this.exclusive(async () => {
+      const files = [];
+      for await (const file of logFiles(this.directory, name => owned.test(name) && !name.endsWith('.tmp'))) files.push(file);
+      // If sealing stopped between rename and unlink, index the sealed copy once.
+      const sealed = new Set(files.filter(file => file.name.endsWith('.gz')).map(file => file.name.slice(0, -3)));
+      await this.history.sync(files.filter(file => !sealed.has(file.name)));
+      return this.history.page(page, pageSize);
+    }).finally(() => { this.queries--; });
+  }
   constructor(directory: string, policy: RuntimeLogPolicy) { this.directory = directory; this.policy = policy; }
   async start() {
     await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
@@ -71,7 +93,7 @@ export class RuntimeLog {
   private drop() { this.dropped++; this.unreported++; }
   private kick() {
     if (this.writing) return;
-    this.writing = this.drain().finally(() => { this.writing = undefined; if (this.queue.length || this.maintenance) this.kick(); });
+    this.writing = this.exclusive(() => this.drain()).finally(() => { this.writing = undefined; if (this.queue.length || this.maintenance) this.kick(); });
   }
   private async drain() {
     try {
@@ -164,8 +186,9 @@ export class RuntimeLog {
     return this.closing ??= (async () => {
       this.closed = true; clearInterval(this.timer);
       await this.flush();
+      await this.io;
       try { await this.seal(); await this.prune(); } catch (error) { this.fail(error); throw error; }
-      finally { this.unlock?.(); this.unlock = undefined; }
+      finally { try { await this.history.close(); } finally { this.unlock?.(); this.unlock = undefined; } }
     })();
   }
 }

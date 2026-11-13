@@ -53,19 +53,38 @@ export function installMenu(button: HTMLElement, menu: HTMLElement, options: {
     });
   }, events);
   const items = () => [...menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
-  const close = () => { if (menu.matches(':popover-open')) menu.hidePopover(); expanded(false); };
-  const open = (last = false) => {
-    if (button.matches(':disabled') || options.canOpen?.() === false) return;
-    clearExit();
+  let positionFrame: number | undefined;
+  const cancelPosition = () => { if (positionFrame !== undefined) cancelAnimationFrame(positionFrame); positionFrame = undefined; };
+  const close = () => { cancelPosition(); if (menu.matches(':popover-open')) menu.hidePopover(); expanded(false); };
+  const position = () => {
     const rect = options.anchor?.() ?? button.getBoundingClientRect();
     const bounds = options.bounds?.() ?? new DOMRect(0, 0, innerWidth, innerHeight);
+    const invoker = options.invoker?.() ?? button;
+    const source = invoker.getBoundingClientRect();
+    let visible = invoker.isConnected && source.width > 0 && source.height > 0
+      && source.bottom > bounds.top && source.top < bounds.bottom && source.right > bounds.left && source.left < bounds.right;
+    for (let parent = invoker.parentElement; visible && parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent), clip = parent.getBoundingClientRect();
+      if (/auto|scroll|hidden|clip/.test(style.overflowY) && (source.bottom <= clip.top || source.top >= clip.bottom)) visible = false;
+      if (/auto|scroll|hidden|clip/.test(style.overflowX) && (source.right <= clip.left || source.left >= clip.right)) visible = false;
+    }
+    if (!visible) { close(); return false; }
     menu.style.setProperty('--menu-trigger-width', `${Math.max(0, Math.min(rect.width, bounds.width - 8))}px`);
-    expanded(true);
-    menu.showPopover();
     const left = options.align === 'end' ? rect.right - menu.offsetWidth : rect.left;
     const top = rect.bottom + menu.offsetHeight + 8 <= bounds.bottom ? rect.bottom + 4 : rect.top - menu.offsetHeight - 4;
     menu.style.left = `${Math.max(bounds.left + 4, Math.min(bounds.right - menu.offsetWidth - 4, left))}px`;
     menu.style.top = `${Math.max(bounds.top + 4, Math.min(bounds.bottom - menu.offsetHeight - 4, top))}px`;
+    return true;
+  };
+  const schedulePosition = () => {
+    if (!menu.matches(':popover-open') || positionFrame !== undefined) return;
+    positionFrame = requestAnimationFrame(() => { positionFrame = undefined; if (menu.matches(':popover-open')) position(); });
+  };
+  const open = (last = false) => {
+    if (button.matches(':disabled') || options.canOpen?.() === false) return;
+    clearExit(); expanded(true);
+    menu.showPopover();
+    if (!position()) return;
     const enabled = items();
     (last ? enabled.at(-1) : options.selected?.() ?? enabled[0])?.focus();
   };
@@ -87,12 +106,17 @@ export function installMenu(button: HTMLElement, menu: HTMLElement, options: {
   menu.addEventListener('click', e => {
     if (options.closeOnSelect !== false && (e.target as Element).closest('button:not(:disabled)')) { close(); returnFocus(); }
   }, { ...events, capture: true });
-  menu.addEventListener('toggle', () => expanded(menu.matches(':popover-open')), events);
+  menu.addEventListener('toggle', () => { const open = menu.matches(':popover-open'); expanded(open); if (!open) cancelPosition(); }, events);
+  document.addEventListener('scroll', event => {
+    if (event.target instanceof Node && !menu.contains(event.target)) schedulePosition();
+  }, { ...events, capture: true, passive: true });
+  const observer = new ResizeObserver(schedulePosition);
+  observer.observe(button); observer.observe(menu);
   window.addEventListener('resize', () => { close(); clearExit(); }, events);
   reducedMotion.addEventListener('change', clearExit, events);
   button.closest('dialog')?.addEventListener('close', clearExit, events);
   button.closest('dialog')?.addEventListener('settings-pane-change', clearExit, events);
-  return { open, close, dispose() { close(); clearExit(); lifecycle.abort(); } };
+  return { open, close, dispose() { close(); clearExit(); observer.disconnect(); lifecycle.abort(); } };
 }
 
 /** Also used by compact track headers, which keep their inline layout. */

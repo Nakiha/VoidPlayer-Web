@@ -395,6 +395,10 @@
     "source": "通用",
     "translation": "General"
   },
+  "admin.goToPage": {
+    "source": "跳转",
+    "translation": "Go"
+  },
   "admin.guestId": {
     "source": "访客 · {id}",
     "translation": "Guest · {id}"
@@ -422,6 +426,10 @@
   "admin.itemsCount": {
     "source": "{n, plural, other {# 条}}",
     "translation": "{n, plural, one {# item} other {# items}}"
+  },
+  "admin.itemsPerPage": {
+    "source": "{count} 条 / 页",
+    "translation": "{count} / page"
   },
   "admin.journalSize": {
     "source": "写入日志",
@@ -482,6 +490,10 @@
   "admin.logJson": {
     "source": "日志 JSON",
     "translation": "Log JSON"
+  },
+  "admin.logPagination": {
+    "source": "日志翻页",
+    "translation": "Log pagination"
   },
   "admin.logPlaceholder": {
     "source": "日志内容会显示在这里",
@@ -699,9 +711,21 @@
     "source": "共 {total} 项 · 第 {n} 页，仅显示可读的非空文件",
     "translation": "{total} items · page {n}, readable non-empty files only"
   },
+  "admin.pageNumber": {
+    "source": "页码",
+    "translation": "Page number"
+  },
+  "admin.pageSize": {
+    "source": "每页条目数",
+    "translation": "Items per page"
+  },
   "admin.pageTitle": {
     "source": "管理 · VoidPlayer",
     "translation": "Administration · VoidPlayer"
+  },
+  "admin.paginationSummary": {
+    "source": "第 {page} / {pages} 页，共 {total} 条",
+    "translation": "Page {page} of {pages}, {total} records"
   },
   "admin.preferencesTitle": {
     "source": "首选项",
@@ -767,9 +791,9 @@
     "source": "最近 60 秒",
     "translation": "Last 60 seconds"
   },
-  "admin.recentRequests": {
-    "source": "最近 200 条请求，服务重启后清空",
-    "translation": "Recent 200 requests, cleared on restart."
+  "admin.recordCount": {
+    "source": "{total} 条",
+    "translation": "{total} records"
   },
   "admin.refreshCaches": {
     "source": "刷新缓存",

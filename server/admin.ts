@@ -162,11 +162,12 @@ export class AdminController {
     this.analysis.configure(input.concurrency, decoder);
     return this.analysisSettings();
   }
-  async logs(before = '', limit = 40): Promise<LogPage> {
-    const page = await this.reports.list(before, limit);
+  async logs(before = '', limit = 40, requestedPage?: number): Promise<LogPage> {
+    const page = await this.reports.list(before, limit, requestedPage);
     if (page.storage) page.storage.runtime = this.runtimeLog?.status() ?? null;
     return page;
   }
+  requests(page: number, pageSize = 40) { return this.runtimeLog?.requests(page, pageSize); }
   readLog(name: string, version: string | null): Promise<LogDocument> { return this.reports.read(name, version); }
   deleteLog(name: string, version: string | null) { return this.reports.delete(name, version); }
   private closing?: Promise<void>;

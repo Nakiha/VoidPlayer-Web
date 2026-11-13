@@ -31,6 +31,45 @@ async function records(directory: string) {
   return result;
 }
 
+test('request history pages survive rotation and restart and discard expired segments', async () => fixture(async directory => {
+  const policy = { ...runtimePolicy, maxBytes: 2 * 1024 ** 2 };
+  const old = segment(Date.now() - 1000, '');
+  const oldRequest = { event: 'http-request', requestId: 'oldest', t: new Date().toISOString(), url: '/api/library', method: 'GET' };
+  await fs.writeFile(path.join(directory, old), JSON.stringify(oldRequest) + '\n');
+  let logs = new RuntimeLog(directory, policy);
+  await logs.start();
+  try {
+    for (let i = 0; i < 245; i++) logs.write({ ...oldRequest, requestId: String(i), url: '/api/library/' + i });
+    logs.write({ ...oldRequest, requestId: 'admin-poll', url: '/api/admin/requests' });
+    await logs.flush();
+    const first = await logs.requests(1), last = await logs.requests(7);
+    assert.equal(first.total, 246); assert.equal(first.pages, 7);
+    assert.deepEqual(first.recentRequests.map(entry => entry.requestId), Array.from({ length: 40 }, (_, i) => String(205 + i)));
+    assert.deepEqual(last.recentRequests.map(entry => entry.requestId), ['oldest', '0', '1', '2', '3', '4']);
+    logs.write({ ...oldRequest, requestId: 'appended' }); await logs.flush();
+    assert.equal((await logs.requests(1)).total, 247, 'the active segment is indexed incrementally');
+    await logs.close();
+    logs = new RuntimeLog(directory, policy); await logs.start();
+    assert.equal((await logs.requests(1)).total, 247, 'sealed gzip requests survive a new process owner');
+    await fs.rm(path.join(directory, old + '.gz'));
+    assert.equal((await logs.requests(1)).total, 246, 'the disposable index follows retained segments');
+    assert.equal((await logs.requests(999)).page, 7);
+  } finally { await logs.close(); }
+}));
+
+test('report page jumps clamp after deletion and preserve cursor pagination', async () => fixture(async directory => {
+  for (let i = 0; i < 85; i++) await fs.writeFile(path.join(directory, `voidplayer-log-${String(i).padStart(3, '0')}.json`), '{}');
+  const reports = new ReportLogs(directory, { ...reportPolicy, maxFiles: 100, maxBytes: 10000 });
+  try {
+    const first = await reports.list('', 40, 1), second = await reports.list('', 40, 2), last = await reports.list('', 40, 999);
+    assert.equal(first.total, 85); assert.equal(first.pages, 3); assert.equal(last.page, 3); assert.equal(last.entries.length, 5);
+    assert.equal(second.entries[0].name, 'voidplayer-log-044.json');
+    assert.deepEqual((await reports.list(first.next!, 40)).entries, second.entries);
+    for (const entry of last.entries) await reports.delete(entry.name, entry.version);
+    assert.equal((await reports.list('', 40, 3)).page, 2);
+  } finally { await reports.close(); }
+}));
+
 test('runtime logs rotate by size and UTC day, seal valid gzip and drain every accepted record on close', async t => fixture(async directory => {
   let now = Date.now(); t.mock.method(Date, 'now', () => now);
   const logs = new RuntimeLog(directory, runtimePolicy);
@@ -174,7 +213,8 @@ test('log policy validates bounded storage and explicit report expiration', () =
 });
 
 test('service launcher drains child stdout/stderr into compressed bounded logs without an append-only console file', async () => fixture(async directory => {
-  for (const name of ['scripts/service-runner.mjs', 'server/logging/runtime.ts', 'server/logging/files.ts', 'server/library-store.ts', 'server/sqlite.ts', 'shared/service/logging.ts']) {
+  for (const name of ['scripts/service-runner.mjs', 'server/logging/runtime.ts', 'server/logging/request-history.ts',
+    'server/logging/files.ts', 'server/library-store.ts', 'server/sqlite.ts', 'shared/service/logging.ts']) {
     await fs.mkdir(path.dirname(path.join(directory, name)), { recursive: true });
     await fs.copyFile(new URL('../../' + name, import.meta.url), path.join(directory, name));
   }

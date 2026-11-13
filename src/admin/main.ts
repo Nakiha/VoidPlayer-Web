@@ -9,6 +9,7 @@ import { installLanguageControls } from '../ui/language.ts';
 import { installFocusFeedback } from '../ui/focus-feedback.ts';
 import { installToasts } from '../ui/toast.ts';
 import { installTooltips } from '../ui/tooltips.ts';
+import { installChoiceMenu } from '../ui/choice-menu.ts';
 import { installLiveLocalization, localizedText, localizedFragment, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
 import { initializeLanguage, onLanguageChange, formatDate, t, th, msg } from '../i18n.ts';
 import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
@@ -28,7 +29,7 @@ import { icon } from '../ui/icons.ts';
 import { installWorkspaceAdmin } from './workspaces.ts';
 import { installMeasurements } from './measurement.ts';
 import { adminShell, PANES } from './shell.ts';
-import type {RootConfiguration as RootConfig,LogPage,LogDocument,LibraryScanStatus} from '../../shared/service/admin.ts';
+import type {RootConfiguration as RootConfig,LogPage,LogDocument,LibraryScanStatus,RequestPage} from '../../shared/service/admin.ts';
 
 type Root = { id: string; name: string; path: string };
 
@@ -75,10 +76,13 @@ let polling = false, errorsOffset = 0, errorsJob: unknown = null;
 let scanStatus: LibraryScanStatus | null = null;
 const postingScans = new Set<string>();
 let rootStates: LibraryScanStatus['roots'] = [], recentRequests: Record<string, unknown>[] = [];
-let requestSnapshot: { actor: string; etag?: string; records: Record<string, unknown>[] } | undefined;
+let requestSnapshot: { actor: string; etag?: string; value: RequestPage } | undefined;
 let requestEpoch = 0, requestAbort: AbortController | undefined;
 const scanCadence = new PollingCadence(3000), requestCadence = new PollingCadence(3000);
-let logCursor = '', nextLog: string | null = null, selectedLog: LogEntry | null = null;
+let selectedLog: LogEntry | null = null;
+const logPages = { uploads: { page: 1, pages: 1, total: 0, pageSize: 40 }, requests: { page: 1, pages: 1, total: 0, pageSize: 40 } };
+let loadingLogs = false;
+let pageNavigation = 0;
 const userNames = new Map<string, string>();
 let logDocument: unknown, logsMode = 'uploads', logSequence = 0, listSequence = 0, scanSequence = 0;
 let dismissNotice: (() => void) | undefined;
@@ -98,6 +102,10 @@ async function api<T>(url: string, method = 'GET', body?: unknown, headers: Reco
   return value;
 }
 const act = async (action: () => Promise<void>) => { try { await action(); } catch (error) { if (!life.signal.aborted) notice(() => requestError(error), true); } };
+const pageSizeMenu = installChoiceMenu('logs-page-size', () => [20, 40, 100].map(value => ({
+  value: String(value), label: t(msg('admin.itemsPerPage', '{count} 条 / 页'), { count: value }),
+})), value => void act(() => goLogPage(1, Number(value))), undefined, undefined, undefined, () => !loadingLogs);
+life.signal.addEventListener('abort', () => pageSizeMenu.dispose(), { once: true });
 function pendingRoot() {
   return [...$('root-editor').querySelectorAll<HTMLElement>('.admin-root-row')].find(row => !rootConfig?.roots.some(root => root.id === row.dataset.id));
 }
@@ -211,7 +219,8 @@ async function poll(force = false) {
   polling = true;
   try {
     if (scanCadence.ready(pane === 'library') || force && pane === 'library') await loadScan();
-    if (requestCadence.ready(pane === 'logs' && logsMode === 'requests') || force && pane === 'logs' && logsMode === 'requests') {
+    if (requestCadence.ready(pane === 'logs' && logsMode === 'requests' && logPages.requests.page === 1)
+      || force && pane === 'logs' && logsMode === 'requests') {
       await loadRequests();
     }
     if (statusError) notice(() => '');
@@ -219,24 +228,28 @@ async function poll(force = false) {
   catch (error) { if (!life.signal.aborted) { notice(() => requestError(error), true); statusError = true; } }
   finally { polling = false; }
 }
-async function loadRequests() {
+async function loadRequests(target = logPages.requests.page, pageSize = logPages.requests.pageSize) {
   const actor = confirmedActor()?.id, epoch = requestEpoch;
   if (!actor || requestAbort) return;
-  const cached = requestSnapshot?.actor === actor ? requestSnapshot : undefined;
+  const cached = requestSnapshot?.actor === actor && requestSnapshot.value.page === target
+    && requestSnapshot.value.pageSize === pageSize ? requestSnapshot : undefined;
   const controller = requestAbort = new AbortController();
   try {
-    const response = await fetch('/api/admin/requests', { cache: 'no-store', headers: cached?.etag ? { 'if-none-match': cached.etag } : {},
+    const response = await fetch(`/api/admin/requests?page=${target}&pageSize=${pageSize}`, { cache: 'no-store', headers: cached?.etag ? { 'if-none-match': cached.etag } : {},
       signal: AbortSignal.any([life.signal, controller.signal, AbortSignal.timeout(15000)]) });
     if (epoch !== requestEpoch || actor !== confirmedActor()?.id || controller.signal.aborted) return;
-    let records: Record<string, unknown>[];
-    if (response.status === 304 && cached) records = cached.records;
+    let value: RequestPage;
+    if (response.status === 304 && cached) value = cached.value;
     else {
-      const value = await response.json();
-      if (!response.ok) throw apiError(response.status, value);
-      records = value.recentRequests;
+      const body = await response.json();
+      if (!response.ok) throw apiError(response.status, body);
+      value = { ...body, page: body.page ?? 1, pages: body.pages ?? 1, pageSize: body.pageSize ?? pageSize,
+        total: body.total ?? body.recentRequests.length };
     }
     if (epoch !== requestEpoch || actor !== confirmedActor()?.id || controller.signal.aborted) return;
-    requestSnapshot = { actor, etag: response.headers.get('etag') ?? (response.status === 304 ? cached?.etag : undefined), records };
+    const records = value.recentRequests;
+    requestSnapshot = { actor, etag: response.headers.get('etag') ?? (response.status === 304 ? cached?.etag : undefined), value };
+    Object.assign(logPages.requests, { page: value.page, pages: value.pages, total: value.total, pageSize: value.pageSize });
     if (recentRequests !== records) { recentRequests = records; renderRequests(); }
     requestCadence.observe(records);
     syncLogViews();
@@ -278,17 +291,16 @@ function clearLog() {
   $('delete-log').setAttribute('disabled', '');
   $('delete-log-confirm').hidden = true;
 }
-async function loadLogs() {
+async function loadLogs(target = logPages.uploads.page, pageSize = logPages.uploads.pageSize) {
   const sequence = ++listSequence;
-  const page = await api<LogPage>(`/api/admin/logs?before=${encodeURIComponent(logCursor)}`);
+  const page = await api<LogPage>(`/api/admin/logs?page=${target}&pageSize=${pageSize}`);
   if (sequence !== listSequence) return;
   renderLogStorage($('log-storage'), page.storage, bytes);
   const users = await api<{ users: { id: string; name: string }[] }>('/api/users').catch(() => ({ users: [] }));
   if (sequence !== listSequence) return;
   for (const user of users.users) userNames.set(user.id, user.name);
-  nextLog = page.next;
-  $('more-logs').hidden = $('first-logs').hidden = !nextLog && !logCursor;
-  $('more-logs').toggleAttribute('disabled', !nextLog); $('first-logs').toggleAttribute('disabled', !logCursor);
+  Object.assign(logPages.uploads, { page: page.page ?? 1, pages: page.pages ?? 1, total: page.total ?? page.entries.length,
+    pageSize: page.pageSize ?? pageSize });
   if (!page.entries.length) {
     $('log-list').replaceChildren(emptyState(() => page.enabled ? t(msg("admin.noUploadedLogs", "暂无上传日志")) : t(msg("admin.logsDisabled", "未开启日志接收")), () => page.enabled ? t(msg("admin.logsEmptyHint", "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看")) : t(msg("admin.logsNoDir", "服务器未设置日志接收目录，你仍可在播放器中下载本地日志")), true)); syncLogViews(); return;
   }
@@ -348,6 +360,37 @@ function syncLogViews() {
   const tabs = document.querySelector<HTMLElement>('.admin-log-tabs')!;
   tabs.setAttribute('aria-busy', String(requests ? !requestSnapshot : !$('log-list').childElementCount));
   for (const tab of tabs.querySelectorAll<HTMLButtonElement>('[data-log-mode]')) tab.setAttribute('aria-pressed', String(tab.dataset.logMode === logsMode));
+  syncLogPages();
+}
+function syncLogPages() {
+  const current = logsMode === 'requests' ? logPages.requests : logPages.uploads;
+  const input = $<HTMLInputElement>('logs-page');
+  input.style.width = `calc(${Math.max(2, String(current.pages).length)}ch + 12px)`;
+  if (document.activeElement !== input) input.value = String(current.page);
+  $('logs-prev').toggleAttribute('disabled', current.page <= 1);
+  $('logs-next').toggleAttribute('disabled', current.page >= current.pages);
+  $('log-pages').setAttribute('aria-busy', String(loadingLogs));
+  text('logs-page-count', () => `/ ${current.pages}`);
+  text('logs-record-count', () => t(msg('admin.recordCount', '{total} 条'), { total: current.total }));
+  localizedAttribute($('log-pages'), 'aria-label', () => t(msg('admin.paginationSummary', '第 {page} / {pages} 页，共 {total} 条'), current));
+  pageSizeMenu.sync(String(current.pageSize), t(msg('admin.itemsPerPage', '{count} 条 / 页'), { count: current.pageSize }), true);
+  $('logs-page-size').dataset.pageSize = String(current.pageSize);
+  localizedAttribute($('logs-page-size'), 'data-tooltip', () => t(msg('admin.itemsPerPage', '{count} 条 / 页'), { count: current.pageSize }));
+}
+onLanguageChange(syncLogPages, life.signal);
+async function goLogPage(target: number, pageSize = (logsMode === 'requests' ? logPages.requests : logPages.uploads).pageSize) {
+  if (loadingLogs || !Number.isSafeInteger(target) || target < 1) return;
+  const mode = logsMode, current = mode === 'requests' ? logPages.requests : logPages.uploads;
+  target = Math.min(target, current.pages);
+  const navigation = ++pageNavigation;
+  loadingLogs = true; syncLogPages();
+  try {
+    if (mode === 'requests') {
+      requestEpoch++; requestAbort?.abort(); requestAbort = undefined;
+      await loadRequests(target, pageSize);
+    } else { clearLog(); await loadLogs(target, pageSize); }
+    if (navigation === pageNavigation && logsMode === mode) $<HTMLInputElement>('logs-page').value = String(current.page);
+  } finally { if (navigation === pageNavigation) { loadingLogs = false; syncLogPages(); } }
 }
 const analysisSettings = installAnalysisSettings(life.signal, api, notice);
 const caches = installCaches(life.signal, notice);
@@ -393,10 +436,15 @@ $('roots-form').onsubmit = event => { event.preventDefault(); if (!rootConfig?.w
 $('errors-prev').onclick = () => { errorsOffset = Math.max(0, errorsOffset - 100); void act(loadScan); };
 $('errors-next').onclick = () => { errorsOffset += 100; void act(loadScan); };
 $('refresh-logs').onclick = () => void act(logsMode === 'uploads' ? loadLogs : () => poll(true));
-$('more-logs').onclick = () => { if (nextLog) { logCursor = nextLog; clearLog(); void act(loadLogs); } };
-$('first-logs').onclick = () => { logCursor = ''; clearLog(); void act(loadLogs); };
+$('logs-prev').onclick = () => void act(() => goLogPage((logsMode === 'requests' ? logPages.requests : logPages.uploads).page - 1));
+$('logs-next').onclick = () => void act(() => goLogPage((logsMode === 'requests' ? logPages.requests : logPages.uploads).page + 1));
+$('log-pages').onsubmit = event => {
+  event.preventDefault();
+  void act(() => goLogPage(Number($<HTMLInputElement>('logs-page').value)));
+};
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-log-mode]')) button.onclick = () => {
   if (button.dataset.logMode === logsMode) return;
+  pageNavigation++; loadingLogs = false;
   logsMode = button.dataset.logMode!;
   syncLogViews();
   if (logsMode === 'requests') void act(loadRequests);
@@ -424,7 +472,9 @@ installLiveLocalization(document.body, life.signal);
 observeIdentity(life.signal, {
   invalidated() {
     overview.reset();
+    pageNavigation++; loadingLogs = false;
     requestEpoch++; requestAbort?.abort(); requestAbort = undefined; requestSnapshot = undefined; recentRequests = [];
+    Object.assign(logPages.requests, { page: 1, pages: 1, total: 0 });
     requestCadence.reset(); renderRequests(); $('requests-view').hidden = true; $('uploads-view').hidden = false; syncLogViews();
   },
   confirmed() { if (pane === 'overview') void overview.refresh(); else if (pane === 'logs' && logsMode === 'requests') void poll(true); },

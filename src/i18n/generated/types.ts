@@ -99,6 +99,7 @@ export interface Sources {
   "admin.filterMedia": "筛选媒体";
   "admin.framesEmpty": "打开支持的媒体库视频后，索引会自动保存在这里";
   "admin.generalPreferences": "通用";
+  "admin.goToPage": "跳转";
   "admin.guestId": "访客 · {id}";
   "admin.historyLogLine": "历史日志 · {size}";
   "admin.hoursMinutes": "{h} 小时 {m} 分";
@@ -106,6 +107,7 @@ export interface Sources {
   "admin.indexTitle": "媒体索引";
   "admin.interfaceLanguage": "界面语言";
   "admin.itemsCount": "{n, plural, other {# 条}}";
+  "admin.itemsPerPage": "{count} 条 / 页";
   "admin.journalSize": "写入日志";
   "admin.kindFrameIndexes": "帧索引";
   "admin.kindPreviews": "标注预览";
@@ -121,6 +123,7 @@ export interface Sources {
   "admin.logDeleted": "日志已从服务器删除";
   "admin.logDropped": "丢弃 {count} 条";
   "admin.logJson": "日志 JSON";
+  "admin.logPagination": "日志翻页";
   "admin.logPlaceholder": "日志内容会显示在这里";
   "admin.logRejectFull": "满额拒收";
   "admin.logRetentionDays": "{days} 天后自动删除";
@@ -175,7 +178,10 @@ export interface Sources {
   "admin.overviewTitle": "概览";
   "admin.overviewUpdated": "更新于 {time}";
   "admin.pageCaption": "共 {total} 项 · 第 {n} 页，仅显示可读的非空文件";
+  "admin.pageNumber": "页码";
+  "admin.pageSize": "每页条目数";
   "admin.pageTitle": "管理 · VoidPlayer";
+  "admin.paginationSummary": "第 {page} / {pages} 页，共 {total} 条";
   "admin.preferencesTitle": "首选项";
   "admin.prevErrors": "上一页错误";
   "admin.prevPage": "上一页";
@@ -192,7 +198,7 @@ export interface Sources {
   "admin.reasonError": "发生错误";
   "admin.reasonUser": "用户取消或连接中断";
   "admin.recentMinute": "最近 60 秒";
-  "admin.recentRequests": "最近 200 条请求，服务重启后清空";
+  "admin.recordCount": "{total} 条";
   "admin.refreshCaches": "刷新缓存";
   "admin.refreshLogs": "刷新日志";
   "admin.refreshMarks": "刷新标注";
@@ -1369,6 +1375,7 @@ export interface MessageParameters {
   "admin.filterMedia": {  };
   "admin.framesEmpty": {  };
   "admin.generalPreferences": {  };
+  "admin.goToPage": {  };
   "admin.guestId": { "id": string | number };
   "admin.historyLogLine": { "size": string | number };
   "admin.hoursMinutes": { "h": string | number; "m": string | number };
@@ -1376,6 +1383,7 @@ export interface MessageParameters {
   "admin.indexTitle": {  };
   "admin.interfaceLanguage": {  };
   "admin.itemsCount": { "n": number };
+  "admin.itemsPerPage": { "count": string | number };
   "admin.journalSize": {  };
   "admin.kindFrameIndexes": {  };
   "admin.kindPreviews": {  };
@@ -1391,6 +1399,7 @@ export interface MessageParameters {
   "admin.logDeleted": {  };
   "admin.logDropped": { "count": string | number };
   "admin.logJson": {  };
+  "admin.logPagination": {  };
   "admin.logPlaceholder": {  };
   "admin.logRejectFull": {  };
   "admin.logRetentionDays": { "days": string | number };
@@ -1445,7 +1454,10 @@ export interface MessageParameters {
   "admin.overviewTitle": {  };
   "admin.overviewUpdated": { "time": string | number };
   "admin.pageCaption": { "n": string | number; "total": string | number };
+  "admin.pageNumber": {  };
+  "admin.pageSize": {  };
   "admin.pageTitle": {  };
+  "admin.paginationSummary": { "page": string | number; "pages": string | number; "total": string | number };
   "admin.preferencesTitle": {  };
   "admin.prevErrors": {  };
   "admin.prevPage": {  };
@@ -1462,7 +1474,7 @@ export interface MessageParameters {
   "admin.reasonError": {  };
   "admin.reasonUser": {  };
   "admin.recentMinute": {  };
-  "admin.recentRequests": {  };
+  "admin.recordCount": { "total": string | number };
   "admin.refreshCaches": {  };
   "admin.refreshLogs": {  };
   "admin.refreshMarks": {  };

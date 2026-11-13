@@ -244,6 +244,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       const list = $('track-selector'); list.replaceChildren();
       for (const track of state.tracks) {
         const button = document.createElement('button'); button.className = 'track-choice';
+        button.dataset.trackDrag = track.slot; button.dataset.dragSurface = track.slot;
         button.setAttribute('aria-label', t(msg("tracks.selectTrack", "选择轨道 {p0}"), { p0: track.slot }));
         button.setAttribute('aria-pressed', String(track.slot === view.selected));
         button.append(text('span', track.slot, `slot slot-${track.slot}`), createMiddleFilename(fileBasename(track.name)));
@@ -410,7 +411,7 @@ export function createTracksPane(shared: WorkbenchShared) {
           const current = session.getState().tracks.find(t => t.slot === track.slot);
           if (current) session.setTrackVisibility(track.slot, !current.visible);
         };
-        label.append(name); row.append(label, offset, lane, audio, visibility); list.append(row);
+        label.append(name); row.append(label, audio, visibility, offset, lane); list.append(row);
       }
       if (!state.tracks.length) list.append(text('p', t(msg("tracks.loadAVideoToViewTracksAnd", "载入视频后查看轨道与标记")), 'panel-empty'));
       queueLabelFit();
