@@ -120,6 +120,7 @@ try {
   await sibling.waitForFunction(() => !!window.voidPlayer);
   const siblingEntry = await sibling.locator('script[type=module][src]').first().getAttribute('src');
   await sibling.evaluate(() => { window.siblingDocument = 'A'; });
+  const publishedBuildId = (await info(candidate)).buildId;
   for (const lane of pages) {
     const { page } = lane;
     await page.locator('#server-update').click();
@@ -131,11 +132,11 @@ try {
     });
     const before = await scene();
     const action = lane.standalone ? page.locator('.toast-warning button').filter({hasText:/保存现场并刷新|Save this session and refresh/}).last() : page.locator('#server-update');
-    await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}), action.click()]);
-    await page.waitForFunction(() => window.voidPlayer?.getState().tracks[0]?.frame && !window.voidPlayer.getState().busy && !document.querySelector('[data-recovery-pending]'));
+    await Promise.all([page.waitForURL(url => url.searchParams.get('vp-update') === publishedBuildId, {waitUntil:'domcontentloaded'}), action.click()]);
+    await page.waitForFunction(() => window.voidPlayer?.getState().tracks[0]?.frame && !window.voidPlayer.getState().busy && !document.querySelector('[data-workspace-opening]'));
     await page.waitForFunction(layout => {
-      const current = window.voidPlayer.getWorkspace();
-      return Object.entries(layout.panels).every(([key, value]) => current.panels[key] === value)
+      const current = window.voidPlayer?.getWorkspace();
+      return current && Object.entries(layout.panels).every(([key, value]) => current.panels[key] === value)
         && Object.entries(layout.sources ?? {}).every(([key, value]) => current.sources?.[key] === value);
     }, before.layout);
     assert.deepEqual(await scene(), before, 'explicit update restores the review document');

@@ -41,7 +41,7 @@ try {
  let traffic=[];
  const staticDir=await snapshotBuild(path.join(root,'dist'),path.join(temporary,'static'));
  server=createMediaServer({roots:library.roots,library,staticDir,onLog(){}});
- server.on('request',(req,res)=>{if(/^\/api\/media\/[a-f0-9]+(?:\?|$)/.test(req.url)&&!req.url.includes('index'))res.on('finish',()=>traffic.push({range:req.headers.range,bytes:Number(res.getHeader('content-length'))}));});
+ server.on('request',(req,res)=>{if(/^\/api\/media\/[a-f0-9]+\/content(?:\?|$)/.test(req.url))res.on('finish',()=>traffic.push({range:req.headers.range,bytes:Number(res.getHeader('content-length'))}));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}`;
  browser=await (engine==='webkit'?webkit:chromium).launch({headless:true,...(engine==='chromium'?{args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']}: {})});
  const tool=(page,name,input={})=>page.evaluate(({name,input})=>window.voidPlayer.tools.find(t=>t.name===name).execute(input),{name,input});

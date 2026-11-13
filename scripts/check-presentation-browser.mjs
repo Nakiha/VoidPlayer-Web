@@ -108,6 +108,7 @@ try {
       }
       setPresentationGeometry(source,geometry);
       paintFrame(source,{kind:'rgba8',description:rgbaDescription(1,1),width:1,height:1,pixels:new Uint8ClampedArray([255,0,0,128])});
+      await gpu.gpuDrain(source);
       const alpha=read();await Promise.resolve();
       const surface=document.querySelector('.frame-presentation'),mix=new OffscreenCanvas(surface.width,surface.height),ctx=mix.getContext('2d');
       ctx.fillStyle='blue';ctx.fillRect(0,0,mix.width,mix.height);ctx.drawImage(surface,0,0);
