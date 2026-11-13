@@ -79,7 +79,7 @@ export function installUriState(session: ReviewSession, options: {
     }
     throw new Error(t(msg('uriState.markUnavailable', '当前片源版本中找不到这条标注。')));
   }
-  async function restoreState(value: unknown) {
+  async function restoreState(value: unknown, dismissSettings = true) {
     const state = parseUriState(value), capturedActor = currentActor()?.id, stamp = ++epoch;
     operation.abort();
     operation = new AbortController();
@@ -143,7 +143,8 @@ export function installUriState(session: ReviewSession, options: {
           offsetUs: track.offsetUs, visible: track.visible })), media, marks: [], positionUs: state.positionUs,
         viewport: state.viewport, comparison: state.comparison, layout: state.layout ?? defaultLayout });
       staged = true;
-      options.beforeRestore(); await options.closeSettings();
+      options.beforeRestore();
+      if (dismissSettings) await options.closeSettings();
       if (!current()) return false;
       await session.restoreWorkspace(document, async (info, signal, progress, configuration) => {
         if (!info.source) {
@@ -166,7 +167,7 @@ export function installUriState(session: ReviewSession, options: {
       if (stamp === epoch) { opening = false; root.removeAttribute('data-workspace-opening'); options.openingChanged?.(); }
     }
   }
-  async function openAddress(url: URL) {
+  async function openAddress(url: URL, dismissSettings = true) {
     const ticket = ++addressEpoch;
     addressOperation.abort();
     addressOperation = new AbortController();
@@ -182,7 +183,7 @@ export function installUriState(session: ReviewSession, options: {
       }
       if (ticket !== addressEpoch || signal.aborted) return;
       const state = applyUriParameters(url, base);
-      if (!await restoreState(state) || ticket !== addressEpoch || signal.aborted) return;
+      if (!await restoreState(state, dismissSettings) || ticket !== addressEpoch || signal.aborted) return;
       // Expand the immutable shared payload into editable parameters after restoring.
       state.positionUs = session.getState().positionUs;
       const expanded = writeUriState(state, location.href); previousSignature = expanded.search; previousSources = JSON.stringify(state.tracks);
@@ -233,7 +234,7 @@ export function installUriState(session: ReviewSession, options: {
     if (startupPending && !syncingUrl) return;
     epoch++; addressEpoch++; addressOperation.abort(); operation.abort(); opening = false;
     root.removeAttribute('data-workspace-opening'); controls(); }, { signal: life.signal });
-  if (explicit) void options.identityReady.then(() => openAddress(original)).catch(error => {
+  if (explicit) void options.identityReady.then(() => openAddress(original, false)).catch(error => {
     options.toasts.show((error as Error).message, { kind: 'error', durationMs: 0 });
   }).finally(() => { startupPending = false; opening = false; controls(); root.removeAttribute('data-workspace-opening'); options.openingChanged?.(); });
   controls();

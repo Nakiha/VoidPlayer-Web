@@ -52,8 +52,7 @@ try {
   // deliberately does not wait before guest entry; it drains only afterwards.
   const settled = (...pages) => Promise.all(pages.map(p => p.waitForLoadState('networkidle')));
   const settings = async p => {
-    // Reload now restores URI state after identity confirmation. Drain that
-    // navigation before opening a modal the restoration is allowed to close.
+    // Drain normal navigation requests before exercising the modal lifecycle.
     await settled(p);
     await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click();
     await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); await settled(p);
