@@ -265,9 +265,9 @@ try {
   await editPage.waitForFunction(() => document.querySelector('#identity-current').textContent === '改好的名字');
   assert.equal(await editPage.locator('#identity-id').getAttribute('data-tooltip'), createdId);
   await editPage.locator('#settings-tab-workspace').click();
-  await editPage.locator('#saved-workspace-list').filter({ hasText: '暂无工作区' }).waitFor();
-  assert.equal(await editPage.locator('.saved-workspace-search').isVisible(), true);
-  assert.equal(await editPage.locator('.saved-workspace-pages').isVisible(), false);
+  assert.equal(await editPage.locator('#saved-workspace-list, .saved-workspace-search, .saved-workspace-pages').count(), 0);
+  assert.equal(await editPage.locator('#state-copy-readable').isVisible(), true);
+  assert.equal(await editPage.locator('#annotation-status').isVisible(), true);
   assert.equal(await editPage.locator('#saved-workspace-share').isEnabled(), false);
   await settled(editPage);
   await editContext.close();
