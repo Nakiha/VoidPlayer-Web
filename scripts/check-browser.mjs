@@ -2195,7 +2195,11 @@ try {
       // A revision-qualified first page revalidates the loaded view; it is not
       // another locate. Pagination still must visit exactly offsets 0 and 60.
       (offset === 0 && url.searchParams.has('revision') ? refreshes : offsets).push(offset);
-      const response = await route.fetch(), data = await response.json();
+      // This fixture replaces JSON pages, including conditional refreshes.
+      // Ask the origin for a body rather than attempting to parse a 304.
+      const headers = { ...route.request().headers() };
+      delete headers['if-none-match'];
+      const response = await route.fetch({ headers }), data = await response.json();
       const entries = offset === 0 ? Array.from({length:60}, (_, i) => ({...nested, id:`decoy-${i}`, name:`review/shots/decoy-${i}.mp4`})) : [nested];
       await route.fulfill({response, json:{...data, entries, directories:[], total:61, offset, nextOffset:offset === 0 ? 60 : null}});
     });

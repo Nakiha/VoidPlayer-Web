@@ -42,7 +42,7 @@ try {
       if (new URL(request.url()).pathname.endsWith('/voidplayer-core-mt.js')) triedMt = true;
     });
     page.on('pageerror', e => errors.push(e.message));
-    page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
+    page.on('request', r => { if (/\/api\/media\/[0-9a-f]+\/content$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
     try {
       await page.goto(base); await page.waitForFunction(() => !!window.voidPlayer);
       // Assert decoder-capability policy explicitly in browser matching mode.
@@ -128,7 +128,7 @@ try {
     try {
       await page.context().route(/\/frame-index\?/, route => route.fulfill({ status: 404, body: '{}' }));
       page.context().on('request', request => {
-        if (/^\/api\/media\/[0-9a-f]{24}$/.test(new URL(request.url()).pathname)) requests.push(request.url());
+        if (/^\/api\/media\/[0-9a-f]{24}\/content$/.test(new URL(request.url()).pathname)) requests.push(request.url());
       });
       await page.goto(base);
       await page.waitForFunction(() => !!window.voidPlayer);

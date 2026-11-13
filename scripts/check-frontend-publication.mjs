@@ -16,7 +16,7 @@ const a = path.join(root, 'dist'), candidate = path.join(temporary, 'candidate')
 const store = path.join(temporary, 'data/frontend-releases');
 const info = async directory => JSON.parse(await readFile(path.join(directory, 'build-info.json'), 'utf8'));
 const pages = [], contexts = [];
-let service, browser;
+let service, browser, sharedMarkId;
 try {
   const media = path.join(root, 'fixtures/video');
   const config = await loadConfig(['--static', a, '--data-dir', path.join(temporary, 'data'), '--folder', media], 'production');
@@ -36,17 +36,25 @@ try {
       await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
       await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     } else assert.equal(await page.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false);
+    await page.waitForFunction(() => window.voidPlayer && !document.querySelector('#app').hasAttribute('data-initializing')
+      && !document.querySelector('[data-workspace-opening]'));
     if (!await page.locator('#library-location').isVisible()) await page.locator('#toggle-sources').click();
+    await page.locator('#library-location').fill('library:/');
+    await page.locator('#library-location').press('Enter');
     await page.locator('#library-mounts .library-mount').first().click();
     await page.locator('#source-list .source-file').filter({ hasText:'ci_h264_smoke.mp4' }).getByRole('button').first().click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.frame);
-    await page.evaluate(async () => {
+    const markId = await page.evaluate(async existingMarkId => {
       const call = (name, args) => window.voidPlayer.tools.find(t => t.name === name).execute(args);
       await call('seek_review', {ptsUs:200000});
-      await call('add_review_mark', {slot:'A', text:'A → B → C', drawings:[{id:'keep-area', tool:'rect', color:'#ff3b30',
-        strokeWidth:4, points:[{x:.2,y:.2},{x:.6,y:.5}]}]});
       window.publicationDocument = 'original';
-    });
+      if (existingMarkId) return existingMarkId;
+      return (await call('add_review_mark', {slot:'A', text:'A → B → C', drawings:[{id:'keep-area', tool:'rect', color:'#ff3b30',
+        strokeWidth:4, points:[{x:.2,y:.2},{x:.6,y:.5}]}]})).id;
+    }, sharedMarkId);
+    sharedMarkId = markId;
+    // Capture the acknowledged mark, after the server confirms actor metadata.
+    await page.waitForFunction(id => window.voidPlayer.getState().marks.some(mark => mark.id === id && mark.author?.kind === 'guest'), markId);
     const snapshot = () => page.evaluate(() => {
       const { positionUs, marks, tracks } = window.voidPlayer.getState();
       return { positionUs, marks, firstFrame:tracks[0].frame, id:tracks[0].id, document:window.publicationDocument };

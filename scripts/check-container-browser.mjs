@@ -72,7 +72,7 @@ try {
       assert.ok(matched,'real core export is instrumented');await route.fulfill({response,body:wrapped});
     });
     page.on('pageerror', e => errors.push(e.message));
-    page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
+    page.on('request', r => { if (/\/api\/media\/[0-9a-f]+\/content$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
     // Capture from the Worker that owns the actual request. Chromium does not
     // expose every Worker response body through Network.getResponseBody.
     await context.route(/packet-worker-[^/]+\.js(?:\?|$)/,async route=>{

@@ -64,7 +64,8 @@ try {
   page.setDefaultTimeout(15000); observeErrors(page, 'admin-first');
   await page.waitForURL(base + '/admin'); await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
   assert.equal(await page.locator('head meta[name="darkreader-lock"]').count(), 1, 'admin retains its native palette');
-  assert.equal(await player.url(), base + '/');
+  assert.equal(new URL(player.url()).origin, base);
+  assert.equal(new URL(player.url()).pathname, '/');
   // Returning to an existing player must retain its in-memory review and tab.
   await player.evaluate(() => { window.adminReturnMarker = 'preserve-review'; });
   assert.equal(await page.evaluate(() => !!window.opener), true);

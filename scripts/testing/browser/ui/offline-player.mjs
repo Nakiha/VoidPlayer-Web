@@ -56,8 +56,8 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       assert.equal(new URL(handler.action, base).href, base + '/?open=files');
       assert.equal(parsed.manifest.launchHandler.clientMode, 'kNavigateNew');
       const extensions = Object.values(handler.accept).flat();
-      for (const ext of ['.voidplayer', '.mp4', '.mkv']) assert.ok(extensions.includes(ext));
-      for (const ext of ['.ts', '.gz', '.json']) assert.ok(!extensions.includes(ext));
+      for (const ext of ['.mp4', '.mkv']) assert.ok(extensions.includes(ext));
+      for (const ext of ['.voidplayer', '.ts', '.gz', '.json']) assert.ok(!extensions.includes(ext));
       await session.detach();
       await first.evaluate(() => {
         window.promptCalls = 0;
