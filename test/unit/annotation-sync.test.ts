@@ -37,13 +37,16 @@ test('shared annotation polling backs off, caps idle delay, and wakes for edits,
   }
   t.mock.method(performance, 'now', () => now);
   t.mock.method(performance, 'getEntriesByType', () => []);
+  // Hashing has its own contract tests. Keep the polling clock independent
+  // of native WebCrypto thread-pool scheduling under loaded CI runners.
+  t.mock.method(crypto.subtle, 'digest', async () => new Uint8Array(32).buffer);
   t.mock.timers.enable({ apis: ['setInterval'] });
   let change!: (id: string, document: AnnotationDocument | null) => void;
   const controller = installAnnotationSync({ subscribe: () => () => {}, subscribeMarkChanges: (callback: typeof change) => { change = callback; return () => {}; },
     getState: () => ({ tracks: [{id:'track',source:{id:'a'.repeat(24),url:'http://localhost/api/media/'+ 'a'.repeat(24)+'/content?v='+ 'b'.repeat(24)}}], marks: [], playing: false }), applyStoredAnnotations() {} } as unknown as ReviewSession, () => false);
   const settle = async () => { for (let i = 0; i < 60; i++) await setImmediate(); };
   t.after(async () => {
-    await settle(); controller.dispose();
+    await settle(); await controller.dispose();
     for (const [key, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else Reflect.deleteProperty(globalThis, key); }
   });
   const advance = async (ms: number) => { now += ms; t.mock.timers.tick(ms); await settle(); };

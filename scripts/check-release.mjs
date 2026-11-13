@@ -262,7 +262,7 @@ try {
   const received = await (await fetch(base + '/api/admin/logs/' + receivedLogs.entries[0].name)).json();
   assert.equal(received.document.serverReceipt.actorId, 'local');
   await stop();
-  // Exercise the compiled runtime's actual schema 1 -> 8 migration. The old
+  // Exercise the compiled runtime's actual schema 1 -> 9 migration. The old
   // mount now exposes an empty directory instead of returning ENOENT.
   const legacyIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
   legacyIndex.exec('DROP TABLE root_storage; DROP TABLE library_directory_checks; PRAGMA user_version=1;'); legacyIndex.close();
@@ -292,7 +292,7 @@ try {
   assert.equal((await fetch(url, { headers: { range: 'bytes=0-31' } })).status, 206);
   await stop();
   const migratedIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
-  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 8);
+  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 9);
   assert.ok(migratedIndex.prepare('SELECT fs_type FROM root_storage').get()?.fs_type);
   migratedIndex.close();
   // A stopped full-data backup must restore into a fresh directory, not only
@@ -332,6 +332,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, portable HTTP identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, trusted-user admin page/identity/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-4 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index, stateless URI shares and versioned annotations`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, portable HTTP identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, trusted-user admin page/identity/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-9 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index, stateless URI shares and versioned annotations`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);
