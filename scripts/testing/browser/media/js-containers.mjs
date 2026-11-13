@@ -107,7 +107,8 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
  };
  await call('remove_review_track',{slot:'A'});
  await call('set_review_color_mode',{mode:'reference'});await call('set_reference_decode',{decoder:'software',depth:2});
- await stage('fresh-runtime-reload',()=>navigation.reload('fresh-runtime-reload',()=>page.reload()));await page.waitForFunction(()=>window.voidPlayer?.tools);
+ // Reopen an empty address so URI restoration cannot compete with this test's explicit File selection.
+ await stage('fresh-runtime-reload',()=>navigation.reload('fresh-runtime-reload',()=>page.goto(url)));await page.waitForFunction(()=>window.voidPlayer?.tools);
  // Agent configuration belongs to the current session. Reapply the software
  // thumbnail precondition after a fresh runtime, independently of host codecs.
  await call('set_review_color_mode',{mode:'reference'});await call('set_reference_decode',{decoder:'software',depth:2});

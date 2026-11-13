@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
 const name = 'webkit';
-await withBrowserFixture({ caseName: 'color-settings', engine: name, pageOptions: {"viewport": {"width": 1280, "height": 850}, "colorScheme": "dark"} }, async ({ page, ready, artifact }) => {
+await withBrowserFixture({ caseName: 'color-settings', engine: name, pageOptions: {"viewport": {"width": 1280, "height": 850}, "colorScheme": "dark"} }, async ({ page, ready, artifact, url:base }) => {
  const errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  await ready();
  await page.evaluate(()=>localStorage.setItem('voidplayer.reference-decode',JSON.stringify({decoder:'software',depth:2})));
- await page.reload();await page.waitForFunction(()=>window.voidPlayer);
+ await page.goto(base);await page.waitForFunction(()=>window.voidPlayer);
  assert.equal(await page.evaluate(()=>window.voidPlayer.getState().referenceDecode.decoder),'hardware','legacy software preferences do not override a fresh page');
  await page.locator('#settings-open').click();await page.locator('#settings-tab-performance').click();
  const pane=page.locator('#settings-pane-performance');
@@ -103,7 +103,8 @@ await withBrowserFixture({ caseName: 'color-settings', engine: name, pageOptions
  await page.locator('[data-color-target=hdr]').click();
  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('voidplayer.color-output')).target==='hdr'&&!window.voidPlayer.getState().busy);
  assert.match(await page.locator('#hdr-source-peak').innerText(),/4000/,'hiding the control retains the chosen peak');
- await page.reload();await page.waitForFunction(()=>window.voidPlayer);
+ // A fresh address tests profile defaults; an existing URI owns its explicit comparison settings.
+ await page.goto(base);await page.waitForFunction(()=>window.voidPlayer);
  assert.equal(await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='get_review_session').execute({}).colorMode),'reference','saved explicit choice survives reload');
  assert.equal(await page.locator('[data-color-target=hdr]').getAttribute('aria-pressed'),'true');assert.match(await page.locator('#hdr-source-peak').innerText(),/4000/);
  assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getState().referenceDecode),{decoder:'hardware',depth:4},'reload resets decoder and preserves buffer depth');

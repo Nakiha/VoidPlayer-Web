@@ -557,18 +557,18 @@ try {
   await nestedFile.click({button:'right'});
   const [destination] = await Promise.all([context.waitForEvent('page'),managed.locator('#library-file-menu [data-action=browse-in-player]').click()]);
   await destination.waitForFunction(() => !!window.voidPlayer);
-  assert.equal(new URL(destination.url()).searchParams.get('library'),'local');
-  assert.equal(new URL(destination.url()).searchParams.has('root'),false);
   await destination.waitForFunction(() => {
     const state=window.voidPlayer.getState();
-    return !state.busy&&state.tracks.length===1&&!!state.tracks[0].frame;
+    return !state.busy&&state.tracks.length===1&&!!state.tracks[0].frame&&new URL(location.href).searchParams.has('A');
   });
   const opened=await destination.evaluate(() => window.voidPlayer.getState());
   assert.equal(opened.tracks[0].name,'z-branch/leaf/nested.mp4');
-  assert.equal(opened.tracks[0].source.id,new URL(destination.url()).searchParams.get('media'));
-  assert.equal(new URL(opened.tracks[0].source.url,destination.url()).searchParams.get('v'),new URL(destination.url()).searchParams.get('v'));
+  assert.equal(opened.tracks[0].source.id,covered.id);
+  assert.equal(new URL(opened.tracks[0].source.url,destination.url()).searchParams.get('v'),covered.version);
+  assert.equal(new URL(destination.url()).searchParams.get('A'),`${covered.id}@${covered.version}`);
   assert.equal(opened.playing,false,'the explicit file link presents the chosen file without autoplay');
-  assert.equal(new URL(destination.url()).searchParams.get('dir'),'z-branch/leaf');
+  const openedLibrary=await destination.evaluate(() => window.voidPlayer.getWorkspace().sources);
+  assert.equal(openedLibrary.root,'local');assert.equal(openedLibrary.directory,'z-branch/leaf');
   const sourceSplitter=destination.locator('#sources-resize'), sourcePanel=destination.locator('#sources-panel');
   assert.equal(await sourceSplitter.isVisible(),true,'an initially open library panel exposes its splitter without resizing the window or toggling the panel');
   await sourceSplitter.hover();
