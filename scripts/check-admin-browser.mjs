@@ -559,13 +559,14 @@ try {
   await destination.waitForFunction(() => !!window.voidPlayer);
   await destination.waitForFunction(() => {
     const state=window.voidPlayer.getState();
-    return !state.busy&&state.tracks.length===1&&!!state.tracks[0].frame&&new URL(location.href).searchParams.has('A');
+    return !state.busy&&state.tracks.length===1&&!!state.tracks[0].frame&&new URL(location.href).searchParams.has('s');
   });
   const opened=await destination.evaluate(() => window.voidPlayer.getState());
   assert.equal(opened.tracks[0].name,'z-branch/leaf/nested.mp4');
   assert.equal(opened.tracks[0].source.id,covered.id);
   assert.equal(new URL(opened.tracks[0].source.url,destination.url()).searchParams.get('v'),covered.version);
-  assert.equal(new URL(destination.url()).searchParams.get('A'),`${covered.id}@${covered.version}`);
+  assert.deepEqual([...new URL(destination.url()).searchParams.keys()], ['s']);
+  assert.deepEqual(await destination.evaluate(() => ({ root: window.voidPlayer.getWorkspace().sources.root, directory: window.voidPlayer.getWorkspace().sources.directory })), { root: 'local', directory: 'z-branch/leaf' });
   assert.equal(opened.playing,false,'the explicit file link presents the chosen file without autoplay');
   const openedLibrary=await destination.evaluate(() => window.voidPlayer.getWorkspace().sources);
   assert.equal(openedLibrary.root,'local');assert.equal(openedLibrary.directory,'z-branch/leaf');
@@ -635,7 +636,7 @@ try {
   assert.equal(await page.locator('.admin-brand .icon, .admin-nav-caption').count(), 0);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const iconDrift = await page.locator('#admin-navigation-toggle').evaluate(async toggle => {
-    const nav = toggle.closest('nav'), icons = [...nav.querySelectorAll('[data-pane] .icon, .admin-back .icon')];
+    const nav = toggle.closest('nav'), icons = [toggle, ...nav.querySelectorAll('[data-pane] .icon, .admin-back .icon')];
     const initial = icons.map(icon => icon.getBoundingClientRect().left);
     let drift = 0;
     toggle.click();
@@ -662,6 +663,11 @@ try {
   assert.equal(await page.locator('#analysis-resources').isVisible(), true, 'navigation and the preferences pane survive reload');
   await page.locator('#admin-navigation-toggle').click();
   assert.equal(await page.locator('.admin-navigation').evaluate(nav => nav.getBoundingClientRect().width), navigationWidth);
+  const heading = await page.locator('.admin-navigation-heading').evaluate(element => {
+    const toggle = element.querySelector('button').getBoundingClientRect(), brand = element.querySelector('.admin-brand').getBoundingClientRect();
+    return { toggle: toggle.right, brand: brand.left };
+  });
+  assert.ok(heading.brand >= heading.toggle, 'the brand sits to the right of the stationary sidebar control');
 
   await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '8');
   await page.locator('[data-pane=preferences]').click();

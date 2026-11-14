@@ -1,4 +1,4 @@
-import { applyUriParameters } from '../../shared/review/uri-state.ts';
+import { emptyUriState } from '../../shared/review/uri-state.ts';
 import { annotationTarget } from '../../shared/review/annotation-target.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -96,7 +96,7 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     assert.equal((await fetch(base + diagnostic.links.help)).status, 200);
     const missingOrigin = await submit(operation, { origin: '' }); assert.equal(missingOrigin.status, 403);
     assert.equal((await submit(operation, { 'x-voidplayer-actor': 'different-user' })).status, 409);
-    const uriState = applyUriParameters(new URL(`${base}/?abi=1&A=${entry.id}@${entry.version}&t=0.25&view=split`));
+    const uriState = { ...emptyUriState(), tracks: [{ slot: 'A', id: entry.id, version: entry.version, offsetUs: 0, visible: true }], positionUs: 250000, viewport: { ...emptyUriState().viewport, mode: 'split' } };
     const encoded = await fetch(base + '/api/uri/encode', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'uri' }, body: JSON.stringify({ state: uriState }) });
     assert.equal(encoded.status, 200); assert.equal(encoded.headers.get('set-cookie'), null);
     const shared = await encoded.json();

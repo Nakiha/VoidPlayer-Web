@@ -1,7 +1,8 @@
 import { localOnly } from '../services/build-profile.ts';
 import { t, th, msg } from '../i18n.ts';
 import { colorSettingsShell } from './color-flow.ts';
-import { uriStateSettingsShell } from './uri-state-settings.ts';
+import { browserCachesShell } from './browser-caches.ts';
+import { annotationActivityShell } from './annotation-activity.ts';
 import { icon } from './icons.ts';
 import { aboutFrameGraph, aboutMark } from './about-banner.ts';
 import { buildInfo } from '../build-info.ts';
@@ -10,11 +11,13 @@ import { supportsFileHandles } from '../services/file-handles.ts';
 import { shortcutLabel } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
 export const settingsPanes = () => ([
-  ['appearance', t(msg('settingsShell.preferences', '首选项')), 'settings'], ['workspace', t(msg('uriState.title', '观看状态')), 'stack'],
+  ['appearance', t(msg('settingsShell.preferences', '首选项')), 'settings'], ['caches', t(msg('admin.cacheTitle', '缓存')), 'database'],
   ['identity', t(msg("settingsShell.user", "用户")), 'user'], ['shortcuts', t(msg("settingsShell.shortcuts", "快捷键")), 'keyboard'], ['logs', t(msg("settingsShell.logs", "日志")), 'fileText'], ['performance', t(msg("settingsShell.colorDecoding", "色彩与解码")), 'colorDecoding'],
   ['experimental', t(msg('settingsShell.experimental', '实验性功能')), 'diagnostics'], ['about', t(msg("settingsShell.about", "关于")), 'info'],
 ] as const).filter(([key]) => !localOnly || key !== 'identity');
 const paneTitle = (title: string, description = '') => `<div class="settings-page-title"><h3>${title}</h3>${description ? `<p>${description}</p>` : ''}</div>`;
+const annotationSettings = () => `<div class="settings-section"><h4 class="settings-section-title">${th(msg('uriState.annotations', '片源标注同步'))}</h4>
+  <p id="annotation-status" class="settings-caption" role="status"></p><div id="annotation-conflicts"></div></div>${annotationActivityShell()}`;
 const preferenceHelp = (id: string, text: string) =>
   `<button type="button" class="section-title-info" data-tooltip="${text}" aria-labelledby="${id}">${icon('info')}</button><span id="${id}" hidden>${text}</span>`;
 const shortcutRows = (entries: [string, Shortcut[]][]) => entries.map(([action, keys]) => `<div class="shortcut-row"><span>${action}</span><span class="shortcut-keys">${keys.map(key => `<kbd>${shortcutLabel(key)}</kbd>`).join('<span> / </span>')}</span></div>`).join('');
@@ -70,10 +73,11 @@ export function settingsShell() {
           </div></div>
         </div>
 
+        ${localOnly ? annotationSettings() : ''}
       </section>
-      <section id="settings-pane-workspace" role="tabpanel" aria-labelledby="settings-tab-workspace" tabindex="0" hidden>
-        ${paneTitle(t(msg('uriState.title', '观看状态')))}
-        ${uriStateSettingsShell()}
+      <section id="settings-pane-caches" role="tabpanel" aria-labelledby="settings-tab-caches" tabindex="0" hidden>
+        ${paneTitle(t(msg('admin.cacheTitle', '缓存')))}
+        ${browserCachesShell()}
       </section>
       <section id="settings-pane-identity" role="tabpanel" aria-labelledby="settings-tab-identity" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.user", "用户")))}
@@ -83,6 +87,7 @@ export function settingsShell() {
           <button id="identity-save" type="submit" >${th(msg("settingsShell.enterAName", "输入名字"))}</button></form>
           <p id="identity-message" class="settings-caption" role="status"></p>
         </div>
+        ${localOnly ? '' : annotationSettings()}
       </section>
       <section id="settings-pane-shortcuts" role="tabpanel" aria-labelledby="settings-tab-shortcuts" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.shortcuts", "快捷键")))}

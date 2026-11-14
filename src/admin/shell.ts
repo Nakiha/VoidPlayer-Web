@@ -11,7 +11,7 @@ export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览"))
 export function adminShell() {
   return `<div class="admin-layout">
     <nav class="admin-navigation category-navigation" aria-label="${th(msg("admin.navCategory", "管理分类"))}">
-      <div class="admin-navigation-heading"><a class="admin-brand" href="/">VoidPlayer</a><button id="admin-navigation-toggle" class="icon-button" type="button" aria-controls="admin-navigation-items" aria-expanded="true" aria-label="${th(msg('admin.collapseNavigation', '折叠侧栏'))}">${icon('sidebar')}</button></div>
+      <div class="admin-navigation-heading"><button id="admin-navigation-toggle" class="icon-button" type="button" aria-controls="admin-navigation-items" aria-expanded="true" aria-label="${th(msg('admin.collapseNavigation', '折叠侧栏'))}">${icon('sidebar')}</button><a class="admin-brand" href="/">VoidPlayer</a></div>
       <div id="admin-navigation-items" class="admin-navigation-items category-tabs">${PANES().map(([id, label, glyph]) => `<button data-pane="${id}" aria-label="${label}" aria-current="${id === 'overview' ? 'page' : 'false'}">${icon(glyph)}<span class="admin-nav-label">${label}</span></button>`).join('')}</div>
       <a class="admin-back" href="/" aria-label="${th(msg("admin.backToPlayer", "返回播放器"))}">${icon('caretLeft')}<span class="admin-nav-label">${th(msg("admin.backToPlayer", "返回播放器"))}</span></a>
     </nav>

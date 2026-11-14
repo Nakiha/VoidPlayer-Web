@@ -725,6 +725,11 @@ try {
   });
 
   await check('left-hand panel shortcuts toggle four panels', async page => {
+    const trackPanels = ['inspector', 'analysis', 'subtracks'];
+    for (const panel of trackPanels) {
+      assert.equal(await page.locator(`#toggle-${panel}`).isDisabled(), true);
+      assert.equal(await page.locator(`#toggle-${panel}`).getAttribute('aria-expanded'), 'false');
+    }
     const entry = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4');
     await page.evaluate(async id => {
       await window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ id, slot: 'A' });
@@ -738,6 +743,19 @@ try {
       await page.keyboard.press(key);
       assert.equal(await button.getAttribute('aria-expanded'), before, `${id} closes via ${key}`);
     }
+    for (const panel of [...trackPanels, 'sources']) await page.locator(`#toggle-${panel}`).click();
+    await page.evaluate(() => window.voidPlayer.removeTrack('A'));
+    for (const panel of trackPanels) {
+      const button = page.locator(`#toggle-${panel}`);
+      assert.equal(await button.isDisabled(), true, `${panel} is disabled without tracks`);
+      assert.equal(await button.getAttribute('aria-expanded'), 'false', `${panel} is inactive without tracks`);
+      assert.equal(await page.locator(`#${panel}-panel`).isVisible(), false, `${panel} closes with the last track`);
+      assert.equal(await page.locator('#workspace').evaluate((el, panel) => el.classList.contains(`has-${panel}`), panel), false);
+    }
+    assert.equal(await page.locator('#toggle-sources').isEnabled(), true);
+    assert.equal(await page.locator('#toggle-sources').getAttribute('aria-expanded'), 'true', 'the library stays open');
+    assert.deepEqual(await page.evaluate(() => window.voidPlayer.getWorkspace().panels),
+      { inspector: false, analysis: false, subtracks: false, sources: true }, 'saved layout agrees with the disabled buttons');
   });
 
   await check('truncated filenames show full paths while fully visible filenames stay quiet', async page => {
@@ -1520,9 +1538,11 @@ try {
     assert.match(await page.locator('#source-activity-size').textContent(),/1920×1080/);
     assert.equal(await placeholder.isVisible(), false);
     const eye = page.locator('[data-track-drag="A"] .track-visibility');
-    const eyeBox = await eye.boundingBox(), offsetBox = await page.locator('.subtrack-row[data-track-drag="A"] .track-offset').boundingBox();
-    assert.ok(eyeBox.x + eyeBox.width <= offsetBox.x, 'visibility sits to the left of the offset field');
-    assert.equal(await page.locator('.subtrack-row[data-track-drag="A"] .remove-track').count(), 0);
+    const remove = page.locator('.subtrack-row[data-track-drag="A"] .track-remove');
+    const eyeBox = await eye.boundingBox(), removeBox = await remove.boundingBox();
+    const offsetBox = await page.locator('.subtrack-row[data-track-drag="A"] .track-offset').boundingBox();
+    assert.ok(eyeBox.x + eyeBox.width <= removeBox.x && removeBox.x + removeBox.width <= offsetBox.x,
+      'quick removal sits between visibility and the offset field');
     await eye.click(); await settle(page);
     assert.equal(await page.locator('.video-card[data-slot="A"]').isVisible(), false);
     assert.equal(await page.locator('.video-card[data-slot="B"]').isVisible(), true);

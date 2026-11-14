@@ -8,9 +8,10 @@ class ElementStub extends EventTarget {
   classList = { contains: () => false };
   hidden = false;
   onclick: ((event: MouseEvent) => void) | null = null;
-  setPointerCapture() {}
-  hasPointerCapture() { return false; }
-  releasePointerCapture() {}
+  captured = new Set<number>();
+  setPointerCapture(id: number) { this.captured.add(id); }
+  hasPointerCapture(id: number) { return this.captured.has(id); }
+  releasePointerCapture(id: number) { this.captured.delete(id); }
   setAttribute() {}
   closest() { return null; }
 }
@@ -43,7 +44,7 @@ test('right-drag starts immediately, batches later moves and suppresses page men
   assert.equal(menuBeforePan.defaultPrevented, false, 'unrelated page context menus remain available');
 
   pointer('pointerdown', 10, 20);
-  assert.equal(elements.get('viewport-pan-surface')!.hidden, false);
+  assert.equal(stage.hasPointerCapture(1), true, 'the viewport owns the drag without an overlay');
   pointer('pointermove', 10, 20);
   assert.equal(updates(), 0, 'zero movement does not start the drag');
   assert.equal(frames.size, 0);
@@ -61,7 +62,7 @@ test('right-drag starts immediately, batches later moves and suppresses page men
   pointer('pointermove', 43, 31);
   pointer('pointermove', 47, 34);
   pointer('pointerup', 47, 34);
-  assert.equal(elements.get('viewport-pan-surface')!.hidden, true);
+  assert.equal(stage.hasPointerCapture(1), false, 'release returns pointer ownership');
   assert.equal(updates(), 3, 'release flushes the pending movement once');
   assert.deepEqual([viewport.offsetX, viewport.offsetY], [37, 14]);
 
@@ -114,7 +115,6 @@ function gestureFixture(t: test.TestContext, annotationActive = () => false, can
   elements.set('divider', new ElementStub());
   elements.set('arrangement', new ElementStub());
   const screens = new ElementStub();
-  elements.set('viewport-pan-surface', new ElementStub());
   const viewport = new Viewport();
   let transformUpdates = 0;
   installViewportGestures({

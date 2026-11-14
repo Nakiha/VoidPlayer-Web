@@ -1,5 +1,7 @@
 import { t, msg } from '../i18n.ts';
 import type { LibraryEntry } from '../services/library.ts';
+import { createShareUrl } from '../../shared/review/uri-binary.ts';
+import { emptyUriState } from '../../shared/review/uri-state.ts';
 
 export type LibraryLocation = { root: string; directory: string; all: boolean };
 
@@ -53,20 +55,10 @@ export function parseLibraryLocationLink(value: string, base: string): LibraryLo
   return validate({ root, directory, all });
 }
 
-/** Explicit file actions carry a version-pinned item beside the directory context. */
+/** Explicit file actions use the same version-pinned share ABI and directory layout. */
 export function libraryFileLink(entry: LibraryEntry, base: string): string {
-  const directory = entry.rootId && entry.name.includes('/') ? entry.name.slice(0,entry.name.lastIndexOf('/')) : '';
-  const url = new URL(libraryLocationLink({root:entry.rootId ?? '',directory,all:false},base));
-  url.searchParams.set('media',entry.id); url.searchParams.set('v',entry.version ?? '');
-  parseLibraryFileLink(url.href,base);
-  return url.href;
-}
-
-export function parseLibraryFileLink(value: string, base: string): {id:string;version:string} | null {
-  const url = new URL(value,base);
-  if (!url.searchParams.has('media')) return null;
-  parseLibraryLocationLink(url.href,base);
-  const id = url.searchParams.get('media') ?? '', version = url.searchParams.get('v') ?? '';
-  if (!/^[a-f0-9]{24}$/.test(id) || !/^[a-f0-9]{24}$/.test(version)) throw new Error(t(msg('libraryLink.invalidFile','媒体库文件链接无效')));
-  return {id,version};
+  const directory = entry.rootId && entry.name.includes('/') ? entry.name.slice(0, entry.name.lastIndexOf('/')) : '';
+  return createShareUrl({ ...emptyUriState(), tracks: [{ slot: 'A', id: entry.id, version: entry.version ?? '', offsetUs: 0, visible: true }],
+    layout: { panels: { inspector: false, subtracks: false, sources: true, analysis: false }, selected: 'A', dockHeight: 180,
+      marksExpanded: false, sources: { tab: 'available', query: '', root: entry.rootId ?? '', directory, search: '', all: false } } }, base).href;
 }

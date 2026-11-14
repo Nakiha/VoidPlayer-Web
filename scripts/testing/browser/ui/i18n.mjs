@@ -124,11 +124,12 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  await switchLanguage('en');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.querySelector('img').alt),'Annotated frame');
  await page.evaluate(()=>window.__recordPreview('English-image'));
  await writeFile(artifact('thumbnail-transition.json'),JSON.stringify(await page.evaluate(()=>window.__previewEvents),null,2));
- await page.locator('#settings-open').click();await page.locator('#settings-tab-workspace').click();
- const copyAddress=page.locator('#state-copy-readable');await copyAddress.focus();await copyAddress.evaluate(e=>{window.__edit=e;});
- await switchLanguage('zh-CN');assert.equal(await page.locator('#settings-current-title').innerText(),'观看状态');
+ await page.locator('#settings-open').click();await page.locator('#settings-tab-caches').click();
+ await page.waitForFunction(() => !document.querySelector('#browser-cache-refresh').disabled);
+ const copyAddress=page.locator('#browser-cache-refresh');await copyAddress.focus();await copyAddress.evaluate(e=>{window.__edit=e;});
+ await switchLanguage('zh-CN');assert.equal(await page.locator('#settings-current-title').innerText(),'缓存');
  assert.equal(await copyAddress.evaluate(e=>e===window.__edit&&document.activeElement===e),true);
- await switchLanguage('en');assert.equal(await copyAddress.innerText(),'Copy editable address');
+ await switchLanguage('en');assert.equal(await copyAddress.getAttribute('aria-label'),'Refresh caches');
  assert.equal(await page.locator('#saved-workspace-name, #checkpoint-history-list').count(),0);
  await page.locator('#settings-tab-logs').click();await page.locator('#log-description').fill('未提交 Report <原文>');await page.locator('#log-description').evaluate(e=>{e.focus();e.setSelectionRange(1,4);window.__report=e;});await switchLanguage('en');
  assert.equal(await page.locator('#log-description').inputValue(),'未提交 Report <原文>');assert.equal(await page.evaluate(()=>document.activeElement===window.__report),true);assert.match(await page.locator('#log-description').getAttribute('placeholder'),/description.*download|send/i);
@@ -137,7 +138,7 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  await page.locator('#settings-tab-appearance').click();await page.locator('#language-choice').click();await page.locator('#language-choice-menu [data-value=system]').focus();await switchLanguage('en');assert.equal(await page.locator('#language-choice-menu').evaluate(e=>e.matches(':popover-open')),true);assert.equal(await page.evaluate(()=>document.activeElement?.dataset.value),'system');
  await page.locator('#language-choice').click();
  await page.screenshot({path:artifact('settings-en.png')});
- for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','about']){await page.locator(`#settings-tab-${pane}`).click();const chinese=await page.locator(`#settings-pane-${pane}`).evaluate(el=>{const skip='input,textarea,code';const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);const found=[];while(w.nextNode()){const n=w.currentNode;if(n.parentElement.closest(skip)||!n.parentElement.getClientRects().length)continue;if(/[\u4e00-\u9fff]/.test(n.textContent)&&!n.parentElement.closest('#identity-current,.saved-workspace-row,.checkpoint-history-row .saved-workspace-info strong,#color-runtime-tracks'))found.push(n.textContent.trim());}return found;});assert.deepEqual(chinese,[],`English settings completeness: ${pane}`);}
+ for(const pane of ['appearance','caches','identity','shortcuts','logs','performance','about']){await page.locator(`#settings-tab-${pane}`).click();const chinese=await page.locator(`#settings-pane-${pane}`).evaluate(el=>{const skip='input,textarea,code';const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);const found=[];while(w.nextNode()){const n=w.currentNode;if(n.parentElement.closest(skip)||!n.parentElement.getClientRects().length)continue;if(/[\u4e00-\u9fff]/.test(n.textContent)&&!n.parentElement.closest('#identity-current,.saved-workspace-row,.checkpoint-history-row .saved-workspace-info strong,#color-runtime-tracks'))found.push(n.textContent.trim());}return found;});assert.deepEqual(chinese,[],`English settings completeness: ${pane}`);}
  await page.locator('#settings-close').click();
  // Commit no editable values: close settings restores focus without changing user data.
  await page.evaluate(()=>{window.__offset.blur();window.__offset.value='0 ms';});

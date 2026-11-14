@@ -52,7 +52,6 @@ import './ui/settings.css';
 import { shell } from './ui/shell.ts';
 import { installWorkbench } from './ui/workbench.ts';
 import { installSourceActions } from './ui/source-actions.ts';
-import { parseLibraryFileLink } from './ui/library-link.ts';
 import { bindTimelinePreview, syncTimelineProgress } from './ui/seek-preview.ts';
 import { installTrackDrag } from './ui/track-drag.ts';
 import { createViewBindings } from './ui/view-bindings.ts';
@@ -262,7 +261,9 @@ window.addEventListener('pagehide', event => {
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
 const grids = Object.fromEntries(SLOTS.map(slot => [slot, installPixelGrid($<HTMLCanvasElement>(`grid-${slot}`), $(`grid-label-${slot}`))])) as Record<Slot, ReturnType<typeof installPixelGrid>>;
-const viewBindings = createViewBindings({ $, screens, canvases, grids, viewport, session, drawingEditor, trace: viewportTrace });
+let watchingStateChanged = () => {};
+const viewBindings = createViewBindings({ $, screens, canvases, grids, viewport, session, drawingEditor, trace: viewportTrace,
+  changed: () => watchingStateChanged() });
 const { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll } = viewBindings;
 const fitTask = createFrameTask(fitAll);
 const resizeObserver = new ResizeObserver(fitTask.schedule);
@@ -276,6 +277,7 @@ const uriState = installUriState(session, {
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); },
   async restore(document, resumeCloudAnnotations) { viewBindings.restoreViewport(document.viewport, document.panBasis); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
+watchingStateChanged = uriState.changed;
 const zoomMenu = installNumericChoice('zoom-select', { glyph: 'search', presets: ZOOM_PRESETS, suffix: '×', min: ZOOM_MIN, max: ZOOM_MAX,
   editLabel: () => tr(msg('player.editZoom', '编辑缩放倍数')),
   choose(value) { viewport.setZoom(value); log.info('ui','缩放数值',{zoom:viewport.zoom,trigger:inputTrigger}); applyViewTransform(); syncZoomSelect(true); },
@@ -684,15 +686,6 @@ if (!localOnly && import.meta.env.PROD && window.top === window && !document.que
   window.addEventListener('voidplayer:startup-ready', () => { void installOfflineControls(toasts, identitySettings.ready); }, { once: true });
 }
 if (!localOnly) installPageBridge(session,api.tools,uiEvents.signal);
-const annotationLink = new URL(location.href).searchParams;
-if (!localOnly && annotationLink.has('media') && !['annotation','workspace','share','review'].some(key => annotationLink.has(key))) void act(async () => {
-  const file = parseLibraryFileLink(location.href,location.href);
-  if (!file) return;
-  await identitySettings.ready;
-  if (!uiEvents.signal.aborted) await workbench.openLibraryFile(file.id,file.version);
-},'library.open-link');
-
-
 import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); uriState.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); viewportChrome.dispose(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); dropFeedback.dispose(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 // GPU admission is complete and handlers are wired. Explicit deep-link loads

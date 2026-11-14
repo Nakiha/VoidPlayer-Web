@@ -1,31 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { brotliCompressSync, deflateRawSync } from 'node:zlib';
-import { emptyUriState, applyUriParameters, writeUriState, packUriState, unpackUriState, parseUriState } from '../../shared/review/uri-state.ts';
+import { emptyUriState, hasUriState, packUriState, unpackUriState, parseUriState } from '../../shared/review/uri-state.ts';
 import { encodeUriState, decodeUriState } from '../../server/uri-state.ts';
-import { packBinaryUriState, unpackBinaryUriState } from '../../shared/review/uri-binary.ts';
+import { createShareUrl, packBinaryUriState, unpackBinaryUriState } from '../../shared/review/uri-binary.ts';
 import { annotationTarget } from '../../shared/review/annotation-target.ts';
 import type { MediaInfo } from '../../shared/media/types.ts';
 
 const a = '0123456789abcdef01234567', v = '89abcdef0123456789abcdef';
-const state = () => applyUriParameters(new URL(`http://localhost/?abi=1&B=${a}@${v}&offset.B=-0.04&A=${v}@${a}&t=12.5&view=split&split=0.37&channel=y&visible.A=0`));
-test('ABI state round trips track order, signed offsets, visibility and exact view values through text, tuples and each selected codec', () => {
+const state = () => parseUriState({ ...emptyUriState(), tracks: [
+  { slot: 'B', id: a, version: v, offsetUs: -40000, visible: true },
+  { slot: 'A', id: v, version: a, offsetUs: 0, visible: false }], positionUs: 12500000,
+  viewport: { ...emptyUriState().viewport, mode: 'split', splitPos: .37, channel: 'y' } });
+test('ABI state round trips track order, signed offsets, visibility and exact view values through binary links, tuples and each selected codec', () => {
   const value = state();
   assert.deepEqual(value.tracks.map(t => t.slot), ['B', 'A']); assert.equal(value.tracks[0].offsetUs, -40000);
   assert.equal(value.positionUs, 12500000); assert.equal(value.viewport.splitPos, .37);
-  assert.deepEqual(applyUriParameters(writeUriState(value, 'http://localhost')), value);
+  const url = createShareUrl(value, 'http://localhost');
+  assert.deepEqual([...url.searchParams.keys()], ['s']);
+  assert.deepEqual(decodeUriState(url.searchParams.get('s')!), value);
+  assert.equal(hasUriState(new URL(`http://localhost/?abi=1&A=${a}@${v}&t=12.5`)), false);
   assert.deepEqual(unpackUriState(packUriState(value)), value);
   const token = encodeUriState(value); assert.ok(token.length < JSON.stringify(value).length);
   assert.deepEqual(decodeUriState(token), value); assert.equal(encodeUriState(value), token);
-  assert.deepEqual(applyUriParameters(new URL('http://localhost/?t=20&channel=rgb'), decodeUriState(token)),
-    { ...value, positionUs: 20000000, viewport: { ...value.viewport, channel: 'rgb' } });
 });
 test('ABI defaults cost no payload fields and minimal single-source links stay bounded', () => {
   assert.deepEqual(packUriState(emptyUriState()), [[]]);
   assert.ok(encodeUriState(emptyUriState()).length <= 12);
-  const one = applyUriParameters(new URL(`http://localhost/?abi=1&A=${a}@${v}`));
+  const one = { ...emptyUriState(), tracks: [{ slot: 'A' as const, id: a, version: v, offsetUs: 0, visible: true }] };
   assert.ok(encodeUriState(one).length <= 80);
-  assert.equal(writeUriState(one, 'http://localhost').searchParams.has('comparison'), false);
   assert.deepEqual(decodeUriState(encodeUriState(one)), one);
 });
 test('a frozen ABI 1 wire fixture decodes independently of the encoder and application defaults', () => {
@@ -61,7 +64,7 @@ test('binary share envelopes store 12-byte identities and preserve the ABI 1 sta
   const expected = { ...emptyUriState(), tracks: [{ slot: 'A' as const, id: 'a'.repeat(24), version: 'b'.repeat(24),
     offsetUs: 0, visible: true }] };
   assert.deepEqual(decodeUriState('2.n.' + bytes.toString('base64url')), expected);
-  const token = encodeUriState(applyUriParameters(new URL(`http://localhost/?abi=1&A=${a}@${v}`)));
+  const token = encodeUriState({ ...emptyUriState(), tracks: [{ slot: 'A' as const, id: a, version: v, offsetUs: 0, visible: true }] });
   assert.match(token, /^2\.[ndb]\./);
   assert.ok(token.length <= 40, `single-source binary token: ${token.length}`);
 });
@@ -99,8 +102,6 @@ test('binary codecs preserve complete layouts, comparison deltas, pan basis and 
   assert.throws(() => packUriState(value), 'legacy tuples must never silently discard the pan basis');
   for (const [codec, bytes] of [['n', raw], ['d', deflateRawSync(raw)], ['b', brotliCompressSync(raw)]] as const)
     assert.deepEqual(decodeUriState(`2.${codec}.${bytes.toString('base64url')}`), value);
-  const readable = { ...value, positionUs: 12500000, tracks: value.tracks.map(track => ({ ...track, offsetUs: -40000 })) };
-  assert.deepEqual(applyUriParameters(writeUriState(readable, 'http://localhost')), readable);
   const legacyComparison = { ...value, comparison: { version: 1 as const, presentation: 'voidplayer-sdr-v1' as const,
     outputColorSpace: 'srgb' as const, colorMode: 'reference' as const, referenceDecode: { decoder: 'software' as const, depth: 4 as const } } };
   assert.deepEqual(unpackBinaryUriState(packBinaryUriState(legacyComparison)), legacyComparison);
@@ -112,9 +113,10 @@ test('binary codecs preserve complete layouts, comparison deltas, pan basis and 
   for (const basis of [{width:0,height:10},{width:100,height:Infinity}]) assert.throws(() => parseUriState({...value,panBasis:basis}));
 });
 test('URI rejects unknown ABIs, codecs, duplicate/invalid references, noncanonical encodings, bad numbers and decompression bombs', () => {
-  for (const query of ['abi=2', 'abi=1&A=unversioned', `abi=1&A=${a}@${v}&A=${a}@${v}`, 'abi=1&t=NaN',
-    'abi=1&t=-1', 'abi=1&zoom=Infinity', 'abi=1&split=2', 'abi=1&channel=unknown', 'abi=1&mark=bad!'])
-    assert.throws(() => applyUriParameters(new URL('http://localhost/?' + query)), query);
+  for (const value of [{ ...state(), abi: 2 }, { ...state(), positionUs: -1 },
+    { ...state(), tracks: [...state().tracks, state().tracks[0]] },
+    { ...state(), tracks: [{ ...state().tracks[0], id: 'unversioned' }] },
+    { ...state(), viewport: { ...state().viewport, zoom: Infinity } }]) assert.throws(() => parseUriState(value));
   for (const token of ['2.b.AA', '1.z.AA', '1.n.A', '1.n.!!!!', '1.n.' + 'a'.repeat(16384)]) assert.throws(() => decodeUriState(token));
   assert.throws(() => decodeUriState('1.b.' + brotliCompressSync(Buffer.alloc(65537, 32)).toString('base64url')));
   assert.throws(() => parseUriState({ ...emptyUriState(), tracks: [{ slot: 'A', id: a, version: v, origin: 'https://u:p@host', offsetUs: 0, visible: true }] }));

@@ -272,9 +272,9 @@ try {
   await editPage.locator('#identity-name').fill('改好的名字'); await editPage.locator('#identity-save').click();
   await editPage.waitForFunction(() => document.querySelector('#identity-current').textContent === '改好的名字');
   assert.equal(await editPage.locator('#identity-id').getAttribute('data-tooltip'), createdId);
-  await editPage.locator('#settings-tab-workspace').click();
+  await editPage.locator('#settings-tab-caches').click();
   assert.equal(await editPage.locator('#saved-workspace-list, .saved-workspace-search, .saved-workspace-pages').count(), 0);
-  assert.equal(await editPage.locator('#state-copy-readable').isVisible(), true);
+  assert.equal(await editPage.locator('#browser-cache-refresh').isVisible(), true);
   assert.equal(await editPage.locator('#annotation-status').isVisible(), true);
   assert.equal(await editPage.locator('#saved-workspace-share').isEnabled(), false);
   await settled(editPage);

@@ -265,3 +265,13 @@ export function unpackBinaryUriState(bytes: Uint8Array): UriState {
   return parseUriState({ ...unpackUriState([tracks, position, viewport, comparison, layout, mark]),
     ...(basis ? { panBasis: basis } : {}) });
 }
+
+/** Small in-app links use the same binary envelope; the share service additionally compresses it. */
+export function createShareUrl(value: UriState, base: string): URL {
+  const bytes = packBinaryUriState(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  const token = '2.n.' + btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+  if (token.length > 16384) throw new Error('分享链接过大。');
+  const url = new URL('/', base); url.searchParams.set('s', token); return url;
+}

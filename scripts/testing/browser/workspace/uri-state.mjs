@@ -1,3 +1,5 @@
+import { encodeUriState } from '../../../../server/uri-state.ts';
+import { emptyUriState } from '../../../../shared/review/uri-state.ts';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { writeFile } from 'node:fs/promises';
@@ -54,6 +56,7 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   await page.locator('#workspace-share').click();
   release();
   await page.waitForFunction(() => window.copiedStateUrl && !document.querySelector('#workspace-share').hasAttribute('aria-busy'));
+  assert.equal(page.url(), base, 'sharing leaves the live page address unchanged');
   assert.equal(shareRequests, 1, 'repeated clicks reuse one encode and copy');
   await page.unroute('**/api/uri/encode');
   const shared = { url: await page.evaluate(() => window.copiedStateUrl) };
@@ -63,9 +66,11 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   assert.equal(JSON.stringify(decoded).includes('独立片源标注'), false);
   const recipient = await context.newPage();
   await recipient.setViewportSize({ width: 1024, height: 760 });
-  await recipient.goto(shared.url + '&t=2&channel=y');
+  await recipient.goto(origin + '/?s=' + encodeUriState({ ...decoded.state, positionUs: 2000000, viewport: { ...decoded.state.viewport, channel: 'y' } }));
   await recipient.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
   await recipient.waitForFunction(() => window.voidPlayer.getViewport().mode === 'split' && window.voidPlayer.getState().positionUs === 2000000);
+  const recipientUrl = origin + '/?s=' + encodeUriState({ ...decoded.state, positionUs: 2000000, viewport: { ...decoded.state.viewport, channel: 'y' } });
+  assert.equal(recipient.url(), recipientUrl, 'the shared binary payload stays compact after restoration');
   assert.equal(await recipient.evaluate(() => window.voidPlayer.getViewport().channel), 'y');
   const pan = { x: state.viewport.offsetX / state.panBasis.width, y: state.viewport.offsetY / state.panBasis.height };
   await recipient.waitForFunction(({ x, y }) => {
@@ -77,14 +82,34 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   assert.ok(Math.abs(state.panBasis.width - received.panBasis.width) > 10, 'different fitted sizes exercise pan scaling');
   assert.ok(Math.abs(state.viewport.offsetX / received.panBasis.width - pan.x) > .01, 'replaying raw CSS offsets would visibly drift');
   await recipient.waitForFunction(id => window.voidPlayer.getState().marks.some(mark => mark.id === id), mark.id);
+  await recipient.waitForTimeout(650);
+  assert.equal(recipient.url(), recipientUrl, 'background annotations and recipient fitting do not invalidate the snapshot');
+  await recipient.evaluate(() => {
+    window.snapshotAddressWrites = [];
+    const replace = history.replaceState;
+    history.replaceState = function(...args) { window.snapshotAddressWrites.push(String(args[2])); return replace.apply(this, args); };
+  });
+  const stage = await recipient.locator('#stage-A').boundingBox(), x = stage.x + stage.width * .75, y = stage.y + stage.height * .55;
+  await recipient.mouse.move(x, y); await recipient.mouse.down({ button: 'right' });
+  for (let i = 1; i <= 4; i++) { await recipient.mouse.move(x + i, y + i); await recipient.waitForTimeout(90); }
+  await recipient.mouse.up({ button: 'right' });
+  await recipient.waitForFunction(() => !location.search);
+  assert.equal(recipient.url(), origin + '/', 'the first pan clears the obsolete snapshot query');
+  await recipient.keyboard.down('Control'); await recipient.mouse.wheel(0, -30); await recipient.keyboard.up('Control');
+  await recipient.waitForFunction(zoom => window.voidPlayer.getViewport().zoom > zoom, state.viewport.zoom);
+  assert.deepEqual(await recipient.evaluate(() => window.snapshotAddressWrites), [origin + '/'], 'later pan and zoom never rewrite the clean address');
   const beforeMarkJump = await recipient.evaluate(() => window.voidPlayer.exportState());
   await recipient.evaluate(({ state, id }) => window.voidPlayer.applyState({ ...state, mark: id }), { state: beforeMarkJump, id: mark.id });
   assert.equal(await recipient.evaluate(() => window.voidPlayer.getState().positionUs), mark.frame.ptsUs, 'mark navigation uses the source frame anchor, independent of the requested session time');
   assert.equal(await recipient.evaluate(() => window.voidPlayer.getState().tracks.find(track => track.slot === 'A').frame.ptsUs), mark.frame.ptsUs);
   await recipient.evaluate(state => window.voidPlayer.applyState(state), beforeMarkJump);
+  assert.equal(recipient.url(), origin + '/', 'applying a snapshot never repopulates the clean address');
   const independent = await context.newPage();
-  await independent.goto(`${origin}/?abi=1&H=${a.id}@${a.version}&t=1`);
+  await independent.goto(`${origin}/?s=${encodeUriState({ ...emptyUriState(), tracks: [{ slot: 'H', id: a.id, version: a.version, offsetUs: 0, visible: true }], positionUs: 1000000 })}`);
   await independent.waitForFunction(id => window.voidPlayer?.getState().tracks[0]?.slot === 'H' && window.voidPlayer.getState().marks.some(mark => mark.id === id), mark.id);
+  await independent.locator('#toggle-sources').click();
+  await independent.waitForFunction(() => !location.search);
+  assert.equal(independent.url(), origin + '/', 'a panel layout change also invalidates a share snapshot');
   await call(independent, 'update_review_mark', { id: mark.id, resolved: true, reply: '另一个布局中的回复' });
   await page.waitForFunction(id => window.voidPlayer.getState().marks.find(mark => mark.id === id)?.resolved, mark.id);
   assert.equal(await page.evaluate(id => window.voidPlayer.getState().marks.find(mark => mark.id === id).replies.at(-1).text, mark.id), '另一个布局中的回复');
@@ -98,7 +123,7 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   });
   await call(page, 'update_review_mark', { id: mark.id, text: '丢失回执后仍只提交一次' });
   const operation = await committedOnce;
-  await page.unroute(endpoint); await page.reload();
+  await page.unroute(endpoint); await page.goto(shared.url);
   await page.waitForFunction(id => window.voidPlayer?.getState().marks.find(mark => mark.id === id)?.text === '丢失回执后仍只提交一次', mark.id);
   await page.waitForFunction(() => document.querySelector('#annotation-status').textContent === '已同步');
   const afterRetry = await context.request.get(`${origin}/api/annotations/media/${target}/${mark.id}`).then(r => r.json());
@@ -110,8 +135,10 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   assert.equal((await context.request.get(`${origin}/api/annotations/media/${wrongTarget}`).then(r => r.json())).entries.length, 0);
   const snapshot = await recipient.evaluate(() => window.voidPlayer.exportState());
   await recipient.evaluate(state => window.voidPlayer.applyState({ ...state, positionUs: 3000000 }), snapshot);
-  await recipient.goBack();
-  await recipient.waitForFunction(() => window.voidPlayer.getState().positionUs === 2000000 && !window.voidPlayer.getState().busy);
+  assert.equal(await recipient.evaluate(() => window.voidPlayer.getState().positionUs), 3000000);
+  assert.equal(recipient.url(), origin + '/');
+  await recipient.goto(recipientUrl);
+  await recipient.waitForFunction(() => window.voidPlayer?.getState().positionUs === 2000000 && !window.voidPlayer.getState().busy);
   assert.equal((await context.request.get(origin + '/api/workspaces')).status(), 404);
   assert.ok(!requests.some(url => url.includes('/api/workspaces')));
   if (await page.locator('#toggle-sources').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-sources').click();
@@ -139,7 +166,7 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   assert.deepEqual(await page.locator('#library-file-menu button').allTextContents(), ['上屏', '拷贝文件名', '移除文件']);
   await page.locator('#library-file-menu [data-action=add-to-view]').click();
   await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(track => !track.source) && !window.voidPlayer.getState().busy);
-  for (const id of ['workspace-share', 'saved-workspace-share']) assert.equal(await page.locator('#' + id).isDisabled(), true);
+  for (const id of ['workspace-share']) assert.equal(await page.locator('#' + id).isDisabled(), true);
   await page.locator('#workspace-share').hover();
   await page.waitForFunction(() => !document.querySelector('#control-tooltip').hidden && document.querySelector('#control-tooltip').textContent.includes('本地文件不能分享'));
   await localRow.click({ button: 'right' });
@@ -152,7 +179,21 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   await page.locator('#library-file-menu [data-action=remove-file]').click();
   await page.locator('#local-sources').waitFor({ state: 'hidden' });
   assert.equal(await splitter.isHidden(), true);
+  if (await page.locator('#toggle-subtracks').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-subtracks').click();
+  const row = page.locator('.subtrack-row[data-track-drag="A"]'), remove = row.locator('.track-remove');
+  assert.equal(await row.locator('.track-visibility + .track-remove').count(), 1, 'quick removal follows visibility');
+  const neutral = await remove.evaluate(button => getComputedStyle(button).color);
+  await remove.hover();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.subtrack-row[data-track-drag="A"] .track-remove');
+    const probe = document.createElement('span'); probe.style.color = 'var(--action-danger)'; button.append(probe);
+    const matches = getComputedStyle(button).color === getComputedStyle(probe).color; probe.remove(); return matches;
+  });
+  assert.notEqual(await remove.evaluate(button => getComputedStyle(button).color), neutral, 'quick removal uses the danger hover color');
+  await remove.click();
+  await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && window.voidPlayer.getState().tracks[0].slot === 'B');
+  assert.equal((await context.request.get(`${origin}/api/media/${a.id}`)).status(), 200, 'taking a track offscreen keeps its library file');
   assert.deepEqual(errors, []);
   await page.screenshot({ path: artifact('uri-state.png') });
-  console.log('PASS: ABI sharing and overrides, source-version annotations across layouts, replies/status sync and URI history');
+  console.log('PASS: one-time stale query cleanup and binary-only sharing, source-version annotation sync, local sources and quick track removal');
 });

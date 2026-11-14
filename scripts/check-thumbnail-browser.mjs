@@ -1,3 +1,5 @@
+import { encodeUriState } from '../server/uri-state.ts';
+import { emptyUriState } from '../shared/review/uri-state.ts';
 // Phase-1 thumbnail proof: opening an SDR library video from its origin
 // produces a row cover and a shared server cache; a fresh profile reuses the
 // server image without regenerating; a non-zero join stays imageless.
@@ -71,7 +73,7 @@ try {
   const uriContext = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
   const uriPage = await uriContext.newPage();
   const uriUpload = uriPage.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/thumbnail'), { timeout: 20000 });
-  await uriPage.goto(`${base}/?abi=1&A=${direct.id}@${direct.version}`);
+  await uriPage.goto(`${base}/?s=${encodeUriState({ ...emptyUriState(), tracks: [{ slot: 'A', id: direct.id, version: direct.version, offsetUs: 0, visible: true }] })}`);
   assert.equal((await uriUpload).status(), 201, 'cold URI restoration offers its committed origin frame to the shared cache');
   await uriContext.close(); library.thumbnails.remove();
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 800 } });

@@ -385,12 +385,10 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 #settings-pane-logs .log-panel { gap: 0; }
 .workspace-current-section > #saved-workspace-message:not([hidden]) { margin: 0; }
 
-/* Controls share their parent surface; borders communicate editability. */
-.settings-content :is(.settings-card, .settings-group) :is(input:not([type=color], .settings-choice), textarea, kbd) {
+/* Keycaps keep their own outline; editable fields use the shared inset surface below. */
+.settings-content :is(.settings-card, .settings-group) kbd {
   background: transparent; box-shadow: none; border: 1px solid var(--divider);
 }
-.settings-content .saved-workspace-search input { border: 0; }
-.settings-content .log-json { background: transparent; border: 1px solid var(--divider); }
 .settings-content .settings-detail-body { animation: none; }
 
 .identity-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); align-items: center; gap: 12px; padding: 14px 16px; }
@@ -407,7 +405,11 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 #identity-id { overflow-wrap: anywhere; font-size: 11px; }
 .identity-combo:focus-within { background: color-mix(in srgb, var(--settings-card-fill), var(--text) 8%); }
 #settings-pane-identity #identity-users { flex: 0 0 30px; }
-.settings-content :is(#log-description, #saved-workspace-name, #local-workspace-name) { background: var(--surface-panel); border: 0; border-radius: 8px; height: var(--control-height); min-height: var(--control-height); padding: var(--space-2) 12px; }
+/* Text inputs default to the card's inset surface. Use settings-input for a one-row textarea. */
+.settings-content :is(input:not([type=color], [type=range], [type=checkbox], [type=radio], [type=file], .settings-choice), .settings-input) {
+  background: var(--surface-panel); border: 0; box-shadow: none; border-radius: 8px;
+  height: var(--control-height); min-height: var(--control-height); padding: var(--space-2) 12px;
+}
 .settings-content :is(#log-session, #hardware-buffer-depth, #language-choice, #chart-hover-style):hover:not(:disabled) { background: var(--surface-hover); }
 .settings-content :is(#log-session, #hardware-buffer-depth, #language-choice, #chart-hover-style)[aria-expanded=true]:not(:disabled) { background: var(--surface-selected); }
 .settings-content :is(#log-session, #hardware-buffer-depth, #language-choice, #chart-hover-style)[aria-expanded=true]:hover:not(:disabled) { background: var(--glass-control-selected-hover); }

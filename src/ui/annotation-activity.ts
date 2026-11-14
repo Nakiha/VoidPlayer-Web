@@ -1,6 +1,8 @@
 import type { AnnotationEvent } from '../../shared/review/annotation-events.ts';
 import { formatTime } from '../../shared/review/model.ts';
 import { t, th, msg, formatDate, onLanguageChange } from '../i18n.ts';
+import { createShareUrl } from '../../shared/review/uri-binary.ts';
+import { emptyUriState } from '../../shared/review/uri-state.ts';
 
 export function annotationActivityShell() {
   return `<section id="annotation-activity" class="settings-section annotation-activity" aria-labelledby="annotation-activity-title" hidden>
@@ -40,8 +42,10 @@ export function installAnnotationActivity(signal: AbortSignal) {
       const time = row.querySelector('time')!; time.dateTime = event.occurredAt; time.textContent = formatDate(event.occurredAt);
       if (event.action !== 'delete') {
         const open = row.querySelector('a')!;
-        const url = new URL('/', location.origin), source = event.target.source;
-        if (source) { const origin = origins.get(event.space); url.searchParams.set('abi', '1'); url.searchParams.set('A', `${origin && origin !== location.origin ? origin + '/' : ''}${source.id}@${source.version}`); url.searchParams.set('mark', event.id); url.searchParams.set('t', String(event.target.frame.ptsUs / 1e6)); }
+        const source = event.target.source, origin = origins.get(event.space);
+        const url = source ? createShareUrl({ ...emptyUriState(), tracks: [{ slot: 'A', id: source.id, version: source.version,
+          offsetUs: 0, visible: true, ...(origin && origin !== location.origin ? { origin } : {}) }],
+          mark: event.id, positionUs: event.target.frame.ptsUs }, location.href) : new URL('/', location.origin);
         open.href = url.href;
         open.target = '_blank'; open.rel = 'noopener'; open.textContent = t(msg('activity.open', '在新窗口打开标注'));
       }

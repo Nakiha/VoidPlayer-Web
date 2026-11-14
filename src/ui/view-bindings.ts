@@ -12,6 +12,7 @@ import type { GridDirection, ViewportSnapshot, PanBasis } from '../../shared/pre
 export type FittedTrack = { width: number; height: number; sourceWidth: number; sourceHeight: number; centerY: number };
 
 export type ViewBindingDeps = {
+  changed?(): void;
   $<T extends Element = HTMLElement>(id: string): T;
   screens: HTMLElement;
   canvases: Record<Slot, HTMLCanvasElement>;
@@ -120,6 +121,7 @@ export function createViewBindings(deps: ViewBindingDeps) {
     }
     drawingEditor.viewChanged();
     trace?.commit(begin, presenterMs, gridMs);
+    deps.changed?.();
   }
 
   function syncSplitGeometry() {

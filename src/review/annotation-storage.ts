@@ -2,6 +2,7 @@ import { LocalDatabase } from '../storage/local-database.ts';
 import type { AnnotationDocument, AnnotationOperation, AnnotationRecord } from '../../shared/review/annotation-record.ts';
 export type AnnotationDraft = { key: string; space: string; actor: string; id: string; base: number; desired: AnnotationDocument | null; generation: number; attempt?: AnnotationOperation; sentGeneration?: number; conflict?: string };
 export type AnnotationPreview = { url: string; width: number; height: number; signature?: string };
+export type PreviewCacheEntry = { key: string; name: string; bytes: number; updatedAt: number; protected: boolean };
 export class AnnotationStorage {
   private database = new LocalDatabase('voidplayer-annotations', 3, (db, tx) => {
     for (const name of ['drafts', 'records', 'previews']) {
@@ -56,7 +57,7 @@ export class AnnotationStorage {
     });
   }
   async savePreview(space: string, id: string, preview: { url: string; width: number; height: number; signature?: string }) {
-    const db=await this.database.open();await new Promise<void>((resolve,reject)=>{const tx=db.transaction('previews','readwrite');tx.objectStore('previews').put({...preview,key:`${space}/${id}`});tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});
+    const db=await this.database.open();await new Promise<void>((resolve,reject)=>{const tx=db.transaction('previews','readwrite');tx.objectStore('previews').put({...preview,key:`${space}/${id}`,updatedAt:Date.now()});tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});
   }
   async previews(space: string, ids: string[]): Promise<Map<string, AnnotationPreview>> {
     if (!ids.length) return new Map();
@@ -72,6 +73,54 @@ export class AnnotationStorage {
     });
   }
   async preview(space: string, id: string) { return (await this.previews(space, [id])).get(id); }
+  /** Cache maintenance never touches confirmed records or drafts. Pending previews stay protected. */
+  async previewCacheEntries(): Promise<PreviewCacheEntry[]> {
+    const db = await this.database.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(['previews', 'records', 'drafts']), rows: PreviewCacheEntry[] = [], protectedKeys = new Set<string>();
+      const drafts = tx.objectStore('drafts').openCursor();
+      drafts.onsuccess = () => {
+        const cursor = drafts.result; if (!cursor) return;
+        protectedKeys.add(`${cursor.value.space}/${cursor.value.id}`); cursor.continue();
+      };
+      const previews = tx.objectStore('previews').openCursor();
+      previews.onsuccess = () => {
+        const cursor = previews.result; if (!cursor) return;
+        const value = cursor.value, encoded = String(value.url ?? '').split(',')[1] ?? '';
+        const row = { key: String(cursor.key), name: String(cursor.key).split('/').at(-1)!,
+          bytes: Math.max(0, Math.floor(encoded.length * .75) - (encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0)),
+          updatedAt: value.updatedAt ?? 0, protected: false };
+        rows.push(row);
+        const record = tx.objectStore('records').get(cursor.key);
+        record.onsuccess = () => {
+          const document = record.result?.document;
+          if (document) row.name = document.mark.text || document.media.find((media: { id: string }) => media.id === document.mark.mediaId)?.name || row.name;
+        };
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve(rows.map(row => ({ ...row, protected: protectedKeys.has(row.key) })));
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+  async clearPreviewCache(keys?: string[]): Promise<void> {
+    const db = await this.database.open();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(['previews', 'drafts'], 'readwrite'), protectedKeys = new Set<string>();
+      const drafts = tx.objectStore('drafts').openCursor();
+      drafts.onsuccess = () => {
+        const cursor = drafts.result;
+        if (cursor) { protectedKeys.add(`${cursor.value.space}/${cursor.value.id}`); cursor.continue(); return; }
+        const wanted = keys && new Set(keys), previews = tx.objectStore('previews').openCursor();
+        previews.onsuccess = () => {
+          const cursor = previews.result; if (!cursor) return;
+          const key = String(cursor.key);
+          if (!protectedKeys.has(key) && (!wanted || wanted.has(key))) cursor.delete();
+          cursor.continue();
+        };
+      };
+      tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error);
+    });
+  }
   close() { this.database.close(); }
 
   async claim(key: string, target: string) {

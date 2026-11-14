@@ -609,6 +609,13 @@ export interface Sources {
   "fileAccess.unsupported": "当前浏览器未提供持久文件访问能力，本地视频按一次性文件打开";
   "fileDrop.release": "松开以添加视频";
   "fileDrop.videoOnly": "请选择视频文件";
+  "frontCache.clearType": "清理此类缓存";
+  "frontCache.confirm": "清理所选缓存？图像可重新生成。";
+  "frontCache.images": "图像缓存";
+  "frontCache.pending": "这条标注尚未同步，暂时保留预览";
+  "frontCache.quota": "可用配额 {bytes}";
+  "frontCache.storage": "浏览器存储（估算）";
+  "frontCache.unavailable": "浏览器未提供容量估算";
   "identity.chooseExisting": "选择已有用户";
   "identity.continueAsGuest": "以访客身份继续";
   "identity.entering": "正在进入…";
@@ -670,7 +677,6 @@ export interface Sources {
   "libraryFileMenu.pathUnavailable": "无法获取文件绝对路径";
   "libraryLink.incompletePath": "媒体库路径不完整";
   "libraryLink.invalidDirectory": "媒体库目录无效";
-  "libraryLink.invalidFile": "媒体库文件链接无效";
   "libraryLink.invalidRoot": "媒体库标识无效";
   "libraryLink.notLocationLink": "这不是媒体库位置链接";
   "libraryLink.otherService": "链接来自另一个媒体服务，请在浏览器中打开该链接";
@@ -1181,12 +1187,9 @@ export interface Sources {
   "update.preparing": "新版离线资源尚未准备好，请稍后再刷新。";
   "update.refresh": "保存现场并刷新";
   "update.wait": "请先暂停播放，完成标注并等载入和保存结束，再刷新。";
-  "uriState.address": "当前状态地址";
   "uriState.annotations": "片源标注同步";
   "uriState.copied": "状态链接已复制";
-  "uriState.copyAddress": "复制可编辑地址";
-  "uriState.copyFallback": "请在设置中的状态链接上手动复制";
-  "uriState.help": "片源、时间、比较条件和布局由地址栏保存；标注独立保存到片源版本。";
+  "uriState.copyFallback": "请手动复制以下分享链接";
   "uriState.loading": "正在恢复观看状态…";
   "uriState.localShare": "本地文件不能分享，请先放入媒体库。";
   "uriState.localUnavailable": "刷新后无法读取本地片源，请继续使用当前窗口。";
@@ -1194,7 +1197,6 @@ export interface Sources {
   "uriState.mediaVersion": "片源版本";
   "uriState.sourceChanged": "片源已不可用或内容版本发生变化。";
   "uriState.sourceReadFailed": "无法读取片源 {id}（HTTP {status}）。";
-  "uriState.title": "观看状态";
   "uriState.wait": "请等待状态载入或分享完成";
   "viewportTrace.download": "下载轨迹";
   "viewportTrace.finished": "已录制 {seconds} 秒，{count} 次视口输入";
@@ -1818,6 +1820,13 @@ export interface MessageParameters {
   "fileAccess.unsupported": {  };
   "fileDrop.release": {  };
   "fileDrop.videoOnly": {  };
+  "frontCache.clearType": {  };
+  "frontCache.confirm": {  };
+  "frontCache.images": {  };
+  "frontCache.pending": {  };
+  "frontCache.quota": { "bytes": string | number };
+  "frontCache.storage": {  };
+  "frontCache.unavailable": {  };
   "identity.chooseExisting": {  };
   "identity.continueAsGuest": {  };
   "identity.entering": {  };
@@ -1879,7 +1888,6 @@ export interface MessageParameters {
   "libraryFileMenu.pathUnavailable": {  };
   "libraryLink.incompletePath": {  };
   "libraryLink.invalidDirectory": {  };
-  "libraryLink.invalidFile": {  };
   "libraryLink.invalidRoot": {  };
   "libraryLink.notLocationLink": {  };
   "libraryLink.otherService": {  };
@@ -2390,12 +2398,9 @@ export interface MessageParameters {
   "update.preparing": {  };
   "update.refresh": {  };
   "update.wait": {  };
-  "uriState.address": {  };
   "uriState.annotations": {  };
   "uriState.copied": {  };
-  "uriState.copyAddress": {  };
   "uriState.copyFallback": {  };
-  "uriState.help": {  };
   "uriState.loading": {  };
   "uriState.localShare": {  };
   "uriState.localUnavailable": {  };
@@ -2403,7 +2408,6 @@ export interface MessageParameters {
   "uriState.mediaVersion": {  };
   "uriState.sourceChanged": {  };
   "uriState.sourceReadFailed": { "id": string | number; "status": string | number };
-  "uriState.title": {  };
   "uriState.wait": {  };
   "viewportTrace.download": {  };
   "viewportTrace.finished": { "count": string | number; "seconds": string | number };

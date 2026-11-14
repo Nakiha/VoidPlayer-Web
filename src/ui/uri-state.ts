@@ -4,7 +4,9 @@ import { currentActor } from '../services/identity.ts';
 import { prepareOfflineUpdate } from './offline-app.ts';
 import { parseWorkspace } from '../../shared/review/workspace-file.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
-import { applyUriParameters, hasUriState, uriStateFromDocument, writeUriState, parseUriState } from '../../shared/review/uri-state.ts';
+import { emptyUriState, hasUriState, uriStateFromDocument, parseUriState } from '../../shared/review/uri-state.ts';
+import { createShareUrl } from '../../shared/review/uri-binary.ts';
+import { stageUpdateState, takeUpdateState } from '../services/update-state.ts';
 import type { UriState } from '../../shared/review/uri-state.ts';
 import { restoreHandleFile, handleKey } from '../services/file-handles.ts';
 import { openMedia, openMediaFromUrl } from '../media/source.ts';
@@ -14,7 +16,6 @@ import type { ReviewSession } from '../session.ts';
 import type { ToastStack } from './toast.ts';
 import { apiError } from '../services/api-error.ts';
 import { t, msg, onLanguageChange } from '../i18n.ts';
-import { Viewport } from '../../shared/presentation/viewport.ts';
 
 export function installUriState(session: ReviewSession, options: {
   act(action: () => unknown | Promise<unknown>, name: string): Promise<void>;
@@ -29,15 +30,15 @@ export function installUriState(session: ReviewSession, options: {
 }) {
   const life = new AbortController();
   let opening = false, epoch = 0, operation = new AbortController(), syncingUrl = false;
-  let previousSignature = '', previousSources = '', disposed = false;
   let focusedMark: string | undefined, focusedPosition = -1;
   let addressEpoch = 0, addressOperation = new AbortController();
   const defaultLayout = structuredClone(options.capture().layout);
   const original = new URL(location.href), explicit = hasUriState(original);
-  opening = explicit;
-  let startupPending = explicit;
+  const updating = !localOnly && !explicit && original.searchParams.has('vp-update');
+  opening = explicit || updating;
+  let startupPending = opening;
   const root = document.getElementById('app')!;
-  root.toggleAttribute('data-workspace-opening', explicit && (original.searchParams.has('s') || ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].some(slot => original.searchParams.has(slot))));
+  root.toggleAttribute('data-workspace-opening', opening);
   document.getElementById('start-panel')?.removeAttribute('data-recovery-pending');
   function exportWorkspace(): WorkspaceFile {
     return { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture() };
@@ -47,18 +48,33 @@ export function installUriState(session: ReviewSession, options: {
     if (focusedMark && state.positionUs === focusedPosition) state.mark = focusedMark;
     return state;
   };
-  function updateUrl() {
-    if (disposed || opening || syncingUrl || session.getState().busy) return;
-    const state = exportState();
-    // An unopened homepage has no watching scene to publish into its address.
-    if (!state.tracks.length && !explicit && !previousSignature) return;
-    const url = writeUriState(state, location.href);
-    const signature = url.search;
-    if (signature === previousSignature) return;
-    const sources = JSON.stringify(state.tracks);
-    const push = !!previousSignature && sources !== previousSources;
-    previousSignature = signature; previousSources = sources;
-    if (push) history.pushState(null, '', url); else history.replaceState(null, '', url);
+  // Compare the restored scene, including recipient-side layout and pan scaling.
+  // Frame/index metadata and annotation bodies are not part of this snapshot.
+  function stateSignature() {
+    const { panBasis, ...state } = exportState();
+    if (panBasis) state.viewport = { ...state.viewport,
+      offsetX: Math.round(state.viewport.offsetX / panBasis.width * 1e12) / 1e12,
+      offsetY: Math.round(state.viewport.offsetY / panBasis.height * 1e12) / 1e12 };
+    return JSON.stringify(state);
+  }
+  let addressSnapshot: { pathname: string; search: string; state: string } | undefined;
+  let changeFrame: number | null = null;
+  function watchAddress(url: URL) {
+    addressSnapshot = hasUriState(url) ? { pathname: url.pathname, search: url.search, state: stateSignature() } : undefined;
+  }
+  function changed() {
+    if (!addressSnapshot || life.signal.aborted || opening || syncingUrl || session.getState().busy) return;
+    const url = new URL(location.href);
+    if (url.pathname !== addressSnapshot.pathname || url.search !== addressSnapshot.search) return;
+    if (stateSignature() === addressSnapshot.state) return;
+    addressSnapshot = undefined;
+    url.search = '';
+    history.replaceState(history.state, '', url);
+  }
+  function scheduleChanged(event: Event) {
+    if (!addressSnapshot || opening || syncingUrl || changeFrame !== null) return;
+    if (event.type === 'pointermove' && !(event as PointerEvent).buttons) return;
+    changeFrame = requestAnimationFrame(() => { changeFrame = null; changed(); });
   }
   async function focusMark(state: UriState, signal: AbortSignal, current: () => boolean) {
     focusedMark = undefined;
@@ -175,42 +191,35 @@ export function installUriState(session: ReviewSession, options: {
     addressOperation.abort();
     addressOperation = new AbortController();
     const signal = AbortSignal.any([life.signal, addressOperation.signal]);
+    watchAddress(url);
     syncingUrl = true;
     try {
-      let base: UriState | undefined;
+      let state = emptyUriState();
       if (url.searchParams.has('s')) {
         if (localOnly) throw new Error(t(msg('sites.remoteUnavailable', '此版本仅支持本地文件，请使用完整版访问媒体服务')));
         const response = await fetch('/api/uri/decode?s=' + encodeURIComponent(url.searchParams.get('s')!), { signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]) });
         const result = await response.json(); if (!response.ok) throw apiError(response.status, result);
-        base = result.state;
+        state = result.state;
       }
       if (ticket !== addressEpoch || signal.aborted) return;
-      const state = applyUriParameters(url, base);
-      if (!await restoreState(state, dismissSettings) || ticket !== addressEpoch || signal.aborted) return;
-      // Expand the immutable shared payload into editable parameters after restoring.
-      state.positionUs = session.getState().positionUs;
-      const expanded = writeUriState(state, location.href); previousSignature = expanded.search; previousSources = JSON.stringify(state.tracks);
-      history.replaceState(null, '', expanded);
+      if (await restoreState(state, dismissSettings) && ticket === addressEpoch && !signal.aborted)
+        watchAddress(url);
     } catch (error) { if (!signal.aborted) throw error; }
-    finally { if (ticket === addressEpoch) syncingUrl = false; }
+    finally { if (ticket === addressEpoch) { syncingUrl = false; changed(); } }
   }
   async function applyState(value: unknown) {
     addressEpoch++; addressOperation.abort(); syncingUrl = false;
-    if (await restoreState(value)) {
-      const url = writeUriState(parseUriState(value), location.href); previousSignature = url.search; previousSources = JSON.stringify(parseUriState(value).tracks);
-      history.pushState(null, '', url);
-    }
+    await restoreState(value);
+    changed();
   }
   async function copy(url: string) {
     try { await navigator.clipboard.writeText(url); options.toasts.show(() => t(msg('uriState.copied', '状态链接已复制'))); }
     catch {
-      const fallback = document.getElementById('state-link-fallback')!;
-      const link = fallback.querySelector('a')!; link.href = url; link.textContent = url; fallback.hidden = false;
-      options.toasts.show(() => t(msg('uriState.copyFallback', '请在设置中的状态链接上手动复制')));
+      window.prompt(t(msg('uriState.copyFallback', '请手动复制以下分享链接')), url);
     }
   }
   let sharing: Promise<{ url: string; abi: 1 }> | undefined;
-  const shareButtons = ['workspace-share', 'saved-workspace-share'].flatMap(id => {
+  const shareButtons = ['workspace-share'].flatMap(id => {
     const element = document.getElementById(id) as HTMLButtonElement | null; return element ? [element] : [];
   });
   function controls() {
@@ -240,16 +249,22 @@ export function installUriState(session: ReviewSession, options: {
     finally { sharing = undefined; controls(); }
   }
   for (const button of shareButtons) button.addEventListener('click', () => void options.act(shareState, 'state.share'), { signal: life.signal });
-  document.getElementById('state-copy-readable')!.addEventListener('click', () => void options.act(async () => {
-    await copy(writeUriState(exportState(), location.href).href);
-  }, 'state.copy'), { signal: life.signal });
-  const unsubscribe = session.subscribe(controls), timer = setInterval(() => { try { updateUrl(); } catch {} }, 500);
+  const unsubscribe = session.subscribe(() => { controls(); changed(); });
+  const unsubscribeProgress = session.subscribeProgress(changed);
+  for (const event of ['click', 'input', 'change', 'pointermove', 'pointerup', 'keyup'])
+    window.addEventListener(event, scheduleChanged, { signal: life.signal });
   window.addEventListener('popstate', () => void options.act(() => openAddress(new URL(location.href)), 'state.navigate'), { signal: life.signal });
   window.addEventListener('voidplayer-identity-change', () => {
     if (startupPending && !syncingUrl) return;
     epoch++; addressEpoch++; addressOperation.abort(); operation.abort(); opening = false;
     root.removeAttribute('data-workspace-opening'); controls(); }, { signal: life.signal });
-  if (explicit) void options.identityReady.then(() => openAddress(original, false)).catch(error => {
+  if (explicit || updating) void options.identityReady.then(async () => {
+    const handoff = updating ? takeUpdateState(original.searchParams.get('vp-update')!) : undefined;
+    if (!handoff) return openAddress(original, false);
+    if (await restoreState(handoff, false)) {
+      const url = new URL(location.href); url.search = ''; history.replaceState(history.state, '', url);
+    }
+  }).catch(error => {
     options.toasts.show((error as Error).message, { kind: 'error', durationMs: 0 });
   }).finally(() => { startupPending = false; opening = false; controls(); root.removeAttribute('data-workspace-opening'); options.openingChanged?.(); });
   controls();
@@ -266,10 +281,15 @@ export function installUriState(session: ReviewSession, options: {
       }
       catch { throw new Error(t(msg('uriState.localUnavailable', '刷新后无法读取本地片源，请继续使用当前窗口。'))); }
     }
-    const uri = writeUriState(saved, location.href);
+    const local = saved.tracks.some(track => track.local);
+    const uri = local ? new URL('/', location.href) : createShareUrl(saved, location.href);
     await prepareOfflineUpdate(target);
+    if (local) stageUpdateState(target, saved);
     uri.searchParams.set('vp-update', target); location.assign(uri.href);
   }
-  return { exportState, applyState, shareState: localOnly ? undefined : shareState, refreshForUpdate,
-    dispose() { disposed = true; life.abort(); addressOperation.abort(); operation.abort(); clearInterval(timer); unsubscribe(); } };
+  return { exportState, applyState, shareState: localOnly ? undefined : shareState, refreshForUpdate, changed,
+    dispose() {
+      life.abort(); addressOperation.abort(); operation.abort(); unsubscribe(); unsubscribeProgress();
+      if (changeFrame !== null) cancelAnimationFrame(changeFrame);
+    } };
 }

@@ -1,0 +1,20 @@
+.browser-cache-heading button { flex-shrink:0; white-space:nowrap; }
+.browser-cache-overview { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; padding:16px; }
+.browser-cache-overview > div { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.browser-cache-overview strong { font-size:24px; font-weight:600; font-variant-numeric:tabular-nums; }
+.browser-cache-overview span, .browser-cache-types button > span:last-child { font-size:12px; color:var(--text-secondary); }
+.browser-cache-bar { height:6px; border-radius:99px; overflow:hidden; background:var(--surface-hover); }
+.browser-cache-bar > span { display:block; height:100%; background:var(--accent); }
+.browser-cache-types { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+.browser-cache-types button { display:flex; flex-direction:column; align-items:flex-start; min-width:0; white-space:normal; gap:4px; padding:12px; background:var(--surface-stripe); }
+.browser-cache-types button[aria-pressed=true] { background:var(--surface-selected); color:var(--accent); }
+.browser-cache-types strong { font-size:17px; font-variant-numeric:tabular-nums; }
+.browser-cache-entries { display:flex; flex-direction:column; gap:8px; padding:16px; min-width:0; }
+#browser-cache-search { width:100%; min-width:0; margin:0; }
+.browser-cache-row, .browser-cache-list-heading { display:grid; grid-template-columns:minmax(0,1fr) 76px 140px var(--button-size); gap:8px; align-items:center; padding:6px 4px; font-size:12px; }
+.browser-cache-list-heading { color:var(--text-secondary); }
+.browser-cache-row:nth-child(even) { background:var(--surface-stripe); }
+.browser-cache-row > span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.browser-cache-row > span:nth-child(2), .browser-cache-row time { color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+.browser-cache-confirm { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 0; font-size:12px; }
+@media(max-width:600px) { .browser-cache-row, .browser-cache-list-heading { grid-template-columns:minmax(0,1fr) 64px var(--button-size); } .browser-cache-row time, .browser-cache-list-heading > :nth-child(3) { display:none; } }

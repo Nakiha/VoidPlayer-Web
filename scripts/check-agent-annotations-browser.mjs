@@ -1,3 +1,5 @@
+import { encodeUriState } from '../server/uri-state.ts';
+import { emptyUriState } from '../shared/review/uri-state.ts';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, copyFile, writeFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
@@ -50,7 +52,7 @@ try {
   const context = await browser.newContext({ locale: 'en-US', viewport: { width: 1280, height: 900 }, colorScheme: 'dark' });
   const errors = []; context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   page = await context.newPage(); evidence = recordBrowserEvidence(page);
-  const url = `${base}/?abi=1&A=${a.source.id}@${new URL(a.source.url).searchParams.get('v')}`;
+  const url = `${base}/?s=${encodeUriState({ ...emptyUriState(), tracks: [{ slot: 'A', id: a.source.id, version: new URL(a.source.url).searchParams.get('v'), offsetUs: 0, visible: true }] })}`;
   const ready = target => target.waitForFunction(() => window.voidPlayer?.getState().tracks[0]?.frame && !window.voidPlayer.getState().busy);
   await page.goto(url); await chooseTestGuest(page); await ready(page);
   assert.equal(await page.evaluate(() => window.voidPlayer.getState().marks.length), 0, 'unloaded source annotations do not join the scene');
@@ -83,7 +85,7 @@ try {
   await page.close();
   await submit({ ...first, operationId: 'gui-closed', revision: 1, document: annotation(b, 'mark-B', 'Written with GUI closed') });
   page = await context.newPage(); evidence = recordBrowserEvidence(page);
-  await page.goto(`${base}/?abi=1&H=${b.source.id}@${new URL(b.source.url).searchParams.get('v')}&mark=mark-B`); await ready(page);
+  await page.goto(`${base}/?s=${encodeUriState({ ...emptyUriState(), tracks: [{ slot: 'H', id: b.source.id, version: new URL(b.source.url).searchParams.get('v'), offsetUs: 0, visible: true }], mark: 'mark-B' })}`); await ready(page);
   await page.waitForFunction(() => window.voidPlayer.getState().marks.find(mark => mark.id === 'mark-B')?.text === 'Written with GUI closed');
   assert.equal((await read()).tracks[0].slot, 'H'); assert.equal((await read()).positionUs, 0);
   assert.deepEqual(errors, []); await page.screenshot({ path: path.join(directory, 'media-annotations.png') });

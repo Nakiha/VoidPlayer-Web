@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
 import { checkScrollBoundary } from '../../scroll-boundary.mjs';
 const name=process.argv[2]??'webkit';
+const sectionLabelBox = locator => locator.evaluate(element => {
+ const range = document.createRange(); range.selectNodeContents(element);
+ const { x, y } = range.getBoundingClientRect(); return { x, y };
+});
 // Check the rendered stroke, not just matching CSS values: CSS fills and SVG
 // strokes can rasterize differently even at the same nominal thickness.
 async function checkConnectorPixels(page) {
@@ -83,6 +87,58 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await ready();
  assert.equal(await page.locator('#more-actions').count(),0);assert.equal(await page.locator('#help').count(),0);assert.equal(await page.locator('dialog.log-panel').count(),0);
  await page.locator('#settings-open').click();await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));const geometry=await page.locator('#settings').boundingBox();
+ await page.locator('#settings-tab-appearance').click();
+ const preferenceHeading = await sectionLabelBox(page.locator('#theme-label'));
+ await page.evaluate(async () => {
+  const db = await new Promise((resolve, reject) => {
+   const request = indexedDB.open('voidplayer-thumbnails', 2);
+   request.onupgradeneeded = () => { request.result.createObjectStore('thumbs', { keyPath: 'key' }); request.result.createObjectStore('lru', { keyPath: 'key' }); };
+   request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+  });
+  await new Promise((resolve, reject) => {
+   const tx = db.transaction(['thumbs', 'lru'], 'readwrite');
+   for (const [name, bytes] of [['cache-one', 4], ['cache-two', 8]]) {
+    const key = JSON.stringify([null, name, bytes, 0, null]);
+    tx.objectStore('thumbs').put({ key, bytes: new ArrayBuffer(bytes), width: 2, height: 2, sourcePtsUs: 0, updatedAt: 1 });
+    tx.objectStore('lru').put({ key, bytes, accessedAt: 1 });
+   }
+   tx.oncomplete = resolve; tx.onabort = () => reject(tx.error);
+  }); db.close();
+ });
+ await page.locator('#settings-tab-caches').click();
+ await page.waitForFunction(() => document.querySelectorAll('#browser-cache-list .browser-cache-row').length === 2);
+ const cacheHeading = await sectionLabelBox(page.locator('#settings-pane-caches h4').first());
+ assert.ok(Math.abs(cacheHeading.x - preferenceHeading.x) < 1, 'cache and preference section labels share the title inset');
+ assert.ok(Math.abs(cacheHeading.y - preferenceHeading.y) < 8, 'cache and preferences share the same first-section spacing');
+ const searchSurface = await page.locator('#browser-cache-search').evaluate(input => {
+  const surface = element => {
+   const style = getComputedStyle(element);
+   return { background: style.backgroundColor, border: style.borderTopWidth, radius: style.borderRadius,
+    shadow: style.boxShadow, height: style.height, padding: style.padding };
+  };
+  const card = input.closest('.settings-card'), bounds = input.getBoundingClientRect(), outer = card?.getBoundingClientRect();
+  return { search: surface(input), description: surface(document.getElementById('log-description')), card: card && surface(card),
+   inset: outer && [bounds.left - outer.left, outer.right - bounds.right] };
+ });
+ assert.ok(searchSurface.card, 'cache search belongs to an outer settings card');
+ assert.deepEqual(searchSurface.search, searchSurface.description, 'cache search shares the borderless log-description input treatment');
+ assert.equal(searchSurface.search.border, '0px');
+ assert.equal(searchSurface.search.shadow, 'none');
+ assert.notEqual(searchSurface.search.background, searchSurface.card.background, 'the editable field has its own surface inside the card');
+ assert.deepEqual(searchSurface.inset, [16, 16], 'the card supplies equal horizontal padding');
+ await page.locator('#settings').screenshot({path: artifact(`voidplayer-settings-cache-search-${name}.png`)});
+ assert.equal(await page.locator('#browser-cache-bytes').textContent(), '12 B');
+ await page.locator('#browser-cache-search').fill('cache-one');
+ assert.equal(await page.locator('#browser-cache-list .browser-cache-row').count(), 1);
+ await page.locator('#browser-cache-list button').click(); await page.locator('#browser-cache-cancel').click();
+ assert.equal(await page.locator('#browser-cache-list .browser-cache-row').count(), 1);
+ await page.locator('#browser-cache-list button').click(); await page.locator('#browser-cache-confirm-clear').click();
+ await page.waitForFunction(() => !document.querySelectorAll('#browser-cache-list .browser-cache-row').length);
+ await page.locator('#browser-cache-search').fill('');
+ assert.equal(await page.locator('#browser-cache-list .browser-cache-row').count(), 1, 'single cleanup keeps unrelated cache entries');
+ await page.locator('#browser-cache-clear').click(); await page.locator('#browser-cache-confirm-clear').click();
+ await page.waitForFunction(() => document.querySelector('#browser-cache-bytes').textContent === '0 B');
+ await page.locator('#settings-tab-appearance').click();
  assert.equal(await page.locator('#settings-tab-annotations, #settings-pane-annotations, #annotation-space-choice, #annotation-space-create, #annotation-publish').count(),0,'legacy recovery page is removed');
  assert.equal(await page.locator('#settings [role=tab]:visible').count(),8);
  assert.equal(await page.locator('#chart-hover-style').innerText(),'合并显示');
@@ -95,7 +151,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await page.locator('#settings-tab-shortcuts span').dblclick();
  assert.equal(await page.evaluate(()=>getSelection().toString()),'','double clicking tab text never selects it');
  assert.deepEqual(await page.evaluate(()=>window.settingsChanges),['shortcuts'],'double clicking selects a new tab just once');
- for(const pane of ['workspace','logs']) {
+ for(const pane of ['caches','logs']) {
   await page.locator(`#settings-tab-${pane}`).click();
   const count=await page.evaluate(()=>window.settingsChanges.length);
   await page.locator(`#settings-tab-${pane}`).dblclick();
@@ -110,7 +166,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await page.locator('#settings-tab-logs').click();
  await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{')&&!document.querySelector('#log-description').disabled);
  assert.equal(await page.evaluate(()=>window.logRefreshBusy.includes('true')),false,'showing feedback never dims its controls for a background refresh');
- for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','experimental','about']) {
+ for(const pane of ['appearance','caches','identity','shortcuts','logs','performance','experimental','about']) {
   await page.locator(`#settings-tab-${pane}`).click();assert.equal(await page.locator('[role=tabpanel]:visible').count(),1);assert.equal(await page.locator('dialog[open]').count(),1);
   assert.deepEqual(await page.locator('#settings').boundingBox(),geometry,'panes keep a stable window');
   assert.equal(await page.locator(`#settings-tab-${pane}`).getAttribute('aria-selected'),'true');
@@ -149,10 +205,10 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    assert.equal(await page.locator('#settings-tab-mcp, #settings-pane-mcp, #quality-roi-open, #quality-tasks-open').count(),0);
    assert.equal(await page.locator('#settings-pane-experimental #page-bridge-settings').isVisible(),true);
   }
-  if(pane==='workspace') {
+  if(pane==='caches') {
    assert.equal(await page.locator('#saved-workspace-save, #saved-workspace-name, #checkpoint-history-list').count(),0);
-   assert.equal(await page.locator('#state-copy-readable').isVisible(),true);
-   assert.equal(await page.locator('#annotation-status').isVisible(),true);
+   assert.equal(await page.locator('#state-copy-readable, #settings-tab-workspace, #saved-workspace-share').count(),0);
+   assert.equal(await page.locator('#browser-cache-refresh').isVisible(),true);
   }
   if(pane==='performance') {
    const threadMode = page.locator('#wasm-thread-mode');
@@ -342,20 +398,20 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    const downloadPromise=page.waitForEvent('download');await page.locator('.log-panel [data-action=download]').click();const download=await downloadPromise;
    const log=JSON.parse(await readFile(await download.path(),'utf8'));originalSession=log.sessionId;assert.ok(log.events.length>0);assert.equal(uploads,0,'viewing and downloading logs never uploads');
   }
-  if(['appearance','workspace','identity','shortcuts','logs','performance','experimental','about'].includes(pane))await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-${pane}-${name}.png`)});
+  if(['appearance','caches','identity','shortcuts','logs','performance','experimental','about'].includes(pane))await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-${pane}-${name}.png`)});
  }
  await checkSettingsScrollbar(page,1280,artifact);
  await page.locator('#settings-tab-about').click();
  await page.keyboard.press('Escape');await page.waitForFunction(()=>document.activeElement===document.querySelector('#settings-open'));
  await page.locator('#settings-open').click();assert.equal(await page.locator('#settings-tab-about').getAttribute('aria-selected'),'true','reopening remembers last pane');
  await page.keyboard.press('Home');assert.equal(await page.locator('#settings-tab-appearance').getAttribute('aria-selected'),'true');
- await page.keyboard.press('ArrowDown');assert.equal(await page.locator('#settings-tab-workspace').getAttribute('aria-selected'),'true');
+ await page.keyboard.press('ArrowDown');assert.equal(await page.locator('#settings-tab-caches').getAttribute('aria-selected'),'true');
  await page.locator('#settings-tab-appearance').click();await page.locator('[data-theme-choice=light]').click();
  assert.equal(await page.locator('#settings').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(240, 241, 243)');
  await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-light-${name}.png`)});
  await page.setViewportSize({width:390,height:700});
  await checkSettingsScrollbar(page,390,artifact);
- for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','experimental','about']) {
+ for(const pane of ['appearance','caches','identity','shortcuts','logs','performance','experimental','about']) {
   await page.locator(`#settings-tab-${pane}`).click();
   const overflow=await page.locator(`#settings-pane-${pane}`).evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
   assert.ok(overflow.scroll<=overflow.width+1,`no horizontal overflow in ${pane}: ${JSON.stringify(overflow)}`);

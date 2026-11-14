@@ -2653,6 +2653,36 @@
     "source": "请选择视频文件",
     "params": {}
   },
+  "frontCache.clearType": {
+    "source": "清理此类缓存",
+    "params": {}
+  },
+  "frontCache.confirm": {
+    "source": "清理所选缓存？图像可重新生成。",
+    "params": {}
+  },
+  "frontCache.images": {
+    "source": "图像缓存",
+    "params": {}
+  },
+  "frontCache.pending": {
+    "source": "这条标注尚未同步，暂时保留预览",
+    "params": {}
+  },
+  "frontCache.quota": {
+    "source": "可用配额 {bytes}",
+    "params": {
+      "bytes": "string | number"
+    }
+  },
+  "frontCache.storage": {
+    "source": "浏览器存储（估算）",
+    "params": {}
+  },
+  "frontCache.unavailable": {
+    "source": "浏览器未提供容量估算",
+    "params": {}
+  },
   "identity.chooseExisting": {
     "source": "选择已有用户",
     "params": {}
@@ -2926,10 +2956,6 @@
   },
   "libraryLink.invalidDirectory": {
     "source": "媒体库目录无效",
-    "params": {}
-  },
-  "libraryLink.invalidFile": {
-    "source": "媒体库文件链接无效",
     "params": {}
   },
   "libraryLink.invalidRoot": {
@@ -5133,10 +5159,6 @@
     "source": "请先暂停播放，完成标注并等载入和保存结束，再刷新。",
     "params": {}
   },
-  "uriState.address": {
-    "source": "当前状态地址",
-    "params": {}
-  },
   "uriState.annotations": {
     "source": "片源标注同步",
     "params": {}
@@ -5145,16 +5167,8 @@
     "source": "状态链接已复制",
     "params": {}
   },
-  "uriState.copyAddress": {
-    "source": "复制可编辑地址",
-    "params": {}
-  },
   "uriState.copyFallback": {
-    "source": "请在设置中的状态链接上手动复制",
-    "params": {}
-  },
-  "uriState.help": {
-    "source": "片源、时间、比较条件和布局由地址栏保存；标注独立保存到片源版本。",
+    "source": "请手动复制以下分享链接",
     "params": {}
   },
   "uriState.loading": {
@@ -5187,10 +5201,6 @@
       "id": "string | number",
       "status": "string | number"
     }
-  },
-  "uriState.title": {
-    "source": "观看状态",
-    "params": {}
   },
   "uriState.wait": {
     "source": "请等待状态载入或分享完成",

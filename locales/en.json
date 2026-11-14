@@ -2459,6 +2459,34 @@
     "source": "请选择视频文件",
     "translation": "Choose a video file"
   },
+  "frontCache.clearType": {
+    "source": "清理此类缓存",
+    "translation": "Clear this cache type"
+  },
+  "frontCache.confirm": {
+    "source": "清理所选缓存？图像可重新生成。",
+    "translation": "Clear the selected cache? Images can be regenerated."
+  },
+  "frontCache.images": {
+    "source": "图像缓存",
+    "translation": "Image cache"
+  },
+  "frontCache.pending": {
+    "source": "这条标注尚未同步，暂时保留预览",
+    "translation": "This annotation has not synced yet. Its preview is being kept."
+  },
+  "frontCache.quota": {
+    "source": "可用配额 {bytes}",
+    "translation": "Storage quota {bytes}"
+  },
+  "frontCache.storage": {
+    "source": "浏览器存储（估算）",
+    "translation": "Browser storage (estimated)"
+  },
+  "frontCache.unavailable": {
+    "source": "浏览器未提供容量估算",
+    "translation": "Storage estimates are unavailable in this browser"
+  },
   "identity.chooseExisting": {
     "source": "选择已有用户",
     "translation": "Choose an existing user"
@@ -2702,10 +2730,6 @@
   "libraryLink.invalidDirectory": {
     "source": "媒体库目录无效",
     "translation": "Invalid library directory."
-  },
-  "libraryLink.invalidFile": {
-    "source": "媒体库文件链接无效",
-    "translation": "Invalid library file link."
   },
   "libraryLink.invalidRoot": {
     "source": "媒体库标识无效",
@@ -4751,10 +4775,6 @@
     "source": "请先暂停播放，完成标注并等载入和保存结束，再刷新。",
     "translation": "Pause playback, finish editing annotations and wait for loading and saving to complete before refreshing."
   },
-  "uriState.address": {
-    "source": "当前状态地址",
-    "translation": "Current state address"
-  },
   "uriState.annotations": {
     "source": "片源标注同步",
     "translation": "Media annotation sync"
@@ -4763,17 +4783,9 @@
     "source": "状态链接已复制",
     "translation": "State link copied"
   },
-  "uriState.copyAddress": {
-    "source": "复制可编辑地址",
-    "translation": "Copy editable address"
-  },
   "uriState.copyFallback": {
-    "source": "请在设置中的状态链接上手动复制",
-    "translation": "Copy the state link manually in Settings"
-  },
-  "uriState.help": {
-    "source": "片源、时间、比较条件和布局由地址栏保存；标注独立保存到片源版本。",
-    "translation": "Sources, time, comparison conditions and layout are saved in the address. Annotations are saved independently by media version."
+    "source": "请手动复制以下分享链接",
+    "translation": "Copy the share link below manually"
   },
   "uriState.loading": {
     "source": "正在恢复观看状态…",
@@ -4802,10 +4814,6 @@
   "uriState.sourceReadFailed": {
     "source": "无法读取片源 {id}（HTTP {status}）。",
     "translation": "Cannot read source {id} (HTTP {status})."
-  },
-  "uriState.title": {
-    "source": "观看状态",
-    "translation": "View state"
   },
   "uriState.wait": {
     "source": "请等待状态载入或分享完成",

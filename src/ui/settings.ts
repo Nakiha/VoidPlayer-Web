@@ -11,6 +11,7 @@ import { MAX_ANALYSIS_CONCURRENCY } from '../../shared/analysis/bitstream/task-p
 import { installChoiceMenu } from './choice-menu.ts';
 import { installSourceScrollbar } from './source-scrollbar.ts';
 import { FileHandleError, handleKey, pickVideoFiles, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../services/file-handles.ts';
+import { installBrowserCaches } from './browser-caches.ts';
 
 const wheelKey = 'voidplayer.viewport-wheel-behavior';
 function readWheelBehavior(): WheelBehavior {
@@ -28,6 +29,7 @@ export function installSettings(toasts: ToastStack) {
   const close = document.getElementById('settings-close') as HTMLButtonElement;
   const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[data-settings-pane]')];
   const life = new AbortController();
+  installBrowserCaches(life.signal, toasts);
   const fileAccess = document.getElementById('local-file-access-try') as HTMLButtonElement;
   let dismissFileResult: (() => void) | undefined;
   fileAccess.addEventListener('click', async () => {

@@ -106,7 +106,6 @@ export function shell() {
 </section>
       </div>
       </section>
-      <div id="viewport-pan-surface" class="viewport-pan-surface" aria-hidden="true" hidden></div>
       <aside id="sources-panel" class="side-panel sources-panel glass library-pane" aria-label="${th(msg("shell.sources", "片源"))}" hidden>
         ${librarySurfaceShell(`        <section id="local-sources" class="local-sources" aria-label="${th(msg("shell.localFiles", "本地文件"))}" hidden><h3 class="source-section"><span id="local-sources-heading">${th(msg("shell.localFiles", "本地文件"))}</span><button id="local-add" class="icon-button" aria-label="${th(msg("shell.chooseLocalFiles", "选择本地文件"))}" data-tooltip="${th(msg("shell.addLocalFilesToTheListLocal", "选择本地文件加入列表（仅本机预览，不上传）"))}">${icon('filePlus')}</button></h3><div id="local-list"></div></section>
         <section id="source-activity" class="source-activity" aria-label="${th(msg("shell.sourceLoadingStatus", "片源载入状态"))}" data-state="idle">
@@ -121,7 +120,7 @@ export function shell() {
       <section id="subtracks-panel" class="subtracks-panel marks-collapsed" aria-label="${th(msg("shell.tracks", "子轨道"))}" hidden>
         <div id="dock-resize" class="dock-resize" role="separator" tabindex="0" aria-label="${th(msg("shell.resizeTracksPanel", "调整子轨道高度"))}" aria-orientation="horizontal" aria-valuemin="128" aria-valuemax="420" aria-valuenow="180"></div>
 
-        <div class="subtrack-scroll"><div class="subtrack-columns"><span class="subtrack-name-heading">${th(msg("shell.track", "轨道"))}<span id="track-label-resize" role="separator" tabindex="0" aria-label="${th(msg("shell.resizeFilenameColumn", "调整文件名列宽度"))}" aria-orientation="vertical"></span></span><span></span><span></span><span class="track-offset">${th(msg("shell.offset", "偏移"))}</span><div id="subtrack-ruler" class="subtrack-ruler" aria-label="${th(msg("shell.timeRuler", "时间标尺"))}"></div></div><div id="subtrack-list"></div></div>
+        <div class="subtrack-scroll"><div class="subtrack-columns"><span class="subtrack-name-heading">${th(msg("shell.track", "轨道"))}<span id="track-label-resize" role="separator" tabindex="0" aria-label="${th(msg("shell.resizeFilenameColumn", "调整文件名列宽度"))}" aria-orientation="vertical"></span></span><span></span><span></span><span></span><span class="track-offset">${th(msg("shell.offset", "偏移"))}</span><div id="subtrack-ruler" class="subtrack-ruler" aria-label="${th(msg("shell.timeRuler", "时间标尺"))}"></div></div><div id="subtrack-list"></div></div>
         <aside class="annotation-strip" aria-label="${th(msg("shell.allTrackAnnotations", "所有轨道标注"))}">
           <div class="annotation-strip-tools"><button id="toggle-marks" class="icon-button" aria-label="${th(msg("shell.showAnnotationCards", "显示标注卡片"))}" aria-expanded="false" aria-controls="selected-marks" title="${th(msg("shell.showAnnotationCards", "显示标注卡片"))}">${icon('grid')}</button><button id="subtrack-add-mark" class="icon-button" aria-label="${th(msg("shell.addAnnotation", "添加标注"))}" title="${th(msg("shell.addAnnotation", "添加标注"))}">${icon('plusRegular')}</button></div>
           <div id="selected-marks" class="selected-marks" aria-label="${th(msg("shell.annotations", "标注"))}"></div>

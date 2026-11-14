@@ -6,7 +6,13 @@ await withBrowserFixture({ caseName: 'viewport-interactions', engine,
   pageOptions: { viewport: { width: 776, height: 778 }, hasTouch: true, locale: 'zh-CN' } }, async ({ page, ready, artifact }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.addInitScript(() => { window.__vpAnalysisQA = true; });
+  await page.addInitScript(() => {
+    window.__vpAnalysisQA = true; window.uriHistoryWrites = [];
+    for (const method of ['pushState', 'replaceState']) {
+      const original = history[method];
+      history[method] = function(...args) { window.uriHistoryWrites.push(method); return original.apply(this, args); };
+    }
+  });
   await ready();
   await page.evaluate(async () => {
     const call = (name, args = {}) => window.voidPlayer.tools.find(tool => tool.name === name).execute(args);
@@ -38,8 +44,9 @@ await withBrowserFixture({ caseName: 'viewport-interactions', engine,
   const reset = async () => { await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1, offsetX: 0, offsetY: 0 })); await settle(); };
   const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const touch = await touchInput(page, engine);
+  const originalUrl = page.url();
   await page.mouse.move(x, y); await page.mouse.down({ button: 'right' });
-  await page.waitForFunction(() => !document.querySelector('#viewport-pan-surface').hidden);
+  await page.waitForFunction(() => document.documentElement.classList.contains('panning-viewport'));
   await page.evaluate(({ x, y }) => {
     window.panCursorSamples = []; window.samplingPanCursor = true;
     const sample = () => {
@@ -49,12 +56,19 @@ await withBrowserFixture({ caseName: 'viewport-interactions', engine,
       requestAnimationFrame(sample);
     }; sample();
   }, { x, y });
-  for (let i = 1; i <= 4; i++) { await page.mouse.move(x + i, y + i); await page.waitForTimeout(90); }
+  for (let i = 1; i <= 6; i++) { await page.mouse.move(x + i, y + i); await page.waitForTimeout(120); }
   const cursors = await page.evaluate(() => { window.samplingPanCursor = false; return window.panCursorSamples; });
   assert.ok(cursors.length);
-  assert.ok(cursors.every(sample => sample.target === 'viewport-pan-surface' && sample.cursor === 'grabbing'), 'slow and paused pan retains one stationary grabbing surface');
+  assert.ok(cursors.every(sample => sample.cursor === 'grabbing'), 'slow and paused pan retains the grabbing cursor');
   await page.mouse.up({ button: 'right' });
-  assert.equal(await page.locator('#viewport-pan-surface').isHidden(), true);
+  assert.equal(await page.locator('html').evaluate(root => root.classList.contains('panning-viewport')), false);
+  assert.deepEqual([(await view()).offsetX, (await view()).offsetY], [6, 6]);
+  await page.keyboard.down('Control');
+  for (let i = 0; i < 4; i++) { await page.mouse.wheel(0, -30); await page.waitForTimeout(180); }
+  await page.keyboard.up('Control');
+  assert.ok((await view()).zoom > 1, 'wheel zoom still applies');
+  assert.equal(page.url(), originalUrl);
+  assert.deepEqual(await page.evaluate(() => window.uriHistoryWrites), [], 'pan and zoom never touch browser history');
   await reset();
   await touch('start', [[1, x, y]]);
   await touch('move', [[1, x + 20, y + 30]]);
@@ -159,6 +173,7 @@ await withBrowserFixture({ caseName: 'viewport-interactions', engine,
     return Math.abs((view.start + view.end) / 2 - expected) < 2;
   }, dts);
   assert.equal((await range()).view.end - (await range()).view.start, dtsSpan);
+  assert.deepEqual(await page.evaluate(() => window.uriHistoryWrites), [], 'touch, playback and applying state leave the input URL intact');
   await page.screenshot({ path: artifact('viewport-interactions.png') });
   assert.deepEqual(errors, []);
   console.log(`PASS ${engine}: ${engine === 'chromium' ? 'native multi-touch' : 'pointer touch simulation'}, pan/pinch anchors, annotation arbitration, neutral toggles, curve-to-card frame seek, locate/follow and constant time span`);

@@ -61,6 +61,7 @@
     "src/ui/brand-scenes/orbit.ts",
     "src/ui/brand-scenes/prism.ts",
     "src/ui/brand-scenes/timing.ts",
+    "src/ui/browser-caches.ts",
     "src/ui/chart-hover-style.ts",
     "src/ui/choice-menu.ts",
     "src/ui/color-flow.ts",
@@ -84,8 +85,6 @@
     "src/ui/index-progress.ts",
     "src/ui/language.ts",
     "src/ui/library-browser.ts",
-    "src/ui/local-source-browser.ts",
-    "src/ui/local-sources-resize.ts",
     "src/ui/library-column-layout.ts",
     "src/ui/library-columns.ts",
     "src/ui/library-file-menu.ts",
@@ -93,6 +92,8 @@
     "src/ui/library-thumbnails.ts",
     "src/ui/library-view.ts",
     "src/ui/live-localization.ts",
+    "src/ui/local-source-browser.ts",
+    "src/ui/local-sources-resize.ts",
     "src/ui/localized-shell.ts",
     "src/ui/logging/panel.ts",
     "src/ui/mark-preview-backfill.ts",
@@ -111,7 +112,6 @@
     "src/ui/playback-icon.ts",
     "src/ui/progress-ring.ts",
     "src/ui/resize-gesture.ts",
-    "src/ui/uri-state-settings.ts",
     "src/ui/seek-preview.ts",
     "src/ui/settings-shell.ts",
     "src/ui/settings.ts",
@@ -134,6 +134,7 @@
     "src/ui/track-selection.ts",
     "src/ui/track-timeline.ts",
     "src/ui/track-toasts.ts",
+    "src/ui/uri-state.ts",
     "src/ui/video-input.ts",
     "src/ui/view-bindings.ts",
     "src/ui/view-recovery.ts",
@@ -144,8 +145,7 @@
     "src/ui/workbench/shared.ts",
     "src/ui/workbench/sources.ts",
     "src/ui/workbench/tracks.ts",
-    "src/ui/workspace-state.ts",
-    "src/ui/uri-state.ts"
+    "src/ui/workspace-state.ts"
   ],
   "exceptions": [
     {

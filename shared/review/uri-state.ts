@@ -5,7 +5,7 @@ import type { ViewportSnapshot, PanBasis } from '../presentation/viewport.ts';
 import { SLOTS, slotValue, timeUs } from './model.ts';
 import type { Slot } from './model.ts';
 
-// ABI 1 is immutable: field ordering, defaults and textual parameters are wire contracts.
+// ABI 1 is immutable: state fields, defaults and tuple ordering are wire contracts.
 export const URI_ABI = 1;
 export const URI_MAX_BYTES = 64 * 1024;
 export type UriTrack = { slot: Slot; id: string; version: string; origin?: string; local?: { name: string; size: number; lastModified: number }; offsetUs: number; visible: boolean };
@@ -107,65 +107,4 @@ export function unpackUriState(value: unknown): UriState {
     ...(value[3] != null ? { comparison: value[3] } : {}), ...(value[4] != null ? { layout: value[4] } : {}),
     ...(value[5] != null ? { mark: value[5] } : {}) });
 }
-const viewKeys = { view: 'mode', arrange: 'arrangement', split: 'splitPos', zoom: 'zoom', x: 'offsetX', y: 'offsetY',
-  pixel: 'pixelSize', channel: 'channel' } as const;
-export function hasUriState(url: URL) { return ['abi', 's', ...SLOTS].some(key => url.searchParams.has(key)); }
-export function applyUriParameters(url: URL, base: UriState = emptyUriState()): UriState {
-  const params = url.searchParams;
-  if (params.has('abi') && params.get('abi') !== '1') throw new Error('不支持此 URI ABI。');
-  const state = structuredClone(base);
-  const slots = [...params.keys()].filter(key => SLOTS.includes(key as Slot));
-  for (const key of slots) {
-    if (params.getAll(key).length !== 1) throw new Error('URI 轨道重复。');
-    const ref = params.get(key)!;
-    const existing = state.tracks.findIndex(track => track.slot === key);
-    if (ref === '-') { if (existing >= 0) state.tracks.splice(existing, 1); continue; }
-    const previous = state.tracks[existing];
-    let next: UriTrack;
-    if (ref.startsWith('file:')) {
-      const file = JSON.parse(ref.slice(5));
-      if (!Array.isArray(file) || file.length !== 4) throw new Error('本地片源引用无效。');
-      next = { slot: key as Slot, id: file[0], version: '', local: { name: file[1], size: file[2], lastModified: file[3] }, offsetUs: previous?.offsetUs ?? 0, visible: previous?.visible ?? true };
-    } else {
-      const match = /^(?:(https?:\/\/[^/]+)\/)?([0-9a-f]{24})@([0-9a-f]{24})$/.exec(ref);
-      if (!match) throw new Error('URI 片源必须包含资产 ID 和内容版本。');
-      next = { slot: key as Slot, id: match[2], version: match[3], ...(match[1] ? { origin: match[1] } : {}), offsetUs: previous?.offsetUs ?? 0, visible: previous?.visible ?? true };
-    }
-    if (existing >= 0) state.tracks[existing] = next; else state.tracks.push(next);
-  }
-  for (const track of state.tracks) {
-    if (params.has(`offset.${track.slot}`)) track.offsetUs = Math.round(Number(params.get(`offset.${track.slot}`)) * 1e6);
-    if (params.has(`visible.${track.slot}`)) {
-      if (!['0', '1'].includes(params.get(`visible.${track.slot}`)!)) throw new Error('URI 显示状态无效。');
-      track.visible = params.get(`visible.${track.slot}`) === '1';
-    }
-  }
-  if (params.has('t')) state.positionUs = Math.round(Number(params.get('t')) * 1e6);
-  for (const [key, field] of Object.entries(viewKeys)) if (params.has(key)) {
-    (state.viewport as Record<string, unknown>)[field] = ['split', 'zoom', 'x', 'y'].includes(key) ? Number(params.get(key)) : params.get(key);
-  }
-  for (const key of ['comparison', 'layout'] as const) if (params.has(key)) state[key] = JSON.parse(params.get(key)!);
-  if (params.has('basis')) {
-    const parts = params.get('basis')!.split(',');
-    if (parts.length !== 2 || parts.some(part => !part.trim())) throw new Error('平移参考尺寸无效。');
-    state.panBasis = { width: Number(parts[0]), height: Number(parts[1]) };
-  }
-  if (params.has('mark')) state.mark = params.get('mark')!;
-  return parseUriState(state);
-}
-export function writeUriState(value: UriState, base: string): URL {
-  const state = parseUriState(value), url = new URL('/', base), params = url.searchParams;
-  params.set('abi', '1');
-  for (const track of state.tracks) {
-    params.set(track.slot, track.local ? 'file:' + JSON.stringify([track.id, track.local.name, track.local.size, track.local.lastModified]) : `${track.origin ? track.origin + '/' : ''}${track.id}@${track.version}`);
-    if (track.offsetUs) params.set(`offset.${track.slot}`, String(track.offsetUs / 1e6));
-    if (!track.visible) params.set(`visible.${track.slot}`, '0');
-  }
-  if (state.positionUs) params.set('t', String(state.positionUs / 1e6));
-  for (const [key, field] of Object.entries(viewKeys)) if (state.viewport[field] !== defaults[field]) params.set(key, String(state.viewport[field]));
-  if (state.comparison && canonical(state.comparison) !== canonical(comparisonDefaults)) params.set('comparison', JSON.stringify(state.comparison));
-  if (state.layout) params.set('layout', JSON.stringify(state.layout));
-  if (state.panBasis) params.set('basis', `${state.panBasis.width},${state.panBasis.height}`);
-  if (state.mark) params.set('mark', state.mark);
-  return url;
-}
+export function hasUriState(url: URL) { return url.searchParams.has('s'); }

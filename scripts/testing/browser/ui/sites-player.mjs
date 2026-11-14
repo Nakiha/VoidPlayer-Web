@@ -55,7 +55,8 @@ try {
     });
     const page = await context.newPage();
     page.setDefaultTimeout(20000);
-    await page.goto(base + '/?workspace=00000000-0000-4000-8000-000000000000&annotation=unavailable&library=invalid');
+    const inputUrl = base + '/?workspace=00000000-0000-4000-8000-000000000000&annotation=unavailable&library=invalid';
+    await page.goto(inputUrl);
     await page.waitForFunction(() => window.voidPlayer && !document.querySelector('#app').hasAttribute('data-initializing'));
     assert.equal(await page.evaluate(() => crossOriginIsolated), isolated);
     assert.equal(await page.locator('#identity-welcome').count(), 0);
@@ -66,7 +67,7 @@ try {
       assert.ok(!tools.includes(name), name + ' is not exposed');
     await page.locator('#settings-open').click();
     assert.equal(await page.locator('#settings-tab-identity').count(), 0);
-    for (const tab of ['workspace', 'logs', 'performance', 'about', 'appearance']) {
+    for (const tab of ['caches', 'logs', 'performance', 'about', 'appearance']) {
       await page.locator('#settings-tab-' + tab).click();
       if (tab === 'logs') assert.equal(await page.locator('[data-action="upload"]').isVisible(), false);
       if (tab === 'about') assert.equal(await page.locator('#web-app').isVisible(), false);
@@ -97,7 +98,7 @@ try {
     assert.equal(await page.locator('#library-manage, #library-mounts').count(), 0);
     assert.equal(await page.locator('#local-add').isVisible(), true);
     await page.locator('#settings-open').click();
-    await page.locator('#settings-tab-workspace').click();
+    await page.locator('#settings-tab-caches').click();
     assert.equal(await page.locator('#local-workspace-export, #checkpoint-history-list, #saved-workspace-save').count(), 0);
     const state = await page.evaluate(() => window.voidPlayer.exportState());
     assert.equal(state.abi, 1); assert.equal(state.tracks[0].local.name, first.name);
@@ -107,7 +108,8 @@ try {
     await page.evaluate(state => window.voidPlayer.applyState(state), state);
     assert.equal(await page.evaluate(() => window.voidPlayer.getViewport().channel), state.viewport.channel);
     assert.ok(await page.evaluate(id => window.voidPlayer.getState().marks.some(mark => mark.id === id), markId));
-    await page.waitForFunction(() => new URL(location.href).searchParams.has('A'));
+    await page.waitForTimeout(650);
+    assert.equal(page.url(), inputUrl, 'local playback and snapshot restoration leave the address unchanged');
     await page.screenshot({ path: path.join(evidence, isolated ? 'isolated.png' : 'static.png') });
     const remote = await page.evaluate(async state => {
       try {

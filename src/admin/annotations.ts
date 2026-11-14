@@ -9,6 +9,8 @@ import { randomUUID } from '../../shared/utils/uuid.ts';
 import { installChoiceMenu } from '../ui/choice-menu.ts';
 import { markSymbol } from '../ui/mark-symbol.ts';
 import { icon } from '../ui/icons.ts';
+import { createShareUrl } from '../../shared/review/uri-binary.ts';
+import { emptyUriState } from '../../shared/review/uri-state.ts';
 export function annotationAdminShell() {
   return `<section id="pane-annotations" hidden>
     <header class="admin-heading"><h1>${th(msg("admin.marksTab", "标注"))}</h1><button id="admin-annotations-refresh" class="icon-button" aria-label="${th(msg("admin.refreshMarks", "刷新标注"))}">${icon('refreshRegular')}</button></header>
@@ -63,7 +65,11 @@ export function installAnnotationAdmin(signal: AbortSignal, notice: (message: Lo
   localizedText($('-title'), () => `${source.name} · ${formatTime(mark.frame.ptsUs)}`);localizedText($('-text'), () => mark.text);
   localizedText($('-author'), () => t(msg("admin.annotationMeta", "{author} · 版本 {revision} · {date}"), {author:mark.author?.name ?? t(msg('marks.anonymous', '未署名')),revision:record.revision,date:formatDate(record.updatedAt)}));
   const image=$<HTMLImageElement>('-image');image.hidden=false;$('-no-preview').hidden=true;image.onerror=()=>{image.hidden=true;$('-no-preview').hidden=false;};image.src=`/api/annotations/media/${space}/${record.id}/preview?revision=${record.revision}`;
-  const link=$<HTMLAnchorElement>('-open');const sourceUrl=source.source?new URL(source.source.url,location.origin):null;link.href=sourceUrl?`/?abi=1&${mark.slot}=${encodeURIComponent((sourceUrl.origin!==location.origin?sourceUrl.origin+'/':'')+source.source!.id+'@'+sourceUrl.searchParams.get('v'))}&mark=${record.id}`:'#';link.hidden=record.deleted || !source.source;
+  const link = $<HTMLAnchorElement>('-open'), sourceUrl = source.source ? new URL(source.source.url, location.origin) : null;
+  link.href = sourceUrl ? createShareUrl({ ...emptyUriState(), tracks: [{ slot: mark.slot, id: source.source!.id,
+    version: sourceUrl.searchParams.get('v')!, offsetUs: 0, visible: true,
+    ...(sourceUrl.origin !== location.origin ? { origin: sourceUrl.origin } : {}) }], mark: record.id }, location.href).href : '#';
+  link.hidden = record.deleted || !source.source;
   $('-delete').hidden=record.deleted;$('-restore').hidden=!record.deleted;
  }
  type Page={entries:AnnotationRecord[];next:number|null;count:number;previewBytes:number};

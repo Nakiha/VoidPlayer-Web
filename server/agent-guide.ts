@@ -145,14 +145,16 @@ POST /api/identity accepts {name}, {id}, or {guest:true}; use matching Origin,
 Content-Type: application/json and X-VoidPlayer-Action: identity. Keep the cookie.
 Identity attributes writes; it is not authentication.
 
-There is no stored workspace CRUD. The page is controlled by ABI 1 URI parameters:
-/?abi=1&A=ASSET@VERSION&t=12.5&view=split&channel=y
-A-H select ordered sources, offset.A is seconds, visible.A=0 hides a track.
-zoom/x/y/split/arrange/pixel, comparison and layout specify view conditions.
+There is no stored workspace CRUD. The page opens self-contained ABI share links:
+/?s=VERSION.CODEC.BASE64URL
 POST /api/uri/encode with {state} and X-VoidPlayer-Action: uri returns {abi,token,url}.
-GET /api/uri/decode?s=TOKEN returns {abi,state}. Links are self-contained, with no
-server-side workspace or link mapping. Explicit query parameters override payload
-values. Unknown ABI/codec and invalid or oversized states are rejected.
+GET /api/uri/decode?s=TOKEN returns {abi,state}. State contains ordered source
+references, integer-microsecond position and offsets, visibility, viewport,
+comparison conditions, layout and an optional mark ID. Readable state query
+parameters and query overrides are not supported. Editing a scene clears its
+old share query once; further actions do not rewrite the address. Links have no
+server-side workspace or link mapping. Unknown ABI/codec and invalid or oversized
+states are rejected.
 `;
 
 const annotations = `# Headless annotations and operation events

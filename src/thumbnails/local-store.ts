@@ -99,4 +99,18 @@ export async function putLocalThumbnail(entry: StoredThumbnail | (Omit<StoredThu
 export async function deleteLocalThumbnail(key: string): Promise<void> {
   try { await transact<void>(tx => { tx.objectStore(STORE).delete(key); tx.objectStore(META).delete(key); }); } catch {}
 }
+export async function localThumbnailCacheEntries(): Promise<{ key: string; bytes: number; updatedAt: number }[]> {
+  return transact((tx, result) => {
+    const request = tx.objectStore(META).getAll();
+    request.onsuccess = () => result(request.result.map((entry: Meta) => ({ key: entry.key, bytes: entry.bytes, updatedAt: entry.accessedAt })));
+  });
+}
+export async function clearLocalThumbnailCache(keys?: string[]): Promise<void> {
+  await transact<void>(tx => {
+    for (const name of [STORE, META]) {
+      const store = tx.objectStore(name);
+      if (keys) for (const key of keys) store.delete(key); else store.clear();
+    }
+  });
+}
 export function closeThumbnailDatabase() { void database?.then(connection => connection.close()).catch(() => {}); database = null; }

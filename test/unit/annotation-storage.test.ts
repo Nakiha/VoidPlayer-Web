@@ -21,3 +21,26 @@ test('a server reset replaces only confirmed state atomically and preserves draf
     assert.equal((await storage.records('review')).find(r => r.id === 'changed')!.revision, 2, 'ordinary duplicate/out-of-order delivery cannot regress revisions');
   } finally { storage.close(); }
 });
+
+test('preview cache cleanup preserves pending previews, annotation records and drafts', async () => {
+  globalThis.indexedDB = new IDBFactory();
+  const storage = new AnnotationStorage();
+  const record = { id: 'ready', space: 'review', revision: 1, sequence: 1, deleted: false, updatedAt: '2026-11-14',
+    updatedBy: 'actor', document: { mark: { id: 'ready', text: 'confirmed annotation' } as never, media: [] } };
+  const draft = { key: 'actor/review/window/pending', space: 'review', actor: 'actor', id: 'pending', base: 0,
+    desired: { mark: { id: 'pending', text: 'unsent annotation' } as never, media: [] }, generation: 1 };
+  try {
+    await storage.remember([record]); await storage.change(draft.key, () => draft);
+    for (const id of ['ready', 'pending']) await storage.savePreview('review', id, { url: 'data:image/jpeg;base64,AQIDBA==', width: 2, height: 2 });
+    const entries = await storage.previewCacheEntries();
+    assert.deepEqual(entries.map(entry => [entry.key, entry.bytes, entry.protected]), [['review/pending', 4, true], ['review/ready', 4, false]]);
+    await storage.clearPreviewCache();
+    assert.equal(await storage.preview('review', 'ready'), undefined);
+    assert.ok(await storage.preview('review', 'pending'));
+    assert.deepEqual(await storage.records('review'), [{ ...record, key: 'review/ready' }]);
+    assert.deepEqual(await storage.drafts('review', 'actor'), [draft]);
+    await storage.change(draft.key, () => undefined);
+    await storage.clearPreviewCache(['review/pending']);
+    assert.deepEqual(await storage.previewCacheEntries(), []);
+  } finally { storage.close(); }
+});

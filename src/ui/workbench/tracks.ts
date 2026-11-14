@@ -413,7 +413,10 @@ export function createTracksPane(shared: WorkbenchShared) {
           const current = session.getState().tracks.find(t => t.slot === track.slot);
           if (current) session.setTrackVisibility(track.slot, !current.visible);
         };
-        label.append(name); row.append(label, audio, visibility, offset, lane); list.append(row);
+        const remove = createIconButton({ glyph: 'close', label: t(msg('shell.closeTrack', '关闭轨道 {p0}'), { p0: track.slot }),
+          tooltip: t(msg('sources.takeOff', '下屏')), className: 'track-remove remove-track' });
+        remove.onclick = () => void act(() => session.removeTrack(track.slot), 'ui.subtrack-remove', { slot: track.slot });
+        label.append(name); row.append(label, audio, visibility, remove, offset, lane); list.append(row);
       }
       if (!state.tracks.length) list.append(text('p', t(msg("tracks.loadAVideoToViewTracksAnd", "载入视频后查看轨道与标记")), 'panel-empty'));
       queueLabelFit();
@@ -421,6 +424,7 @@ export function createTracksPane(shared: WorkbenchShared) {
     // Selection changes state in place; keep row, offset input and seek nodes.
     for (const row of $('subtrack-list').querySelectorAll<HTMLElement>('.subtrack-row')) {
       const track = state.tracks.find(t => t.slot === row.dataset.trackDrag)!;
+      row.querySelector<HTMLButtonElement>('.track-remove')!.disabled = state.busy;
       const audio = row.querySelector<HTMLButtonElement>('.track-audio')!;
       const enabled = state.audioSlot === track.slot, audioGlyph = enabled ? 'speaker' : 'speakerMuted';
       audio.disabled = !track.opportunisticAudio || !!track.failure;
@@ -490,6 +494,9 @@ export function createTracksPane(shared: WorkbenchShared) {
       const row = $('subtrack-list').querySelector<HTMLElement>(`[data-track-drag="${track.slot}"]`);
       if (!row) continue;
       row.querySelector('.subtrack-name')!.setAttribute('aria-label', t(msg("tracks.inspectSubtrack", "检视子轨道 {p0}"), { p0: track.slot }));
+      const remove = row.querySelector<HTMLElement>('.track-remove')!;
+      remove.setAttribute('aria-label', t(msg('shell.closeTrack', '关闭轨道 {p0}'), { p0: track.slot }));
+      remove.dataset.tooltip = t(msg('sources.takeOff', '下屏'));
       const seek = row.querySelector<HTMLElement>('.track-duration')!;
       seek.title = t(msg("tracks.trackDurationClickToSeek", "轨道 {p0} 时长 {p1}；点击定位"), { p0: track.slot, p1: formatTime(track.durationUs) });
       seek.setAttribute('aria-label', t(msg("tracks.seekTrack", "定位轨道 {p0}"), { p0: track.slot }));
