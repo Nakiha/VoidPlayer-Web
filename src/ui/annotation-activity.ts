@@ -1,4 +1,5 @@
 import type { AnnotationEvent } from '../../shared/review/annotation-events.ts';
+import { icon } from './icons.ts';
 import { formatTime } from '../../shared/review/model.ts';
 import { t, th, msg, formatDate, onLanguageChange } from '../i18n.ts';
 import { createShareUrl } from '../../shared/review/uri-binary.ts';
@@ -7,7 +8,10 @@ import { emptyUriState } from '../../shared/review/uri-state.ts';
 export function annotationActivityShell() {
   return `<section id="annotation-activity" class="settings-section annotation-activity" aria-labelledby="annotation-activity-title" hidden>
     <h4 id="annotation-activity-title" class="settings-section-title">${th(msg('activity.title', '评审活动'))}</h4>
-    <p class="settings-caption" role="status"></p><ol class="settings-card"></ol>
+    <div class="settings-card">
+      <p class="review-status" role="status"></p>
+      <ol aria-label="${th(msg('activity.recent', '片源版本的最近标注操作；不会改变当前播放'))}"></ol>
+    </div>
   </section>`;
 }
 
@@ -19,9 +23,11 @@ export function installAnnotationActivity(signal: AbortSignal) {
   function render() {
     root.hidden = scope === 'local';
     root.querySelector('h4')!.textContent = t(msg('activity.title', '评审活动')) + (events.length ? ` (${events.length})` : '');
-    root.querySelector('p')!.textContent = failed
+    const status = root.querySelector('p')!;
+    status.dataset.state = failed ? 'error' : 'empty';
+    status.textContent = failed
       ? t(msg('activity.disconnected', '活动连接中断，恢复后自动续读'))
-      : events.length ? t(msg('activity.recent', '片源版本的最近标注操作；不会改变当前播放')) : t(msg('activity.empty', '此片源版本暂无操作记录'));
+      : events.length ? '' : t(msg('activity.empty', '此片源版本暂无操作记录'));
     const list = root.querySelector('ol')!;
     const existing = new Map([...list.querySelectorAll<HTMLElement>('li')].map(row => [row.dataset.eventKey, row]));
     const rows = [...events].reverse().map(event => {
@@ -29,17 +35,24 @@ export function installAnnotationActivity(signal: AbortSignal) {
       let row = existing.get(key);
       if (!row) {
         row = document.createElement('li'); row.dataset.eventKey = key;
-        row.append(document.createElement('strong'), document.createElement('span'), document.createElement('span'), document.createElement('time'));
-        if (event.action !== 'delete') row.append(document.createElement('a'));
+        row.innerHTML = `<div class="activity-byline"><strong></strong><span class="activity-author"></span><time></time></div>
+          <p class="activity-note"></p><div class="activity-target"><span class="activity-file"></span><span class="activity-frame"></span></div>`;
+        if (event.action !== 'delete') {
+          const open = document.createElement('a');
+          open.innerHTML = icon('externalLink'); open.target = '_blank'; open.rel = 'noopener';
+          row.querySelector('.activity-target')!.append(open);
+        }
       }
       row.dataset.operationId = event.operationId;
-      const title = row.querySelector('strong')!;
-      const action = t(event.action === 'delete' ? msg('activity.deleted', '删除标注') :  event.action === 'restore' ? msg('activity.restored', '恢复标注') : msg('activity.saved', '保存标注'));
+      row.querySelector('strong')!.textContent = t(event.action === 'delete' ? msg('activity.deleted', '删除标注')
+        : event.action === 'restore' ? msg('activity.restored', '恢复标注') : msg('activity.saved', '保存标注'));
       const client = event.client.kind === 'agent' ? 'Agent' : event.client.kind === 'gui' ? 'GUI' : 'HTTP';
-      title.textContent = `${event.actor.name} · ${client} · ${action}`;
-      const target = row.querySelectorAll('span')[0]; target.textContent = `${event.target.name} · ${formatTime(event.target.frame.ptsUs)} · r${event.revision}`;
-      const note = row.querySelectorAll('span')[1]; note.textContent = event.summary;
-      const time = row.querySelector('time')!; time.dateTime = event.occurredAt; time.textContent = formatDate(event.occurredAt);
+      row.querySelector('.activity-author')!.textContent = `${event.actor.name} · ${client}`;
+      row.querySelector('.activity-note')!.textContent = event.summary;
+      row.querySelector('.activity-file')!.textContent = event.target.name;
+      row.querySelector('.activity-frame')!.textContent = `${formatTime(event.target.frame.ptsUs)} · r${event.revision}`;
+      const time = row.querySelector('time')!;
+      time.dateTime = event.occurredAt; time.textContent = formatDate(event.occurredAt);
       if (event.action !== 'delete') {
         const open = row.querySelector('a')!;
         const source = event.target.source, origin = origins.get(event.space);
@@ -47,7 +60,8 @@ export function installAnnotationActivity(signal: AbortSignal) {
           offsetUs: 0, visible: true, ...(origin && origin !== location.origin ? { origin } : {}) }],
           mark: event.id, positionUs: event.target.frame.ptsUs }, location.href) : new URL('/', location.origin);
         open.href = url.href;
-        open.target = '_blank'; open.rel = 'noopener'; open.textContent = t(msg('activity.open', '在新窗口打开标注'));
+        open.setAttribute('aria-label', t(msg('activity.open', '在新窗口打开标注')));
+        open.dataset.tooltip = open.getAttribute('aria-label')!;
       }
       return row;
     });

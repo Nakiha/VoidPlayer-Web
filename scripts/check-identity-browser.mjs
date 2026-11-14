@@ -156,7 +156,8 @@ try {
   await otherWelcome.locator('[data-guest]').click(); await settings(other);
   assert.equal(await other.locator('#identity-name').inputValue(), '访客');
   assert.equal(await other.locator('#identity-save').isDisabled(), true);
-  assert.equal(await other.locator('#identity-current').isVisible(), false);
+  assert.equal(await other.locator('#identity-current').isVisible(), true);
+  assert.equal(await other.locator('#identity-current').innerText(), '访客');
   const otherId = await other.locator('#identity-id').getAttribute('data-tooltip'); assert.notEqual(otherId, id);
   await other.locator('#identity-users').click();
   assert.equal(await other.locator('#identity-users-menu [data-value=guest]').count(), 0);
@@ -272,11 +273,12 @@ try {
   await editPage.locator('#identity-name').fill('改好的名字'); await editPage.locator('#identity-save').click();
   await editPage.waitForFunction(() => document.querySelector('#identity-current').textContent === '改好的名字');
   assert.equal(await editPage.locator('#identity-id').getAttribute('data-tooltip'), createdId);
+  assert.equal(await editPage.locator('#annotation-status').isVisible(), true);
   await editPage.locator('#settings-tab-caches').click();
   assert.equal(await editPage.locator('#saved-workspace-list, .saved-workspace-search, .saved-workspace-pages').count(), 0);
   assert.equal(await editPage.locator('#browser-cache-refresh').isVisible(), true);
-  assert.equal(await editPage.locator('#annotation-status').isVisible(), true);
-  assert.equal(await editPage.locator('#saved-workspace-share').isEnabled(), false);
+  assert.equal(await editPage.locator('#annotation-status').isVisible(), false);
+  assert.equal(await editPage.locator('#workspace-share').isEnabled(), false);
   await settled(editPage);
   await editContext.close();
   // A failed list must not label unknown names as new; failed submission remains retryable.

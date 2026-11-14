@@ -17,7 +17,8 @@ export const settingsPanes = () => ([
 ] as const).filter(([key]) => !localOnly || key !== 'identity');
 const paneTitle = (title: string, description = '') => `<div class="settings-page-title"><h3>${title}</h3>${description ? `<p>${description}</p>` : ''}</div>`;
 const annotationSettings = () => `<div class="settings-section"><h4 class="settings-section-title">${th(msg('uriState.annotations', '片源标注同步'))}</h4>
-  <p id="annotation-status" class="settings-caption" role="status"></p><div id="annotation-conflicts"></div></div>${annotationActivityShell()}`;
+  <div class="settings-card"><p id="annotation-status" class="review-status" role="status"></p>
+    <div id="annotation-conflicts"></div></div></div>${annotationActivityShell()}`;
 const preferenceHelp = (id: string, text: string) =>
   `<button type="button" class="section-title-info" data-tooltip="${text}" aria-labelledby="${id}">${icon('info')}</button><span id="${id}" hidden>${text}</span>`;
 const shortcutRows = (entries: [string, Shortcut[]][]) => entries.map(([action, keys]) => `<div class="shortcut-row"><span>${action}</span><span class="shortcut-keys">${keys.map(key => `<kbd>${shortcutLabel(key)}</kbd>`).join('<span> / </span>')}</span></div>`).join('');
@@ -81,11 +82,25 @@ export function settingsShell() {
       </section>
       <section id="settings-pane-identity" role="tabpanel" aria-labelledby="settings-tab-identity" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.user", "用户")))}
-        <div class="settings-card identity-compact">
-          <div class="identity-summary"><div class="identity-current"><span>${th(msg("settingsShell.currentUser", "当前用户"))}</span><strong id="identity-current" hidden></strong></div><p id="identity-id" class="settings-caption"></p></div>
-          <form id="identity-form"><div class="identity-combo"><input id="identity-name" maxlength="128" autocomplete="off" placeholder="${th(msg("settingsShell.enterANameOrChooseAnExisting", "输入名字或选择已有用户"))}" aria-label="${th(msg("settingsShell.name", "名字"))}" aria-describedby="identity-kind"><span id="identity-kind" role="status"></span><button id="identity-users" type="button" aria-label="${th(msg("settingsShell.chooseAUserOrRenameYourself", "选择用户或修改当前名字"))}"></button></div>
-          <button id="identity-save" type="submit" >${th(msg("settingsShell.enterAName", "输入名字"))}</button></form>
-          <p id="identity-message" class="settings-caption" role="status"></p>
+        <div class="settings-section">
+          <h4 class="settings-section-title">${th(msg('settingsShell.currentUser', '当前用户'))}</h4>
+          <div class="settings-card identity-card">
+            <div class="identity-profile">
+              <span class="identity-avatar">${icon('user')}</span>
+              <div><strong id="identity-current"></strong><p id="identity-id" class="settings-caption"></p></div>
+            </div>
+            <form id="identity-form">
+              <label for="identity-name">${th(msg('settingsShell.name', '名字'))}</label>
+              <div class="identity-combo">
+                <input id="identity-name" maxlength="128" autocomplete="off" aria-describedby="identity-kind"
+                  placeholder="${th(msg('settingsShell.enterANameOrChooseAnExisting', '输入名字或选择已有用户'))}">
+                <button id="identity-users" type="button" aria-label="${th(msg('settingsShell.chooseAUserOrRenameYourself', '选择用户或修改当前名字'))}"></button>
+              </div>
+              <button id="identity-save" type="submit">${th(msg('settingsShell.enterAName', '输入名字'))}</button>
+              <span id="identity-kind" role="status"></span>
+            </form>
+            <p id="identity-message" class="settings-caption" role="status"></p>
+          </div>
         </div>
         ${localOnly ? '' : annotationSettings()}
       </section>

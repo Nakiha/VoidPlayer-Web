@@ -275,10 +275,34 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 .settings-file-actions > button, .identity-actions > button, .log-submit-row > button { flex: none; width: max-content; white-space: nowrap; margin-top: 0; }
 
 /* Stable settings rows; current workspace and saved records form two sections. */
-.annotation-activity ol { list-style: none; margin: 0; padding: 0 16px; max-height: 300px; overflow: auto; }
-.annotation-activity li { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-.annotation-activity li span, .annotation-activity time { font-size: 12px; color: var(--text-secondary); }
-.annotation-activity a { width: fit-content; }
+/* Sync status, conflict details and review history use the same card insets as Preferences. */
+.review-status { display: flex; align-items: baseline; gap: 10px; margin: 0; padding: 14px 16px; font-size: 13px; }
+.review-status::before { content: ''; flex: none; align-self: baseline; width: 7px; height: 7px; border-radius: 50%; background: var(--text-subtle); }
+.review-status[data-state=saved]::before { background: var(--connection-ok); }
+.review-status[data-state=pending]::before { background: var(--connection-waiting); }
+.review-status[data-state=error]::before { background: var(--connection-error); }
+.review-status:empty, .activity-note:empty { display: none; }
+.annotation-activity .review-status[data-state=empty] { color: var(--text-secondary); }
+.annotation-activity .review-status[data-state=empty]::before { display: none; }
+.sync-conflict, .annotation-activity li { display: grid; gap: 6px; padding: 14px 16px; overflow-wrap: anywhere; }
+.sync-conflict:nth-child(odd), .annotation-activity li:nth-child(even) { background: var(--settings-row-fill); }
+.sync-conflict:last-child, .annotation-activity li:last-child { border-radius: 0 0 12px 12px; }
+.sync-conflict strong, .activity-byline strong { font-size: 13px; font-weight: 600; }
+.sync-conflict p, .activity-note { margin: 0; line-height: 1.5; white-space: pre-wrap; }
+.sync-conflict p { color: var(--warning-text); font-size: 12px; }
+.sync-conflict-actions, .activity-byline, .activity-target { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.sync-conflict-actions { margin-top: 4px; }
+.sync-conflict-actions button { margin: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.annotation-activity ol { list-style: none; margin: 0; padding: 0; }
+.activity-byline, .activity-target, .sync-conflict > span { color: var(--text-secondary); font-size: 12px; }
+.activity-byline strong { color: var(--text); }
+.activity-byline time { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+.activity-note { font-size: 13px; }
+.activity-target { align-items: center; }
+.activity-frame { font-variant-numeric: tabular-nums; }
+.activity-target a { display: grid; place-items: center; margin-inline-start: auto; width: 28px; height: 28px; border-radius: 6px; color: var(--accent); }
+.activity-target a:hover, .activity-target a:focus-visible { background: var(--surface-selected); }
+.activity-target a .icon { width: 16px; height: 16px; }
 #settings-pane-identity .identity-form { grid-template-columns: 88px minmax(0, 1fr); margin-top: 20px; }
 #settings-pane-identity #identity-users { flex: 1; min-width: 0; }
 #settings-pane-identity #identity-switch-panel > label { margin: 0; }
@@ -391,10 +415,17 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 }
 .settings-content .settings-detail-body { animation: none; }
 
-.identity-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); align-items: center; gap: 12px; padding: 14px 16px; }
-.identity-compact .identity-current { justify-content: flex-start; gap: 8px; padding: 0; margin: 0; border: 0; font-size: 13px; }
-.identity-compact .identity-current strong { margin: 0; font-size: 13px; }
-.identity-compact #identity-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.identity-card { display: grid; gap: 14px; padding: 16px; }
+.identity-profile { display: flex; align-items: center; gap: 12px; }
+.identity-avatar { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; color: var(--accent); background: var(--surface-selected); }
+.identity-avatar .icon { width: 22px; height: 22px; }
+.identity-profile strong { font-size: 15px; font-weight: 600; }
+.identity-profile #identity-id { margin: 2px 0 0; font-family: var(--font-mono); }
+#identity-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; align-items: center; gap: 4px 8px; }
+#identity-form label { font-size: 13px; }
+#identity-kind { grid-column: 2 / -1; }
+#identity-kind:empty { display: none; }
+#identity-message { margin: 0; }
 .identity-combo { display: flex; align-items: center; border: 0; border-radius: 8px; padding: 3px; min-width: 0; background: color-mix(in srgb, var(--settings-card-fill), var(--text) 6%); box-shadow: none; }
 .settings-content .identity-combo #identity-name { border: 0; background: transparent; flex: 1; min-width: 0; width: 0; }
 #identity-kind { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
@@ -444,17 +475,10 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 .saved-workspace-empty > button { flex: none; margin: 0; font-size: 12px; white-space: nowrap; }
 @media (max-width: 600px) { .saved-workspace-empty { flex-wrap: wrap; } .saved-workspace-empty > button { margin-left: 54px; } }
 
-.identity-summary { min-width: 0; }
-.identity-compact #identity-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.identity-compact #identity-id { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.identity-compact #identity-message { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 600px) {
-  .identity-compact { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; padding: 12px; }
-  .identity-compact .identity-current { flex-wrap: wrap; gap: 2px 6px; }
-  .identity-compact #identity-kind { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  #identity-form { grid-template-columns: minmax(0, 1fr) auto; }
+  #identity-form label, #identity-kind { grid-column: 1 / -1; }
 }
-
-.identity-compact #identity-current[hidden] { display: none; }
 
 /* Log actions share the session toolbar. */
 #settings-pane-logs .log-session-row { flex-wrap: wrap; gap: 4px; }

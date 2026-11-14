@@ -1,4 +1,5 @@
 import { installAnnotationActivity } from './annotation-activity.ts';
+import { formatTime } from '../../shared/review/model.ts';
 import { mergeAnnotationEvents } from '../../shared/review/annotation-events.ts';
 import type { AnnotationEvent } from '../../shared/review/annotation-events.ts';
 import { localOnly } from '../services/build-profile.ts';
@@ -45,9 +46,9 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       : queued.length && remote ? t(msg('sync.savedPendingSync', '已存本机 · 等待同步'))
       : remote ? t(msg('sync.synced', '已同步')) : t(msg('sync.savedLocal', '已存本机')));
     const output = document.getElementById?.('annotation-status');
-    if (output) output.textContent = message;
-    window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { message,
-      state: failure || conflicts.length ? 'error' : saving || pending.size || (remote && queued.length) ? 'pending' : 'saved' } }));
+    const state = failure || conflicts.length ? 'error' : saving || pending.size || (remote && queued.length) ? 'pending' : 'saved';
+    if (output) { output.dataset.state = state; output.textContent = message; }
+    window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { message, state } }));
     const list = document.getElementById?.('annotation-conflicts');
     if (!list) return;
     const signature = JSON.stringify(conflicts.map(draft => [draft.key, draft.generation, draft.conflict]));
@@ -55,16 +56,28 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     renderedConflicts = signature;
     list.replaceChildren();
     for (const draft of conflicts) {
-      const row = document.createElement('div'), label = document.createElement('p');
-      label.textContent = `${draft.desired?.mark.text || draft.id}：${draft.conflict}`;
+      const row = document.createElement('div'), label = document.createElement('strong'), reason = document.createElement('p');
+      row.className = 'sync-conflict';
+      label.textContent = draft.desired?.mark.text || draft.id;
+      row.append(label);
+      if (draft.desired) {
+        const { media, mark } = draft.desired;
+        const target = document.createElement('span');
+        target.textContent = [media.find(item => item.id === mark.mediaId)?.name, formatTime(mark.frame.ptsUs)].filter(Boolean).join(' · ');
+        row.append(target);
+      }
+      reason.textContent = draft.conflict ?? '';
+      const actions = document.createElement('div');
+      actions.className = 'sync-conflict-actions';
       const discard = document.createElement('button');
       discard.textContent = t(msg('sync.useServer', '采用服务器版本'));
       discard.onclick = () => void resolve(draft, false);
-      row.append(label, discard);
+      actions.append(discard);
       if (draft.desired) {
         const copy = document.createElement('button'); copy.textContent = t(msg('sync.keepCopy', '保留为新标注'));
-        copy.onclick = () => void resolve(draft, true); row.append(copy);
+        copy.onclick = () => void resolve(draft, true); actions.append(copy);
       }
+      row.append(reason, actions);
       list.append(row);
     }
   }
