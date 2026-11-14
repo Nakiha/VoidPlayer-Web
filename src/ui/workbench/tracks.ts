@@ -61,14 +61,16 @@ export function createTracksPane(shared: WorkbenchShared) {
       const textW = range.getBoundingClientRect().width;
       if (!(textW > 0)) { delete seek.dataset.label; continue; }
       const cs = getComputedStyle(seek);
-      const pad = (Number.parseFloat(cs.paddingLeft) || 0) + (Number.parseFloat(cs.paddingRight) || 0);
+      const paddingLeft = Number.parseFloat(cs.paddingLeft) || 0, paddingRight = Number.parseFloat(cs.paddingRight) || 0;
+      const pad = paddingLeft + paddingRight;
       if (textW + pad <= seek.clientWidth + 1) { delete seek.dataset.label; continue; }
       if (lane.clientWidth < textW + pad) { seek.dataset.label = 'truncate'; continue; }
       const barLeft = seek.offsetLeft;
       const barRight = barLeft + seek.offsetWidth;
-      // Text starts/ends ~6px inside the bar edges (border + padding).
-      if (barLeft + 6 + textW <= lane.clientWidth) seek.dataset.label = 'outside-right';
-      else if (barRight - 6 - textW >= 0) seek.dataset.label = 'outside-left';
+      const insetLeft = paddingLeft + (Number.parseFloat(cs.borderLeftWidth) || 0);
+      const insetRight = paddingRight + (Number.parseFloat(cs.borderRightWidth) || 0);
+      if (barLeft + insetLeft + textW <= lane.clientWidth) seek.dataset.label = 'outside-right';
+      else if (barRight - insetRight - textW >= 0) seek.dataset.label = 'outside-left';
       else seek.dataset.label = 'truncate';
     }
   }

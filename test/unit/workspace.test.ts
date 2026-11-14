@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 import { WorkspaceState, marksForTrack, trackTiming } from '../../src/ui/workspace-state.ts';
 import type { ReviewTrack } from '../../src/ui/workspace-state.ts';
 import { SourceCatalog, sourceInUse } from '../../src/ui/source-catalog.ts';
+
+test('removing a local source releases its live file and persisted recent entry', () => {
+  const catalog = new SourceCatalog(), first = new File(['one'], 'one.mp4'), second = new File(['two'], 'two.mp4');
+  catalog.addFile(first); catalog.addFile(second);
+  const key = catalog.available().find(item => item.file === first)!.key;
+  catalog.removeLocal(key);
+  assert.deepEqual(catalog.available().map(item => item.file), [second]);
+  assert.equal(catalog.recent().some(item => item.key === key), false);
+  assert.equal(new SourceCatalog(catalog.serializable()).recent().some(item => item.key === key), false);
+});
 import type { Mark } from '../../shared/review/model.ts';
 
 test('one-time local files stay usable in memory without appearing in recent or persisted history', () => {

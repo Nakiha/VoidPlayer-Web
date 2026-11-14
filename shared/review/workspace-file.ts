@@ -8,8 +8,8 @@ import type { FrameInfo, MediaInfo } from '../media/types.ts';
 import type { Mark, Slot } from './model.ts';
 import { BITRATE_WINDOW_OPTIONS_US } from '../analysis/metadata/statistics.ts';
 import { ANALYSIS_DIAGRAMS, type AnalysisDiagram } from '../analysis/metadata/types.ts';
-import { Viewport } from '../presentation/viewport.ts';
-import type { ViewportSnapshot } from '../presentation/viewport.ts';
+import { Viewport, parsePanBasis } from '../presentation/viewport.ts';
+import type { ViewportSnapshot, PanBasis } from '../presentation/viewport.ts';
 
 /** 码流分析面板状态：可视区间（null 为完整范围）+ 显示偏好 + 对比轨道。 */
 export type AnalysisViewState = {
@@ -31,6 +31,7 @@ export type WorkspaceLayout = {
   inspectorTab?: 'info' | 'analysis';
   selected: Slot; dockHeight: number; marksExpanded: boolean;
   filenameWidth?: number; marksWidth?: number;
+  localSourcesHeight?: number;
   sources?: { tab: 'available' | 'recent'; query: string; root: string; directory: string; search: string; all: boolean };
   analysisView?: AnalysisViewState;
 };
@@ -41,7 +42,7 @@ export type WorkspaceFile = {
   schema: 'voidplayer-workspace'; version: 1 | 2 | 3; name?: string; generatedAt: string; serverUrl: string;
   comparison?: ComparisonConditions;
   positionUs: number; tracks: { slot: Slot; mediaId: string; offsetUs: number; visible?: boolean }[];
-  media: MediaInfo[]; marks: Mark[]; viewport: ViewportSnapshot; layout?: WorkspaceLayout;
+  media: MediaInfo[]; marks: Mark[]; viewport: ViewportSnapshot; panBasis?: PanBasis; layout?: WorkspaceLayout;
   thumbnails?: { id: string; url: string; width: number; height: number }[];
 };
 const MAX_BYTES = 32 * 1024 * 1024;
@@ -110,6 +111,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   const markIds = new Set(marks.map(m => m.id));
   if (markIds.size !== marks.length || markIds.has('')) throw new Error('工作区标注 ID 重复或为空。');
   const viewport = new Viewport(); viewport.apply(object(d.viewport));
+  const panBasis = parsePanBasis(d.panBasis);
   let layout: WorkspaceLayout | undefined;
   if (d.layout) {
     const l = object(d.layout), p = object(l.panels);
@@ -118,7 +120,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
       if (!['info', 'analysis'].includes(l.inspectorTab)) throw new Error('Invalid inspector tab');
       layout.inspectorTab = l.inspectorTab;
     }
-    for (const key of ['filenameWidth', 'marksWidth'] as const) if (l[key] !== undefined) layout[key] = timeUs(l[key]);
+    for (const key of ['filenameWidth', 'marksWidth', 'localSourcesHeight'] as const) if (l[key] !== undefined) layout[key] = timeUs(l[key]);
     if (l.sources !== undefined) {
       const s = object(l.sources);
       if (s.tab !== 'available' && s.tab !== 'recent') throw new Error('工作区媒体库标签无效。');
@@ -167,7 +169,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
     if (!markIds.has(id) || !/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(url)) throw new Error('工作区缩略图无效。');
     return { id, url, width: timeUs(t.width), height: timeUs(t.height) };
   });
-  return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, ...(comparison ? { comparison } : {}), viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };
+  return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, ...(comparison ? { comparison } : {}), viewport: viewport.snapshot(), ...(panBasis ? { panBasis } : {}), ...(layout ? { layout } : {}), thumbnails };
 }
 export class UnrecognizedWorkspaceFile extends Error {}
 

@@ -1061,9 +1061,11 @@ export interface Sources {
   "sources.openFolder": "打开目录：{name}";
   "sources.openName": "打开：{name}";
   "sources.putOn": "上屏";
+  "sources.removeFile": "移除文件";
   "sources.reselectName": "重新选择 {name}";
   "sources.reselectNeeded": " · 需重新选择";
   "sources.reselectRowName": "重新选择：{name}";
+  "sources.resizeLocalFiles": "调整本地文件列表高度";
   "sources.showingFirstFrame": "正在显示首帧";
   "sources.startMetaLibrary": "媒体库";
   "sources.storageAvailable": "{available} 可用";
@@ -2268,9 +2270,11 @@ export interface MessageParameters {
   "sources.openFolder": { "name": string | number };
   "sources.openName": { "name": string | number };
   "sources.putOn": {  };
+  "sources.removeFile": {  };
   "sources.reselectName": { "name": string | number };
   "sources.reselectNeeded": {  };
   "sources.reselectRowName": { "name": string | number };
+  "sources.resizeLocalFiles": {  };
   "sources.showingFirstFrame": {  };
   "sources.startMetaLibrary": {  };
   "sources.storageAvailable": { "available": string | number };

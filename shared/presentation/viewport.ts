@@ -48,6 +48,14 @@ export type ViewportSnapshot = {
   pixelSize: PixelSizeMode;
   channel: ChannelMode;
 };
+/** Optional URI metadata: fitted primary image size in CSS pixels when pan was captured. */
+export type PanBasis = { width: number; height: number };
+export function parsePanBasis(value: unknown): PanBasis | undefined {
+  if (value === undefined) return undefined;
+  const basis = value as PanBasis;
+  if (!basis || ![basis.width, basis.height].every(size => Number.isFinite(size) && size > 0)) throw new Error('平移参考尺寸无效。');
+  return { width: basis.width, height: basis.height };
+}
 
 export class Viewport {
   mode: LayoutMode = 'side-by-side';

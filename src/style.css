@@ -214,12 +214,8 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .subtrack-name[aria-pressed=true] { background: transparent; }
 .track-identity:hover:not(:disabled) { background: var(--surface-hover); }
 .track-lane { height: var(--control-height); position: relative; margin-right: var(--timeline-column-gap); min-width: 0; cursor: pointer; }
-/* 车道与标尺必须共享同一时间几何：标尺刻度按自身宽度取百分比，车道标记同样按车道宽度
-   取百分比，两者宽度差多少，刻度就偏多少。8111f7f 曾把车道的右间距改成 --tool-inset
-   （2px），使车道比标尺宽 6px，同时与 track-column-resize.ts 的可用宽度计算
-   （... - 2 * --tool-inset - --timeline-column-gap）和 themes/README.md 记录的
-   「时间轴列间隔」不符。这里不再覆写，让车道沿用 .track-lane 的 --timeline-column-gap。 */
-.track-duration { position: absolute; left: 0; top: var(--tool-inset); min-height: calc(var(--control-height) - 2 * var(--tool-inset)); height: calc(var(--control-height) - 2 * var(--tool-inset)); padding: 0 var(--space-2); border-radius: var(--radius-small); border: var(--control-border-width) solid var(--border); background: var(--track-fill); font: var(--text-xs)/1 var(--font-mono); color: var(--text-secondary); justify-content: flex-end; white-space: nowrap; }
+/* 车道与标尺共用列末留白，保持百分比刻度与定位一致；末端文字另共用内缩。 */
+.track-duration { position: absolute; left: 0; top: var(--tool-inset); min-height: calc(var(--control-height) - 2 * var(--tool-inset)); height: calc(var(--control-height) - 2 * var(--tool-inset)); padding: 0 var(--timeline-label-inset); border-radius: var(--radius-small); border: var(--control-border-width) solid var(--border); background: var(--track-fill); font: var(--text-xs)/1 var(--font-mono); color: var(--text-secondary); justify-content: flex-end; white-space: nowrap; }
 .track-duration[data-label=outside-right] { justify-content: flex-start; }
 .track-duration[data-label=outside-left] { justify-content: flex-end; }
 .track-duration[data-label=truncate] { justify-content: flex-start; overflow: hidden; text-overflow: ellipsis; }
@@ -321,6 +317,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 [data-track-drag] { touch-action: none; }
 .sorting-tracks, .sorting-tracks * { cursor: grabbing !important; user-select: none; }
 .panning-viewport, .panning-viewport * { cursor: grabbing !important; }
+.viewport-pan-surface { position: fixed; inset: 0; z-index: 10000; cursor: grabbing; touch-action: none; user-select: none; -webkit-user-select: none; }
 .track-drag-source { opacity: .35; }
 .track-drag-preview { position: fixed; top: 0; left: 0; z-index: 1000; pointer-events: none; display: flex; align-items: center; gap: var(--content-gap); width: min(var(--drag-preview-width), calc(100vw - 24px)); height: var(--row-height); padding: var(--tool-inset) var(--panel-padding-inline); border-radius: var(--radius-control); opacity: var(--drag-preview-opacity); background: var(--drag-preview-fill); box-shadow: var(--popover-shadow); color: var(--text); will-change: transform; }
 .track-drop-target { position: relative; background: var(--drag-target-fill); }
@@ -438,7 +435,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .subtrack-ruler { container-type: inline-size; position: relative; height: 100%; margin-right: var(--timeline-column-gap); font: var(--text-xs)/var(--panel-heading-height) var(--font-mono); }
 .subtrack-ruler span { position: absolute; transform: translateX(-50%); }
 .subtrack-ruler span:first-child { transform: none; }
-.subtrack-ruler span:last-child { transform: translateX(-100%); }
+.subtrack-ruler span:last-child { transform: translateX(-100%); margin-left: calc(-1 * (var(--timeline-label-inset) + var(--control-border-width))); }
 @media(max-width: 680px) {
   .subtrack-scroll { --track-label-width: 96px; }
   .subtrack-ruler span:not(:first-child):not(:last-child) { display: none; }
@@ -466,21 +463,23 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .marks-collapsed .marks-empty-hint { display: none; }
 .subtracks-panel:not(.marks-collapsed) .selected-marks .marks-empty { align-self: stretch; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin: 2px 0; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius-small); font-size: var(--text-sm); text-align: center; }
 .subtracks-panel:not(.marks-collapsed) .selected-marks .marks-empty-hint { font-size: var(--text-xs); }
-.annotation-row { position: relative; flex: 0 0 208px; min-width: 0; border: 0; border-radius: var(--radius-small); background: transparent; overflow: hidden; }
+.annotation-row { position: relative; flex: 0 0 clamp(208px, 22vw, 288px); min-width: 0; container-type: inline-size; border: 0; border-radius: var(--radius-small); background: transparent; overflow: hidden; }
 .annotation-row:hover, .annotation-row.mark-linked-hover { background: color-mix(in srgb, var(--mark-color) 7%, transparent); }
 .annotation-row .mark-entry { position: relative; display: block; width: 100%; height: 100%; text-align: left; padding: 0 4px; border-radius: inherit; background: transparent; }
 .annotation-row .mark-entry:hover:not(:disabled) { background: transparent; }
 .mark-content { display: flex; flex-direction: column; gap: 4px; min-width: 0; width: 100%; height: 100%; }
-.mark-meta { display: flex; gap: 6px; align-items: center; min-height: 24px; }
-.mark-meta > .annotation-card-actions { margin-left: auto; }
+.mark-meta { display: grid; grid-template-columns: 16px max-content max-content minmax(0, 1fr); grid-template-rows: var(--button-size); gap: 0 4px; align-items: center; padding-right: calc(var(--button-size) + 4px); }
 .mark-meta > .mark-symbol { width: 16px; height: 16px; flex: 0 0 16px; }
 .mark-content time { font: var(--text-xs)/1.5 var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
 .mark-frame-number { font: var(--text-xs)/1.5 var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
 .mark-thumbnail { display: flex; align-items: center; justify-content: center; min-height: 0; flex: 1; border-radius: 4px; overflow: hidden; background: var(--surface-table); color: var(--text-secondary); font-size: var(--text-xs); }
 .mark-thumbnail img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
-.mark-footer { display: flex; gap: 8px; align-items: center; min-width: 0; min-height: 18px; }
-.mark-note { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); }
-.mark-author { color: var(--text-secondary); font-size: var(--text-xs); max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; }
+.mark-note { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); }
+.mark-author { color: var(--text-secondary); font-size: var(--text-xs); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+@container (max-width: 250px) {
+  .mark-meta { grid-template-columns: 16px max-content minmax(0, 1fr); grid-template-rows: var(--button-size) auto; }
+  .mark-author { grid-column: 1 / -1; text-align: left; }
+}
 .annotation-card-actions { display: flex; flex: none; }
 .annotation-card-actions button.icon-button { width: var(--button-size); min-height: var(--button-size); height: var(--button-size); padding: 0; border: 0; background: transparent; color: var(--text-secondary); }
 .annotation-card-actions button:hover:not(:disabled) { color: var(--text); background: color-mix(in srgb, var(--mark-color) 10%, transparent); }
@@ -491,12 +490,11 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .marks-collapsed .annotation-row { flex: 0 0 var(--button-size); height: var(--button-size); }
 .marks-collapsed .annotation-row .mark-entry { display: flex; align-items: center; justify-content: center; padding: 0; }
 .marks-collapsed .mark-entry .mark-content, .marks-collapsed .mark-meta { display: contents; }
-.marks-collapsed .mark-meta time, .marks-collapsed .mark-frame-number, .marks-collapsed .mark-thumbnail, .marks-collapsed .mark-footer, .marks-collapsed .annotation-card-actions { display: none; }
+.marks-collapsed .mark-meta time, .marks-collapsed .mark-frame-number, .marks-collapsed .mark-thumbnail, .marks-collapsed .mark-note, .marks-collapsed .mark-author, .marks-collapsed .annotation-card-actions { display: none; }
 .annotation-preview { position: fixed; z-index: 40; width: min(var(--annotation-preview-width), calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--viewport-chrome-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); color: var(--text); box-shadow: var(--annotation-toolbar-shadow); text-shadow: none; }
 .annotation-preview .annotation-row { flex: none; width: 100%; }
 .annotation-preview .annotation-row:hover, .annotation-preview .annotation-row.mark-linked-hover { background: transparent; }
 .annotation-preview .mark-thumbnail { flex: none; height: 150px; }
-.annotation-preview .mark-footer { align-items: flex-start; }
 .annotation-preview .mark-note { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 72px; overflow-y: auto; }
 .frame-presentation { z-index: 1; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .image-wrap canvas.frame-source { visibility: hidden; }
@@ -789,6 +787,11 @@ button[aria-haspopup=menu], .choice-menu button { -webkit-user-select: none; use
 /* Bottom block floats over the list, like the transport floats over canvas:
    one frosted foot for local files + load status; the list reserves its height. */
 .source-foot .local-sources { flex: 1 1 auto; min-height: 0; max-height: none; border-top: 0; background: transparent; }
+.source-foot .local-sources { display: flex; flex-direction: column; flex: 0 1 auto; overflow: hidden; }
+.source-foot .local-sources .source-section { flex: none; }
+#local-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.local-sources-splitter { position: relative; flex: 0 0 1px; height: 1px; z-index: 4; }
+.local-sources-resizing, .local-sources-resizing * { cursor: row-resize !important; user-select: none; -webkit-user-select: none; }
 .source-foot .local-sources .source-section { background: transparent; }
 /* Divider between the two foot sections, inset to the content padding. */
 .source-foot .source-activity { position: relative; flex: 0 0 auto; margin: 0 var(--panel-padding-inline); padding: var(--panel-padding-block) 0; border-top: 0; font-size: var(--text-xs); }
@@ -898,5 +901,5 @@ button[aria-haspopup=menu], .choice-menu button { -webkit-user-select: none; use
 .analysis-picture-overlay { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
 
 #toggle-annotations[aria-expanded=true] { color:var(--accent); background:var(--annotation-toolbar-selected); }
-.annotation-row > .annotation-card-actions { flex-wrap:wrap; justify-content:flex-end; gap:2px; }
+.annotation-row > .annotation-card-actions { position:absolute; top:0; right:4px; justify-content:flex-end; gap:2px; }
 .annotation-card-actions > button:not(.icon-button) { font-size:11px; min-height:24px; padding:2px 5px; }

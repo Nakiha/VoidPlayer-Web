@@ -57,6 +57,13 @@ await withBrowserFixture({ caseName: 'mark-cards', engine: name, pageOptions: {v
   assert.equal(await card.evaluate(e=>getComputedStyle(e).borderTopWidth),'0px');
   assert.equal(await card.evaluate(e=>getComputedStyle(e).boxShadow),'none');
   assert.equal(await card.locator('.mark-content img').count(),1);
+  const header = await card.evaluate(row => {
+   const box = selector => {const r=row.querySelector(selector).getBoundingClientRect();return {top:r.top,bottom:r.bottom,center:(r.top+r.bottom)/2};};
+   return {time:box('time'),author:box('.mark-author'),remove:box('.annotation-remove'),image:box('.mark-thumbnail')};
+  });
+  assert.ok(Math.abs(header.author.center-header.time.center)<1,'wide cards put the author beside the time');
+  assert.ok(Math.abs(header.remove.center-header.time.center)<1,'delete stays on the first metadata row');
+  assert.ok(header.image.top>=Math.max(header.author.bottom,header.remove.bottom),'only the preview occupies the lower card');
   const geometry=await card.evaluate(e=>{const card=e.getBoundingClientRect();return [...e.querySelectorAll('button,img,time')].filter(n=>n.getBoundingClientRect().width).map(n=>{const r=n.getBoundingClientRect();return {tag:n.tagName,left:r.left,right:r.right,cardLeft:card.left,cardRight:card.right};});});assert.ok(geometry.every(r=>r.left>=r.cardLeft && r.right<=r.cardRight),JSON.stringify(geometry));
  }
  await page.locator('#toggle-marks').click();await page.locator('#toggle-marks').click();assert.deepEqual(await identities(),before);
@@ -122,6 +129,13 @@ await withBrowserFixture({ caseName: 'mark-cards', engine: name, pageOptions: {v
  await scroll.evaluate(e=>e.scrollLeft=e.scrollWidth);
  assert.ok(await scroll.evaluate(e=>e.scrollLeft>0));
  const right=await page.locator('.annotation-row').last().boundingBox();assert.ok(right.x+right.width<=480);
+ const narrowHeader=await page.locator('.annotation-row').last().evaluate(row=>{
+  const box=selector=>{const r=row.querySelector(selector).getBoundingClientRect();return {top:r.top,bottom:r.bottom,center:(r.top+r.bottom)/2};};
+  return {time:box('time'),author:box('.mark-author'),remove:box('.annotation-remove'),note:box('.mark-note'),image:box('.mark-thumbnail')};
+ });
+ assert.ok(narrowHeader.author.top>=narrowHeader.time.bottom,'narrow cards wrap the author onto a second row');
+ assert.ok(Math.abs(narrowHeader.remove.center-narrowHeader.time.center)<1,'narrow cards keep delete on the first row');
+ assert.ok(narrowHeader.note.bottom<=narrowHeader.image.top,'description stays above the preview');
  assert.ok(await page.locator('#subtracks-panel,.annotation-strip').evaluateAll(nodes=>nodes.every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth;})),'dock and strip stay inside the narrow viewport');
  if(process.env.MARK_CARDS_SCREENSHOT)await page.screenshot({path:artifact(`voidplayer-mark-cards-narrow-${name}.png`)});
  await call('remove_review_track',{slot:'B'});

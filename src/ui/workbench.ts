@@ -201,11 +201,13 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     render, renderProgress, refreshLibrary: () => sources.refreshLibrary(), selected: () => view.selected,
     rememberFile(file: File) { sources.rememberFile(file); },
     openLibraryFile: sources.openLibraryFile,
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState(),
+      ...(sources.localSourcesHeight() !== undefined ? { localSourcesHeight: sources.localSourcesHeight() } : {}) }),
     async restore(layout: import('../../shared/review/workspace-file.ts').WorkspaceLayout) {
       view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected;
       annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
+      sources.restoreLocalSourcesHeight(layout.localSourcesHeight);
       if (layout.analysisView) analysis.restoreAnalysisState(layout.analysisView);
       const sourcesState = layout.sources ?? { tab: 'available', query: '', root: '', directory: '', search: '', all: false };
       const browsing = sources.beginRestore(sourcesState);

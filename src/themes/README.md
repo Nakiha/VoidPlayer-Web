@@ -30,7 +30,8 @@
 | 输入框内边距 | `--field-padding-inline` | 6px |
 | 内容留白 / 内容间隔 / 分组间隔 | `--content-inset`、`--content-gap`、`--section-gap` | 12px / 6px / 8px |
 | 标注列表间隔 | `--list-gap` | 4px |
-| 时间轴列间隔 | `--timeline-column-gap` | 8px，窄屏 4px |
+| 时间轴列末留白 | `--timeline-column-gap` | 2px，车道与标尺及列宽上限计算共用 |
+| 时长条与标尺末端文字内缩 | `--timeline-label-inset` | 2px；末端标尺文字同时计入时长条的实际边框宽度 |
 | 子轨道音频与可见性按钮左侧留白 | `--control-gap` | 各 4px，按钮列宽包含留白，列宽上限计算同步扣除 |
 | 子轨道行/表头横向内边距 | `--track-row-padding-inline` | 4px，列宽上限计算与 CSS 共用此值 |
 | 浮层内边距 / tooltip 纵向内边距 | `--popover-padding`、`--tooltip-padding-block` | 8px / 6px |

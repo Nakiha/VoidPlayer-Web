@@ -1,6 +1,7 @@
 import { brotliCompressSync, brotliDecompressSync, deflateRawSync, inflateRawSync, constants } from 'node:zlib';
 import { packUriState, unpackUriState, parseUriState, URI_MAX_BYTES } from '../shared/review/uri-state.ts';
 import type { UriState } from '../shared/review/uri-state.ts';
+import { packBinaryUriState, unpackBinaryUriState } from '../shared/review/uri-binary.ts';
 
 // Frozen ABI 1 dictionary: only object keys are coded; user text and external IDs remain literal values.
 const fields = ['version', 'presentation', 'outputColorSpace', 'colorMode', 'referenceDecode', 'decoder', 'depth', 'colorOutput',
@@ -35,28 +36,33 @@ function keys(value: unknown, decode = false): unknown {
 export function encodeUriState(value: unknown) {
   const state = parseUriState(value);
   if (state.tracks.some(track => track.local)) throw new Error('本地文件不能生成远端分享链接。');
-  const packed = packUriState(state);
-  for (const track of packed[0] as string[][]) for (const field of [1, 2]) track[field] = Buffer.from(track[field], 'hex').toString('base64url');
-  const raw = Buffer.from(JSON.stringify(keys(packed)));
-  if (raw.length > URI_MAX_BYTES) throw new Error('URI 状态过大。');
-  const choices = [
+  const payloads = [{ version: 2, raw: Buffer.from(packBinaryUriState(state)) }];
+  if (!state.panBasis) {
+    const packed = packUriState(state);
+    for (const track of packed[0] as string[][]) for (const field of [1, 2]) track[field] = Buffer.from(track[field], 'hex').toString('base64url');
+    const raw = Buffer.from(JSON.stringify(keys(packed)));
+    if (raw.length > URI_MAX_BYTES) throw new Error('URI 状态过大。');
+    payloads.push({ version: 1, raw });
+  }
+  const choices = payloads.flatMap(({ version, raw }) => [
     { codec: 'n', data: raw },
     { codec: 'd', data: deflateRawSync(raw, { level: 9 }) },
     { codec: 'b', data: brotliCompressSync(raw, { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } }) },
-  ].map(({ codec, data }) => `1.${codec}.${data.toString('base64url')}`);
+  ].map(({ codec, data }) => `${version}.${codec}.${data.toString('base64url')}`));
   const token = choices.sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
   if (token.length > 16384) throw new Error('分享链接过大。');
   return token;
 }
 export function decodeUriState(token: string): UriState {
   if (typeof token !== 'string' || token.length > 16384) throw new Error('分享链接过大。');
-  const match = /^1\.([ndb])\.([A-Za-z0-9_-]+)$/.exec(token);
+  const match = /^([12])\.([ndb])\.([A-Za-z0-9_-]+)$/.exec(token);
   if (!match) throw new Error('分享链接的 ABI 或编码不受支持。');
-  const data = Buffer.from(match[2], 'base64url');
-  if (data.toString('base64url') !== match[2]) throw new Error('分享链接编码无效。');
-  const raw = match[1] === 'b' ? brotliDecompressSync(data, { maxOutputLength: URI_MAX_BYTES })
-    : match[1] === 'd' ? inflateRawSync(data, { maxOutputLength: URI_MAX_BYTES }) : data;
+  const data = Buffer.from(match[3], 'base64url');
+  if (data.toString('base64url') !== match[3]) throw new Error('分享链接编码无效。');
+  const raw = match[2] === 'b' ? brotliDecompressSync(data, { maxOutputLength: URI_MAX_BYTES })
+    : match[2] === 'd' ? inflateRawSync(data, { maxOutputLength: URI_MAX_BYTES }) : data;
   if (raw.length > URI_MAX_BYTES) throw new Error('URI 状态过大。');
+  if (match[1] === '2') return unpackBinaryUriState(raw);
   const packed = keys(JSON.parse(raw.toString('utf8')), true) as unknown[][];
   if (!Array.isArray(packed) || !Array.isArray(packed[0])) throw new Error('URI 内容无效。');
   for (const track of packed[0]) {

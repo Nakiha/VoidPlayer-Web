@@ -1,7 +1,7 @@
-import { Viewport } from '../presentation/viewport.ts';
+import { Viewport, parsePanBasis } from '../presentation/viewport.ts';
 import { parseWorkspace } from './workspace-file.ts';
 import type { WorkspaceFile, WorkspaceLayout, ComparisonConditions } from './workspace-file.ts';
-import type { ViewportSnapshot } from '../presentation/viewport.ts';
+import type { ViewportSnapshot, PanBasis } from '../presentation/viewport.ts';
 import { SLOTS, slotValue, timeUs } from './model.ts';
 import type { Slot } from './model.ts';
 
@@ -10,7 +10,7 @@ export const URI_ABI = 1;
 export const URI_MAX_BYTES = 64 * 1024;
 export type UriTrack = { slot: Slot; id: string; version: string; origin?: string; local?: { name: string; size: number; lastModified: number }; offsetUs: number; visible: boolean };
 export type UriState = { abi: 1; tracks: UriTrack[]; positionUs: number; viewport: ViewportSnapshot;
-  comparison?: ComparisonConditions; layout?: WorkspaceLayout; mark?: string };
+  comparison?: ComparisonConditions; layout?: WorkspaceLayout; mark?: string; panBasis?: PanBasis };
 const hex = /^[0-9a-f]{24}$/;
 const defaults: ViewportSnapshot = { mode: 'side-by-side', arrangement: 'horizontal', splitPos: .5, zoom: 1,
   offsetX: 0, offsetY: 0, pixelSize: 'uniform', channel: 'rgb' };
@@ -48,6 +48,7 @@ export function parseUriState(value: unknown): UriState {
     ![raw.splitPos, raw.zoom, raw.offsetX, raw.offsetY].every(Number.isFinite) ||
     raw.splitPos < 0 || raw.splitPos > 1 || raw.zoom < 1 || raw.zoom > 500) throw new Error('URI 视口无效。');
   const viewport = new Viewport(); viewport.apply(raw);
+  const panBasis = parsePanBasis(input.panBasis);
   // Reuse host-independent validators for the actual comparison and panel contracts.
   const validated = parseWorkspace({ schema: 'voidplayer-workspace', version: 1, generatedAt: 'URI ABI 1',
     serverUrl: 'http://localhost/', media: [], marks: [], tracks: [], positionUs: 0, viewport: viewport.snapshot(),
@@ -55,6 +56,7 @@ export function parseUriState(value: unknown): UriState {
   if (input.mark !== undefined && (typeof input.mark !== 'string' || !/^[a-zA-Z0-9_-]{1,200}$/.test(input.mark)))
     throw new Error('URI 标注编号无效。');
   return { abi: 1, tracks, positionUs: timeUs(input.positionUs), viewport: viewport.snapshot(),
+    ...(panBasis ? { panBasis } : {}),
     ...(validated.comparison ? { comparison: validated.comparison } : {}), ...(validated.layout ? { layout: validated.layout } : {}),
     ...(input.mark ? { mark: input.mark } : {}) };
 }
@@ -68,11 +70,12 @@ export function uriStateFromDocument(document: WorkspaceFile, base: string): Uri
       offsetUs: track.offsetUs, visible: track.visible !== false };
   });
   return parseUriState({ abi: 1, tracks, positionUs: document.positionUs, viewport: document.viewport,
-    comparison: document.comparison, layout: document.layout });
+    comparison: document.comparison, layout: document.layout, panBasis: document.panBasis });
 }
-// Compact ABI tuples remove all top-level and per-track property names.
+// Frozen envelope 1 tuples cannot represent the optional pan basis; use envelope 2 for it.
 export function packUriState(value: UriState): unknown[] {
   const state = parseUriState(value);
+  if (state.panBasis) throw new Error('平移参考尺寸需要二进制分享编码。');
   const tracks = state.tracks.map(t => {
     const row: unknown[] = [SLOTS.indexOf(t.slot), t.id, t.version, t.offsetUs, t.visible ? 0 : 1, t.origin || '', t.local ?? null];
     while (row.length > 3 && !row.at(-1)) row.pop();
@@ -142,6 +145,11 @@ export function applyUriParameters(url: URL, base: UriState = emptyUriState()): 
     (state.viewport as Record<string, unknown>)[field] = ['split', 'zoom', 'x', 'y'].includes(key) ? Number(params.get(key)) : params.get(key);
   }
   for (const key of ['comparison', 'layout'] as const) if (params.has(key)) state[key] = JSON.parse(params.get(key)!);
+  if (params.has('basis')) {
+    const parts = params.get('basis')!.split(',');
+    if (parts.length !== 2 || parts.some(part => !part.trim())) throw new Error('平移参考尺寸无效。');
+    state.panBasis = { width: Number(parts[0]), height: Number(parts[1]) };
+  }
   if (params.has('mark')) state.mark = params.get('mark')!;
   return parseUriState(state);
 }
@@ -157,6 +165,7 @@ export function writeUriState(value: UriState, base: string): URL {
   for (const [key, field] of Object.entries(viewKeys)) if (state.viewport[field] !== defaults[field]) params.set(key, String(state.viewport[field]));
   if (state.comparison && canonical(state.comparison) !== canonical(comparisonDefaults)) params.set('comparison', JSON.stringify(state.comparison));
   if (state.layout) params.set('layout', JSON.stringify(state.layout));
+  if (state.panBasis) params.set('basis', `${state.panBasis.width},${state.panBasis.height}`);
   if (state.mark) params.set('mark', state.mark);
   return url;
 }

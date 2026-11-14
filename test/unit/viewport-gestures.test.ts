@@ -9,6 +9,8 @@ class ElementStub extends EventTarget {
   hidden = false;
   onclick: ((event: MouseEvent) => void) | null = null;
   setPointerCapture() {}
+  hasPointerCapture() { return false; }
+  releasePointerCapture() {}
   setAttribute() {}
   closest() { return null; }
 }
@@ -41,6 +43,7 @@ test('right-drag starts immediately, batches later moves and suppresses page men
   assert.equal(menuBeforePan.defaultPrevented, false, 'unrelated page context menus remain available');
 
   pointer('pointerdown', 10, 20);
+  assert.equal(elements.get('viewport-pan-surface')!.hidden, false);
   pointer('pointermove', 10, 20);
   assert.equal(updates(), 0, 'zero movement does not start the drag');
   assert.equal(frames.size, 0);
@@ -58,6 +61,7 @@ test('right-drag starts immediately, batches later moves and suppresses page men
   pointer('pointermove', 43, 31);
   pointer('pointermove', 47, 34);
   pointer('pointerup', 47, 34);
+  assert.equal(elements.get('viewport-pan-surface')!.hidden, true);
   assert.equal(updates(), 3, 'release flushes the pending movement once');
   assert.deepEqual([viewport.offsetX, viewport.offsetY], [37, 14]);
 
@@ -82,10 +86,12 @@ test('right-drag starts immediately, batches later moves and suppresses page men
 function gestureFixture(t: test.TestContext, annotationActive = () => false, cancelAnnotationGesture = () => {}) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const oldDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const oldRaf = globalThis.requestAnimationFrame;
   const oldCancelRaf = globalThis.cancelAnimationFrame;
   const documentStub = new DocumentStub();
   Object.defineProperty(globalThis, 'document', { configurable: true, value: documentStub });
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: new EventTarget() });
   let nextFrame = 1;
   const frames = new Map<number, FrameRequestCallback>();
   globalThis.requestAnimationFrame = callback => {
@@ -99,6 +105,8 @@ function gestureFixture(t: test.TestContext, annotationActive = () => false, can
     globalThis.cancelAnimationFrame = oldCancelRaf;
     if (oldDocument) Object.defineProperty(globalThis, 'document', oldDocument);
     else Reflect.deleteProperty(globalThis, 'document');
+    if (oldWindow) Object.defineProperty(globalThis, 'window', oldWindow);
+    else Reflect.deleteProperty(globalThis, 'window');
   });
 
   const elements = new Map<string, ElementStub>();
@@ -106,6 +114,7 @@ function gestureFixture(t: test.TestContext, annotationActive = () => false, can
   elements.set('divider', new ElementStub());
   elements.set('arrangement', new ElementStub());
   const screens = new ElementStub();
+  elements.set('viewport-pan-surface', new ElementStub());
   const viewport = new Viewport();
   let transformUpdates = 0;
   installViewportGestures({

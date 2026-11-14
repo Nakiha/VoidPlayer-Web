@@ -251,13 +251,6 @@ window.addEventListener('voidplayer:ui-error', event => showError((event as Cust
 const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const viewportTrace = installViewportTrace(session, viewport, settings.wheelBehavior, settings.close, uiEvents.signal);
-const uriState = installUriState(session, {
-  editsReady: () => !drawingEditor.active() && annotationSync.locallySaved(),
-  identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
-  openingChanged: () => render(),
-  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); },
-  async restore(document, resumeCloudAnnotations) { viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
-});
 // Recovery's pagehide listener must capture the scene before disposal clears its tracks.
 window.addEventListener('pagehide', event => {
   if (event.persisted) return;
@@ -276,6 +269,13 @@ const resizeObserver = new ResizeObserver(fitTask.schedule);
 resizeObserver.observe(screens);
 for (const slot of SLOTS) resizeObserver.observe($(`stage-${slot}`));
 for (const el of document.querySelectorAll('.viewport-surface .card-heading, .viewport-surface .transport-dock')) resizeObserver.observe(el);
+const uriState = installUriState(session, {
+  editsReady: () => !drawingEditor.active() && annotationSync.locallySaved(),
+  identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), panBasis: viewBindings.capturePanBasis(), layout: workbench.getState() }),
+  openingChanged: () => render(),
+  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); },
+  async restore(document, resumeCloudAnnotations) { viewBindings.restoreViewport(document.viewport, document.panBasis); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
+});
 const zoomMenu = installNumericChoice('zoom-select', { glyph: 'search', presets: ZOOM_PRESETS, suffix: '×', min: ZOOM_MIN, max: ZOOM_MAX,
   editLabel: () => tr(msg('player.editZoom', '编辑缩放倍数')),
   choose(value) { viewport.setZoom(value); log.info('ui','缩放数值',{zoom:viewport.zoom,trigger:inputTrigger}); applyViewTransform(); syncZoomSelect(true); },

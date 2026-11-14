@@ -17,6 +17,7 @@ import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { openMedia } from '../../media/source.ts';
 import { installLibraryBrowser } from '../library-browser.ts';
 import { installLibraryFileMenu } from '../library-file-menu.ts';
+import { installLocalSourcesResize } from '../local-sources-resize.ts';
 import { installSourceScrollbar } from '../source-scrollbar.ts';
 import { sourceInUse, sourceKey } from '../source-catalog.ts';
 import { FileHandleError, handleKey, hasFileHandle, pickVideoFiles, restoreHandleSource, saveFileHandle, supportsFileHandles } from '../../services/file-handles.ts';
@@ -31,7 +32,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 export function createSourcesPane(shared: WorkbenchShared) {
   const { session, act, view, catalog, lifecyle } = shared;
   const save = () => shared.save();
-  const fileMenu = installLibraryFileMenu($('source-list'), act, shared.notify, lifecyle.signal);
+  const fileMenu = installLibraryFileMenu(shared.workspace, act, shared.notify, lifecyle.signal);
   let refreshing: Promise<void> | undefined;
   let libraryChecked = false;
   let disposed = false;
@@ -86,7 +87,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (home) void refreshRecent();
     renderSources();
   }, shared.notify, () => !document.getElementById('empty-A')!.hidden && catalog.referencesToResolve().length > 0);
-  const syncStartDensity = () => { $('start-library-list').dataset.libraryDensity = $('source-list').dataset.libraryDensity; };
+  const localResize = installLocalSourcesResize($('sources-panel'), $('local-sources'), lifecyle.signal);
+  const syncStartDensity = () => {
+    for (const id of ['start-library-list', 'local-list']) $(id).dataset.libraryDensity = $('source-list').dataset.libraryDensity;
+  };
   $('source-list').addEventListener('library-density-change', syncStartDensity, {signal:lifecyle.signal});
   syncStartDensity();
   const listing = installLibraryListing($('source-list'), {fileRow:sourceRow, navigate:libraryBrowser.navigate, registerMount:fileMenu.registerMount});
@@ -174,6 +178,24 @@ export function createSourcesPane(shared: WorkbenchShared) {
       }
     }, 'ui.source-remove', {name:item.name});
   }
+  function removeLocalFile(item: SourceItem) {
+    void act(async () => {
+      if (session.getState().busy || loadingSource) return;
+      for (const track of session.getState().tracks.filter(track => sourceInUse(item, [track]))) await session.removeTrack(track.slot);
+      catalog.removeLocal(item.key);
+      save(); renderSources();
+    }, 'ui.local-source-remove', { name: item.name });
+  }
+  function registerFileMenu(row: HTMLElement, item: SourceItem) {
+    fileMenu.register(row, item.library, () => {
+      const used = sourceInUse(item, session.getState().tracks), state = session.getState();
+      const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
+      return { id: used ? 'remove-from-view' : 'add-to-view', label: used ? t(msg('sources.takeOff', '下屏')) : t(msg('sources.putOn', '上屏')),
+        glyph: used ? 'close' : 'plus', disabled: state.busy || !!loadingSource || !!offline || item.library?.state === 'pending',
+        run: () => { if (used) removeFromView(item); else addToView(item); } };
+    }, item.libraryId || item.library ? undefined : { name: item.name, remove: () => removeLocalFile(item),
+      disabled: () => session.getState().busy || !!loadingSource });
+  }
 
   function sourceRow(item: SourceItem, copyOnly = false) {
     const slots = session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
@@ -188,13 +210,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       removeDisabled:session.getState().busy || !!loadingSource, open:() => addToView(item), remove:() => removeFromView(item),
     });
     if (!copyOnly) attachThumb(row, item);
-    if (!copyOnly) fileMenu.register(row, item.library, () => {
-      const used = sourceInUse(item, session.getState().tracks), state = session.getState();
-      const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-      return {id:used?'remove-from-view':'add-to-view', label:used?t(msg('sources.takeOff', '下屏')):t(msg('sources.putOn', '上屏')),
-        glyph:used?'close':'plus', disabled:used?state.busy || !!loadingSource:!!offline || item.library?.state === 'pending' || loadingSource?.key === item.key,
-        run:() => {if(used)removeFromView(item);else addToView(item);}};
-    });
+    if (!copyOnly) registerFileMenu(row, item);
     return row;
   }
 
@@ -219,6 +235,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     go.setAttribute('aria-hidden', 'true'); go.innerHTML = icon('caretRight');
     row.append(go);
     if (!copyOnly) attachThumb(row, item);
+    if (!copyOnly && !item.libraryId && !item.library) registerFileMenu(row, item);
     return row;
   }
 
@@ -557,6 +574,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     },
     renderSources, renderStartLibrary, refreshLibrary, ensureLibrary, rememberFile, localize,
     syncCatalog, syncLoadVisuals, beginRestore, finishRestore, sourcesLayout, wireSourceControls, locateTrack,
+    localSourcesHeight: localResize.height, restoreLocalSourcesHeight: localResize.restore,
     markDisposed() { disposed = true; },
   };
 }

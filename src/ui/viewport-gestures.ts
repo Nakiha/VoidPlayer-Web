@@ -168,6 +168,9 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
     clearPanContextMenuSuppression();
   }, true);
 
+  // Keep hit testing on an untransformed surface throughout the drag. Moving
+  // composited video/SVG layers underneath a stationary pointer can reset its native cursor.
+  const panSurface = $('viewport-pan-surface');
   for (const slot of SLOTS) {
     const stage = $(`stage-${slot}`);
     stage.addEventListener('contextmenu', e => e.preventDefault());
@@ -182,9 +185,10 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
       clearTimeout(contextMenuExpiry);
       contextMenuExpiry = undefined;
       trace?.input('drag-start', e, 'boundary', slot);
-      stage.setPointerCapture(e.pointerId);
+      panSurface.hidden = false;
+      panSurface.setPointerCapture(e.pointerId);
     });
-    stage.addEventListener('pointermove', e => {
+    const movePan = (e: PointerEvent) => {
       if (!pan || pan.pointer !== e.pointerId) return;
       const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
       if (!dx && !dy) return;
@@ -199,7 +203,9 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
         viewport.panBy(dx, dy);
         applyViewTransform();
       }
-    });
+    };
+    stage.addEventListener('pointermove', movePan);
+    panSurface.addEventListener('pointermove', movePan);
     const endPan = (e: PointerEvent) => {
       if (!pan || pan.pointer !== e.pointerId) return;
       trace?.input(e.type, e, 'boundary', slot);
@@ -207,6 +213,8 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
       pan = null;
       activePanPointer = null;
       document.documentElement.classList.remove('panning-viewport');
+      if (panSurface.hasPointerCapture(e.pointerId)) panSurface.releasePointerCapture(e.pointerId);
+      panSurface.hidden = true;
       if (suppressPanContextMenu) {
         contextMenuExpiry = setTimeout(clearPanContextMenuSuppression, 500);
       }
@@ -216,6 +224,10 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
     stage.addEventListener('pointerup', endPan);
     stage.addEventListener('pointercancel', endPan);
     stage.addEventListener('lostpointercapture', endPan);
+    panSurface.addEventListener('pointerup', endPan);
+    panSurface.addEventListener('pointercancel', endPan);
+    panSurface.addEventListener('lostpointercapture', endPan);
+    window.addEventListener('blur', () => { if (pan) endPan({ pointerId: pan.pointer, type: 'blur' } as PointerEvent); });
   }
 
   screens.addEventListener('wheel', e => {

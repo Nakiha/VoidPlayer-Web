@@ -13,12 +13,12 @@ import type { MediaInfo } from '../../shared/media/types.ts';
 import type { ReviewSession } from '../session.ts';
 import type { ToastStack } from './toast.ts';
 import { apiError } from '../services/api-error.ts';
-import { t, msg } from '../i18n.ts';
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { Viewport } from '../../shared/presentation/viewport.ts';
 
 export function installUriState(session: ReviewSession, options: {
   act(action: () => unknown | Promise<unknown>, name: string): Promise<void>;
-  capture(): Pick<WorkspaceFile, 'viewport' | 'layout'>;
+  capture(): Pick<WorkspaceFile, 'viewport' | 'layout' | 'panBasis'>;
   restore(document: WorkspaceFile, resumeCloudAnnotations: boolean): void | Promise<void>;
   beforeRestore(): void;
   closeSettings(): Promise<void>;
@@ -49,7 +49,10 @@ export function installUriState(session: ReviewSession, options: {
   };
   function updateUrl() {
     if (disposed || opening || syncingUrl || session.getState().busy) return;
-    const state = exportState(), url = writeUriState(state, location.href);
+    const state = exportState();
+    // An unopened homepage has no watching scene to publish into its address.
+    if (!state.tracks.length && !explicit && !previousSignature) return;
+    const url = writeUriState(state, location.href);
     const signature = url.search;
     if (signature === previousSignature) return;
     const sources = JSON.stringify(state.tracks);
@@ -115,7 +118,7 @@ export function installUriState(session: ReviewSession, options: {
         await session.reorderTracks(state.tracks.map(track => track.slot));
         await session.seek(state.positionUs);
         if (!current()) return false;
-        await options.restore({ ...exportWorkspace(), viewport: state.viewport, layout: state.layout ?? defaultLayout }, true);
+        await options.restore({ ...exportWorkspace(), viewport: state.viewport, panBasis: state.panBasis, layout: state.layout ?? defaultLayout }, true);
         await focusMark(state, signal, current);
         return current();
       }
@@ -141,7 +144,7 @@ export function installUriState(session: ReviewSession, options: {
       const document = parseWorkspace({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(),
         serverUrl: location.origin + '/', tracks: state.tracks.map((track, i) => ({ slot: track.slot, mediaId: media[i].id,
           offsetUs: track.offsetUs, visible: track.visible })), media, marks: [], positionUs: state.positionUs,
-        viewport: state.viewport, comparison: state.comparison, layout: state.layout ?? defaultLayout });
+        viewport: state.viewport, panBasis: state.panBasis, comparison: state.comparison, layout: state.layout ?? defaultLayout });
       staged = true;
       options.beforeRestore();
       if (dismissSettings) await options.closeSettings();
@@ -206,23 +209,35 @@ export function installUriState(session: ReviewSession, options: {
       options.toasts.show(() => t(msg('uriState.copyFallback', '请在设置中的状态链接上手动复制')));
     }
   }
-  let sharing = false;
+  let sharing: Promise<{ url: string; abi: 1 }> | undefined;
   const shareButtons = ['workspace-share', 'saved-workspace-share'].flatMap(id => {
     const element = document.getElementById(id) as HTMLButtonElement | null; return element ? [element] : [];
   });
-  function controls() { for (const button of shareButtons) button.disabled = sharing || opening || !session.getState().tracks.length; }
+  function controls() {
+    const tracks = session.getState().tracks;
+    const reason = tracks.some(track => !track.source) ? t(msg('uriState.localShare', '本地文件不能分享，请先放入媒体库。'))
+      : opening ? t(msg('uriState.wait', '请等待状态载入或分享完成')) : !tracks.length ? t(msg('sharing.addVideo', '请先添加视频再分享')) : '';
+    for (const button of shareButtons) {
+      if (button.disabled !== !!reason) button.disabled = !!reason;
+      button.dataset.tooltip = reason || t(msg('shell.share', '分享'));
+      if (sharing) button.setAttribute('aria-busy', 'true'); else button.removeAttribute('aria-busy');
+    }
+  }
   async function shareState() {
-    if (sharing || opening) throw new Error(t(msg('uriState.wait', '请等待状态载入或分享完成')));
+    if (sharing) return sharing;
+    if (opening) throw new Error(t(msg('uriState.wait', '请等待状态载入或分享完成')));
     const state = exportState();
     if (state.tracks.some(track => track.local)) throw new Error(t(msg('uriState.localShare', '本地文件不能分享，请先放入媒体库。')));
     if (!state.tracks.length) throw new Error(t(msg('sharing.addVideo', '请先添加视频再分享')));
-    sharing = true; controls();
-    try {
+    sharing = (async () => {
       const response = await fetch('/api/uri/encode', { method: 'POST', headers: { 'content-type': 'application/json',
         'x-voidplayer-action': 'uri' }, body: JSON.stringify({ state }), signal: AbortSignal.any([life.signal, AbortSignal.timeout(10000)]) });
       const result = await response.json(); if (!response.ok) throw apiError(response.status, result);
-      const url = new URL(result.url, location.origin).href; await copy(url); return { url, abi: 1 };
-    } finally { sharing = false; controls(); }
+      const url = new URL(result.url, location.origin).href; await copy(url); return { url, abi: 1 as const };
+    })();
+    controls();
+    try { return await sharing; }
+    finally { sharing = undefined; controls(); }
   }
   for (const button of shareButtons) button.addEventListener('click', () => void options.act(shareState, 'state.share'), { signal: life.signal });
   document.getElementById('state-copy-readable')!.addEventListener('click', () => void options.act(async () => {
@@ -238,6 +253,7 @@ export function installUriState(session: ReviewSession, options: {
     options.toasts.show((error as Error).message, { kind: 'error', durationMs: 0 });
   }).finally(() => { startupPending = false; opening = false; controls(); root.removeAttribute('data-workspace-opening'); options.openingChanged?.(); });
   controls();
+  onLanguageChange(controls, life.signal);
   async function refreshForUpdate(target: string) {
     const state = session.getState();
     if (opening || state.busy || state.playing || !options.editsReady())

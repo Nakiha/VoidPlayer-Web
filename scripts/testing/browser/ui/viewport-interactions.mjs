@@ -38,6 +38,23 @@ await withBrowserFixture({ caseName: 'viewport-interactions', engine,
   const reset = async () => { await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1, offsetX: 0, offsetY: 0 })); await settle(); };
   const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const touch = await touchInput(page, engine);
+  await page.mouse.move(x, y); await page.mouse.down({ button: 'right' });
+  await page.waitForFunction(() => !document.querySelector('#viewport-pan-surface').hidden);
+  await page.evaluate(({ x, y }) => {
+    window.panCursorSamples = []; window.samplingPanCursor = true;
+    const sample = () => {
+      if (!window.samplingPanCursor) return;
+      const target = document.elementFromPoint(x, y);
+      window.panCursorSamples.push({ target: target.id, cursor: getComputedStyle(target).cursor });
+      requestAnimationFrame(sample);
+    }; sample();
+  }, { x, y });
+  for (let i = 1; i <= 4; i++) { await page.mouse.move(x + i, y + i); await page.waitForTimeout(90); }
+  const cursors = await page.evaluate(() => { window.samplingPanCursor = false; return window.panCursorSamples; });
+  assert.ok(cursors.length);
+  assert.ok(cursors.every(sample => sample.target === 'viewport-pan-surface' && sample.cursor === 'grabbing'), 'slow and paused pan retains one stationary grabbing surface');
+  await page.mouse.up({ button: 'right' });
+  assert.equal(await page.locator('#viewport-pan-surface').isHidden(), true);
   await reset();
   await touch('start', [[1, x, y]]);
   await touch('move', [[1, x + 20, y + 30]]);

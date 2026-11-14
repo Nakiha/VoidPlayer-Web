@@ -78,6 +78,10 @@ export class SourceCatalog {
     this.history = limitHistory([...history.values()]);
   }
   addFile(file: File) { this.local.set(sourceKey(file), file); this.remember(file); }
+  removeLocal(key: string) {
+    this.local.delete(key);
+    this.history = this.history.filter(item => item.libraryId || item.key !== key);
+  }
   restoreFile(previousKey:string,file:File){
     const next=sourceKey(file);
     if(next!==previousKey){this.local.delete(previousKey);this.history=this.history.filter(h=>h.key!==previousKey);}

@@ -6,10 +6,11 @@ import { libraryLocationExpression } from './library-link.ts';
 import { installContextMenu } from './context-menu.ts';
 import type { ContextMenuAction } from './context-menu.ts';
 export type LibraryMenuAction = (action: () => unknown | Promise<unknown>, name?: string, data?: unknown) => Promise<void>;
+type LocalMenuFile = { name: string; remove(): void; disabled(): boolean };
 
 /** File actions invoke workbench callbacks; this menu never owns session state. */
 export function installLibraryFileMenu(host: HTMLElement, act: LibraryMenuAction, notify: (message: string) => void, signal: AbortSignal) {
-  const entries = new WeakMap<HTMLElement, {entry?: LibraryEntry; playback: () => ContextMenuAction | undefined} | {rootId:string}>();
+  const entries = new WeakMap<HTMLElement, {entry?: LibraryEntry; playback: () => ContextMenuAction | undefined; local?: LocalMenuFile} | {rootId:string}>();
   const copy = (value: string | Promise<string>) => {
     // Safari requires clipboard.write in the click task. A promised ClipboardItem
     // preserves that activation while the server resolves the absolute path.
@@ -49,7 +50,12 @@ export function installLibraryFileMenu(host: HTMLElement, act: LibraryMenuAction
         {id:'copy-mount-path', label:t(msg('libraryFileMenu.copyMountPath', '拷贝挂载路径')), glyph:'copy', run:() => copy(absolutePath(record.rootId))},
         copyLibraryPath,
       ];
-      const {entry} = record, playback = record.playback();
+      const {entry, local} = record, playback = record.playback();
+      if (local) return [
+        ...(playback ? [playback] : []),
+        { id: 'copy-name', label: t(msg('libraryFileMenu.copyName', '拷贝文件名')), glyph: 'copy', run: () => copy(local.name) },
+        { id: 'remove-file', label: t(msg('sources.removeFile', '移除文件')), glyph: 'trash', disabled: local.disabled(), run: local.remove },
+      ];
       if (!entry) return playback ? [playback] : [];
       const source = mediaUrl(entry.id, entry.version);
       return [
@@ -70,8 +76,8 @@ export function installLibraryFileMenu(host: HTMLElement, act: LibraryMenuAction
       ];
     },
   });
-  return { register(row: HTMLElement, entry: LibraryEntry | undefined, playback: () => ContextMenuAction | undefined) {
-    entries.set(row, {entry, playback}); row.tabIndex = -1; row.setAttribute('aria-haspopup', 'menu');
+  return { register(row: HTMLElement, entry: LibraryEntry | undefined, playback: () => ContextMenuAction | undefined, local?: LocalMenuFile) {
+    entries.set(row, {entry, playback, local}); row.tabIndex = -1; row.setAttribute('aria-haspopup', 'menu');
   }, registerMount(row: HTMLElement, rootId: string) {
     entries.set(row, {rootId}); row.setAttribute('aria-haspopup', 'menu');
   }, close: menu.close };

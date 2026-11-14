@@ -4269,6 +4269,10 @@
     "source": "上屏",
     "translation": "Add to view"
   },
+  "sources.removeFile": {
+    "source": "移除文件",
+    "translation": "Remove file"
+  },
   "sources.reselectName": {
     "source": "重新选择 {name}",
     "translation": "Pick {name} again"
@@ -4280,6 +4284,10 @@
   "sources.reselectRowName": {
     "source": "重新选择：{name}",
     "translation": "Pick again: {name}"
+  },
+  "sources.resizeLocalFiles": {
+    "source": "调整本地文件列表高度",
+    "translation": "Resize local file list"
   },
   "sources.showingFirstFrame": {
     "source": "正在显示首帧",

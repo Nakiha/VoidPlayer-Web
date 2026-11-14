@@ -106,6 +106,7 @@ export function shell() {
 </section>
       </div>
       </section>
+      <div id="viewport-pan-surface" class="viewport-pan-surface" aria-hidden="true" hidden></div>
       <aside id="sources-panel" class="side-panel sources-panel glass library-pane" aria-label="${th(msg("shell.sources", "片源"))}" hidden>
         ${librarySurfaceShell(`        <section id="local-sources" class="local-sources" aria-label="${th(msg("shell.localFiles", "本地文件"))}" hidden><h3 class="source-section"><span id="local-sources-heading">${th(msg("shell.localFiles", "本地文件"))}</span><button id="local-add" class="icon-button" aria-label="${th(msg("shell.chooseLocalFiles", "选择本地文件"))}" data-tooltip="${th(msg("shell.addLocalFilesToTheListLocal", "选择本地文件加入列表（仅本机预览，不上传）"))}">${icon('filePlus')}</button></h3><div id="local-list"></div></section>
         <section id="source-activity" class="source-activity" aria-label="${th(msg("shell.sourceLoadingStatus", "片源载入状态"))}" data-state="idle">

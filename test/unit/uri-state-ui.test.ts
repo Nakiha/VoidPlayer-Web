@@ -9,7 +9,7 @@ import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 test('URI decoding cannot overwrite a newer navigation, and a pending explicit address is never replaced by startup defaults', async t => {
   const previous = new Map<string, PropertyDescriptor | undefined>(), window = new EventTarget();
   const attributes = new Map<string, string>();
-  const element = Object.assign(new EventTarget(), { disabled: false, toggleAttribute(name: string, value: boolean) { if (value) attributes.set(name, ''); else attributes.delete(name); },
+  const element = Object.assign(new EventTarget(), { disabled: false, dataset: {} as Record<string, string>, toggleAttribute(name: string, value: boolean) { if (value) attributes.set(name, ''); else attributes.delete(name); },
     setAttribute(name: string, value: string) { attributes.set(name, value); }, removeAttribute(name: string) { attributes.delete(name); } });
   const elements = new Map(['app', 'state-copy-readable', 'workspace-share', 'saved-workspace-share', 'start-panel'].map(id => [id, element]));
   const location = { href: 'http://localhost/?s=older', origin: 'http://localhost' };
@@ -52,5 +52,59 @@ test('URI decoding cannot overwrite a newer navigation, and a pending explicit a
     assert.equal(settingsClosed, closedBeforeStartup, 'initial background URI restoration preserves a newly opened settings dialog');
     await controller.applyState({ ...emptyUriState(), positionUs: 4000000 });
     assert.equal(settingsClosed, closedBeforeStartup + 1, 'explicit state navigation still closes settings');
+    controller.dispose(); location.href = 'http://localhost/'; tracks = [];
+    const beforeEmptyPage = writes.length;
+    controller = installUriState(session, options);
+    t.mock.timers.tick(1500); await settle();
+    assert.equal(writes.length, beforeEmptyPage, 'an unopened homepage never expands default state into the address');
+    assert.equal(location.href, 'http://localhost/');
   } finally { controller.dispose(); for (const [key, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else Reflect.deleteProperty(globalThis, key); } }
+});
+
+test('sharing keeps controls stable, coalesces repeated clicks and disables local tracks with a reason', async t => {
+  const previous = new Map<string, PropertyDescriptor | undefined>();
+  const element = () => {
+    const attributes = new Map<string, string>();
+    return Object.assign(new EventTarget(), { disabled: false, dataset: {} as Record<string, string>,
+      setAttribute(name: string, value: string) { attributes.set(name, value); },
+      getAttribute(name: string) { return attributes.get(name); },
+      removeAttribute(name: string) { attributes.delete(name); }, toggleAttribute() {} });
+  };
+  const elements = new Map(['app', 'state-copy-readable', 'workspace-share', 'saved-workspace-share', 'start-panel'].map(id => [id, element()]));
+  let finish!: (response: Response) => void, requests = 0, copies = 0;
+  const source = { kind: 'library', id: 'a'.repeat(24), url: 'http://localhost/api/media/a/content?v=' + 'b'.repeat(24) };
+  let tracks = [{ slot: 'A', id: 'track-a', source }], changed = () => {};
+  const viewport = emptyUriState().viewport;
+  const session = { getState: () => ({ tracks, busy: false }), subscribe(fn: () => void) { changed = fn; return () => {}; },
+    exportWorkspace: () => ({ schema: 'voidplayer-workspace', version: 1, generatedAt: '', serverUrl: 'http://localhost/',
+      tracks: [{ slot: 'A', mediaId: 'track-a', offsetUs: 0 }], media: [{ id: 'track-a', source }], marks: [], positionUs: 0, viewport }) } as unknown as ReviewSession;
+  for (const [key, value] of Object.entries({ window: new EventTarget(), location: { href: 'http://localhost/', origin: 'http://localhost' },
+    document: { getElementById: (id: string) => elements.get(id) ?? null }, navigator: { clipboard: { async writeText() { copies++; } } },
+    fetch: () => { requests++; return new Promise<Response>(resolve => { finish = resolve; }); } })) {
+    previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key)); Object.defineProperty(globalThis, key, { configurable: true, value });
+  }
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const controller = installUriState(session, { capture: () => ({ viewport }), beforeRestore() {}, restore() {}, closeSettings: async () => {},
+    identityReady: Promise.resolve(), editsReady: () => true, toasts: { show() {} } as never, act: async action => { await action(); } });
+  try {
+    const first = controller.shareState!(), second = controller.shareState!();
+    assert.equal(requests, 1);
+    for (const id of ['workspace-share', 'saved-workspace-share']) {
+      assert.equal(elements.get(id)!.disabled, false);
+      assert.equal(elements.get(id)!.getAttribute('aria-busy'), 'true');
+    }
+    finish(Response.json({ url: '/?s=2.n.AAA' }));
+    assert.deepEqual(await first, await second); assert.equal(copies, 1);
+    tracks = [{ slot: 'A', id: 'local-a', source: undefined! }]; changed();
+    for (const id of ['workspace-share', 'saved-workspace-share']) {
+      assert.equal(elements.get(id)!.disabled, true);
+      assert.match(elements.get(id)!.dataset.tooltip, /本地文件不能分享/);
+      assert.equal(elements.get(id)!.getAttribute('aria-busy'), undefined);
+    }
+    tracks = [{ slot: 'A', id: 'track-a', source }]; changed();
+    assert.equal(elements.get('workspace-share')!.disabled, false);
+  } finally {
+    controller.dispose();
+    for (const [key, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else Reflect.deleteProperty(globalThis, key); }
+  }
 });

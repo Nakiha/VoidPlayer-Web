@@ -77,6 +77,25 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await timeline.focus();await page.keyboard.press('End');await page.waitForFunction(max=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs===max,max);
  await page.mouse.move(5,5);assert.equal(await page.locator('#timeline-hover').isVisible(),false);
  await page.locator('#toggle-subtracks').click();await settle();
+ const durationLabelGeometry=()=>page.evaluate(()=>{
+   const textBox=element=>{const range=document.createRange();range.selectNodeContents(element);return range.getBoundingClientRect();};
+   const state=window.voidPlayer.getState(),longest=state.tracks.reduce((a,b)=>a.durationUs+a.offsetUs>=b.durationUs+b.offsetUs?a:b);
+   const ruler=document.querySelector('#subtrack-ruler'),end=ruler.lastElementChild;
+   const duration=document.querySelector(`.subtrack-row[data-track-drag="${longest.slot}"] .track-duration`);
+   return {rulerRight:textBox(end).right,durationRight:textBox(duration).right,
+     edge:document.querySelector('.subtrack-scroll').getBoundingClientRect().right,
+     lanes:[...document.querySelectorAll('.track-lane')].map(lane=>{
+       const bar=lane.querySelector('.track-duration'),text=textBox(bar),box=lane.getBoundingClientRect();
+       return {left:box.left,right:box.right,textLeft:text.left,textRight:text.right};
+     })};
+ });
+ const assertDurationAlignment=async()=>{
+   const geometry=await durationLabelGeometry();
+   assert.ok(Math.abs(geometry.rulerRight-geometry.durationRight)<.5,`longest duration text aligns with the final ruler label: ${JSON.stringify(geometry)}`);
+   assert.ok(geometry.edge-geometry.durationRight<=9.5,`right-end text keeps compact insets including contrast borders and subpixels: ${JSON.stringify(geometry)}`);
+   assert.ok(geometry.lanes.every(lane=>lane.textLeft>=lane.left-1&&lane.textRight<=lane.right+1),'short-track text stays within its lane');
+ };
+ await assertDurationAlignment();
  assert.deepEqual(await page.locator('.subtrack-row').evaluateAll(rows => rows.map(row => row.dataset.trackDrag)), ['A', 'B']);
  const controls = await page.locator('.subtrack-row').evaluateAll(rows => rows.map(row => {
    const box = selector => row.querySelector(selector).getBoundingClientRect();
@@ -152,6 +171,12 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.mouse.move(cancelBox.x+cancelBox.width/2,cancelBox.y+cancelBox.height/2);await page.mouse.down();
  await page.mouse.move(cancelBox.x+cancelBox.width/2+80,cancelBox.y+cancelBox.height/2);await page.keyboard.press('Escape');await page.mouse.up();
  assert.equal(await columnWidth(),originalWidth,'Escape restores column width');
+ for(const width of [720,1280]){
+   await page.setViewportSize({width,height:800});await settle();
+   await assertDurationAlignment();
+ }
+ await page.emulateMedia({contrast:'more'});await settle();await assertDurationAlignment();
+ await page.emulateMedia({contrast:'no-preference'});await settle();
  // Both current and preview lines clamp at each track's own boundaries, including offsets.
  const setOffset=offsetUs=>page.evaluate(offsetUs=>window.voidPlayer.tools.find(t=>t.name==='set_review_track_offset').execute({slot:'B',offsetUs}),offsetUs);
  const laneB=page.locator('.subtrack-row[data-track-drag=B] .track-lane');

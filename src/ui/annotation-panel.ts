@@ -10,7 +10,7 @@ import { onLanguageChange, t, msg } from '../i18n.ts';
 type AnnotationEntry = { mark: Mark; slot: Slot; offsetUs: number };
 
 /** Both strip cards and hover cards share content and actions. */
-function markContent(mark: Mark, slot: Slot, actions?: HTMLElement, session?: ReviewSession) {
+function markContent(mark: Mark, slot: Slot, session?: ReviewSession) {
   const content = document.createElement('span'); content.className = 'mark-content';
   const meta = document.createElement('span'); meta.className = 'mark-meta';
   const time = document.createElement('time'); time.textContent = `${slot} · ${formatTime(mark.frame.ptsUs)}`;
@@ -22,18 +22,19 @@ function markContent(mark: Mark, slot: Slot, actions?: HTMLElement, session?: Re
       if (frame.isConnected) frame.textContent = 'rank' in result ? `· #${result.rank}${result.complete ? '' : '~'}` : '· —';
     });
   }
-  if (actions) meta.append(actions);
+  const author = document.createElement('span'); author.className = 'mark-author'; author.textContent = mark.author?.name || t(msg("marks.anonymous", "未署名"));
+  meta.append(author);
   content.append(meta);
+  const note = document.createElement('span'); note.className = 'mark-note'; note.textContent = mark.text; note.title = mark.text;
+  note.hidden = !mark.text;
+  content.append(note);
   const thumbnail = document.createElement('span'); thumbnail.className = 'mark-thumbnail'; thumbnail.dataset.markThumbnail = mark.id;
   const preview = annotationThumbnails.get(mark.id);
   if (preview) {
     const image = document.createElement('img'); image.src = preview.url; image.width = preview.width; image.height = preview.height; image.alt = t(msg("marks.previewImage", "标注画面")); image.loading = 'lazy'; image.onerror = () => { image.hidden=true; }; thumbnail.append(image);
   } else { thumbnail.textContent = mark.text || t(msg("marks.noPreview", "暂无预览")); }
   content.append(thumbnail);
-  const footer = document.createElement('span'); footer.className = 'mark-footer';
-  const note = document.createElement('span'); note.className = 'mark-note'; note.textContent = mark.text; note.title = mark.text;
-  const author = document.createElement('span'); author.className = 'mark-author'; author.textContent = mark.author?.name || t(msg("marks.anonymous", "未署名"));
-  footer.append(note, author); content.append(footer); return content;
+  return content;
 }
 
 export function installAnnotationPanel(
@@ -84,7 +85,7 @@ export function installAnnotationPanel(
     const row = document.createElement('div'); row.className = 'annotation-row'; row.dataset.slot = slot; identifyMark(row, mark.id);
     const entry = document.createElement(entryTag); entry.className = 'mark-entry';
     identifyMark(entry, mark.id); bindMarkHover(entry, mark.id);
-    entry.append(markContent(mark, slot, undefined, session)); row.append(entry, actions(mark, slot, row));
+    entry.append(markContent(mark, slot, session)); row.append(entry, actions(mark, slot, row));
     return { row, entry };
   }
   function showPreview(button: HTMLElement, mark: Mark, slot: Slot) {

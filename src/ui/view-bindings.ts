@@ -7,7 +7,7 @@ import { setAnnotationViewport } from './annotation-svg.ts';
 import { installPixelGrid } from './pixel-grid.ts';
 import { needsViewRecovery } from './view-recovery.ts';
 import { Viewport, fitReference, fittedSize, gridArrangement, splitPixelGeometry, unobscuredFitArea } from '../../shared/presentation/viewport.ts';
-import type { GridDirection } from '../../shared/presentation/viewport.ts';
+import type { GridDirection, ViewportSnapshot, PanBasis } from '../../shared/presentation/viewport.ts';
 
 export type FittedTrack = { width: number; height: number; sourceWidth: number; sourceHeight: number; centerY: number };
 
@@ -166,7 +166,7 @@ export function createViewBindings(deps: ViewBindingDeps) {
       if (image.style.height !== height) image.style.height = height;
       if (track === (tracks.find(t => t.slot === 'A') ?? tracks[0])) {
         if (primaryFitted && (viewport.zoom !== 1 || viewport.offsetX || viewport.offsetY) &&
-          (Math.abs(primaryFitted.width - size.width) > 0.5 || Math.abs(primaryFitted.height - size.height) > 0.5)) {
+          (primaryFitted.width !== size.width || primaryFitted.height !== size.height)) {
           viewport.rescaleOffset(size.width / primaryFitted.width, size.height / primaryFitted.height);
         }
         primaryFitted = size;
@@ -175,5 +175,11 @@ export function createViewBindings(deps: ViewBindingDeps) {
     applyViewTransform();
   }
 
-  return { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll, zoomAnchor };
+  return { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll, zoomAnchor,
+    capturePanBasis: () => primaryFitted && (viewport.offsetX || viewport.offsetY) ? { ...primaryFitted } : undefined,
+    restoreViewport(snapshot: ViewportSnapshot, basis?: PanBasis) {
+      viewport.apply(snapshot);
+      // Restore against the sender's fitted image, never an unrelated intermediate recipient layout.
+      primaryFitted = basis ? { ...basis } : null;
+    } };
 }

@@ -38,7 +38,7 @@
   --panel-heading-inset: calc((var(--panel-heading-height) - var(--button-size)) / 2);
   --content-inset: var(--space-5); --content-gap: var(--space-3);
   --section-gap: var(--space-4); --list-gap: var(--space-2);
-  --timeline-column-gap: var(--space-4);
+  --timeline-column-gap: var(--space-1); --timeline-label-inset: var(--space-1);
   --popover-padding: var(--space-4); --tooltip-padding-block: var(--space-3);
   --radius-small: 4px; --radius-control: 7px; --radius-panel: 12px;
   --surface: #f5f5f7; --surface-panel: #f0f1f3; --surface-table: #f8f9fa;
@@ -103,7 +103,4 @@
   --toast-enter-duration: 120ms; --toast-exit-duration: var(--panel-motion-duration);
   --toast-warning-fill: color-mix(in srgb, #f59e0b 16%, var(--viewport-chrome-fill)); --toast-warning-text: #4b290b;
   --toast-error-fill: color-mix(in srgb, #d92d20 14%, var(--viewport-chrome-fill)); --toast-error-text: #912018; --toast-error-border: color-mix(in srgb, #d92d20 38%, var(--border));
-}
-@media (max-width: 680px) {
-  :root { --timeline-column-gap: var(--space-2); }
 }
