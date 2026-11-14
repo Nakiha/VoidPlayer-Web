@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="gLagoon" x1="0" y1="0" x2="0.55" y2="1">
-      <stop offset="0" stop-color="#5099ef"/>
-      <stop offset="1" stop-color="#3d74d6"/>
-    </linearGradient>
-  </defs>
-  <path fill="url(#gLagoon)" d="M512 488H676V652H512Z"/>
-</svg>

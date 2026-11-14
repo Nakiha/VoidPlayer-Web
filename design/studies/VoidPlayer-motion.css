@@ -1,9 +1,0 @@
-@media (prefers-reduced-motion: no-preference) {
-  #Frame-A { --dx: -55px; --dy: -44px; }
-  #Frame-B { --dx: 55px; --dy: 44px; }
-  #Frame-A, #Frame-B { animation: open-frame 2s cubic-bezier(.45,0,.2,1) infinite; }
-  @keyframes open-frame {
-    0%, 18%, 68%, 100% { transform: translate(0, 0); }
-    42% { transform: translate(var(--dx), var(--dy)); }
-  }
-}

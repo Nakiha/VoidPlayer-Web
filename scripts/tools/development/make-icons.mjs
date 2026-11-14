@@ -1,6 +1,6 @@
-// Render the editable Apple Icon Composer document once, then derive the web sizes.
+// Derive regular and full-bleed square web icons from the editable Icon Composer document.
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,58 +40,81 @@ try {
   }
   const project = JSON.parse(await readFile(path.join(source, 'icon.json'), 'utf8'));
   const layers = await vectorLayers(source, [...project.groups].reverse().flatMap(group => [...group.layers].reverse()));
-  const vector = (size, artwork, background) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
-  <title>VoidPlayer</title>
-  <rect width="1024" height="1024" rx="224" fill="${background}"/>
-${artwork}
-</svg>\n`;
   // Fit the foreground and tab icon to the artwork without a white backing or shadow.
-  const { foreground, faviconSvg } = await page.evaluate(artwork => {
+  const { foreground, faviconSvg, maskSvg, crop, squareLayers } = await page.evaluate(artwork => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.innerHTML = '<title>VoidPlayer</title>\n' + artwork + '\n';
     document.body.appendChild(svg);
     const { x, y, width, height } = svg.getBBox();
     const side = Math.ceil(Math.max(width, height));
-    svg.setAttribute('viewBox', [x + (width - side) / 2, y + (height - side) / 2, side, side].join(' '));
+    const crop = { x: x + (width - side) / 2, y: y + (height - side) / 2, side };
+    // Maskable artwork fills a square. Extend only outer tile edges; keep the play key and internal seams in place.
+    const squareLayers = [...svg.querySelectorAll(':scope > g')].filter(group => group.id !== 'Play').map(group => {
+      const bounds = group.getBBox(), square = group.cloneNode(true);
+      const edge = (value, outside, extended) => Number((Math.abs(value - outside) < .01 ? extended : value).toFixed(2));
+      const left = edge(bounds.x, x, crop.x), right = edge(bounds.x + bounds.width, x + width, crop.x + side);
+      const top = edge(bounds.y, y, crop.y), bottom = edge(bounds.y + bounds.height, y + height, crop.y + side);
+      square.querySelector('path').setAttribute('d', `M${left} ${top}H${right}V${bottom}H${left}Z`);
+      return { name: group.id, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">${square.innerHTML}</svg>` };
+    });
+    svg.setAttribute('viewBox', [crop.x, crop.y, side, side].join(' '));
     svg.setAttribute('width', side);
     svg.setAttribute('height', side);
     svg.remove();
+    // Clip the Composer rendition to the colored tile silhouette, excluding its white backing.
+    const mask = svg.cloneNode(true);
+    mask.querySelector('#Play')?.remove();
+    for (const path of mask.querySelectorAll('path')) path.setAttribute('fill', '#fff');
+    mask.setAttribute('viewBox', '0 0 1024 1024'); mask.setAttribute('width', '1024'); mask.setAttribute('height', '1024');
+    const maskSvg = new XMLSerializer().serializeToString(mask);
     const foreground = new XMLSerializer().serializeToString(svg) + '\n';
     svg.setAttribute('width', '32');
     svg.setAttribute('height', '32');
-    return { foreground, faviconSvg: new XMLSerializer().serializeToString(svg) + '\n' };
+    return { foreground, faviconSvg: new XMLSerializer().serializeToString(svg) + '\n', maskSvg, crop, squareLayers };
   }, layers);
   await writeFile(new URL('icon-foreground.svg', publicDir), foreground);
   await writeFile(new URL('favicon.svg', publicDir), faviconSvg);
+  const squareSource = path.join(temp, 'Square.icon'), squareMaster = path.join(temp, 'square.png');
+  await cp(source, squareSource, { recursive: true });
+  for (const layer of squareLayers) {
+    const original = project.groups.flatMap(group => group.layers).find(item => item.name === layer.name);
+    if (!original) throw Error('Missing icon tile: ' + layer.name);
+    await writeFile(path.join(squareSource, 'Assets', original['image-name']), layer.svg);
+  }
+  execFileSync(composer, [squareSource, '--export-image', '--output-file', squareMaster, '--platform', 'macOS',
+    '--rendition', 'Default', '--width', '1024', '--height', '1024', '--scale', '1']);
 
-  // Keep the original two-frame motion study reproducible apart from the shipping icon.
-  const studies = new URL('studies/', designDir);
-  const frames = fileURLToPath(new URL('Frames.icon/', studies));
-  const frameProject = JSON.parse(await readFile(path.join(frames, 'icon.json'), 'utf8'));
-  const frameLayers = await vectorLayers(frames, frameProject.groups.flatMap(group => group.layers));
-  const motionCss = await readFile(new URL('VoidPlayer-motion.css', studies), 'utf8');
-  const motion = `  <style>\n${motionCss}  </style>\n${frameLayers}`;
-  await writeFile(new URL('VoidPlayer-motion.svg', studies), vector(256, motion, '#e5ebf3'));
-
-  const { images, maskable } = await page.evaluate(async ({ png, faviconSvg, backing }) => {
+  const { images, maskable } = await page.evaluate(async ({ png, squarePng, faviconSvg, maskSvg, crop, backing }) => {
     const image = new Image();
     image.src = 'data:image/png;base64,' + png;
     await image.decode();
+    const square = new Image(); square.src = 'data:image/png;base64,' + squarePng;
+    await square.decode();
     const favicon = new Image();
     favicon.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(faviconSvg);
     await favicon.decode();
-    function render(image, size, opaque = false) {
+    const mask = new Image();
+    mask.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(maskSvg);
+    await mask.decode();
+    const artwork = document.createElement('canvas'); artwork.width = artwork.height = 1024;
+    const artworkContext = artwork.getContext('2d');
+    artworkContext.drawImage(image, 0, 0);
+    artworkContext.globalCompositeOperation = 'destination-in';
+    artworkContext.drawImage(mask, 0, 0);
+    function render(image, size, opaque = false, cropped = false) {
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = size;
       const ctx = canvas.getContext('2d');
       ctx.imageSmoothingQuality = 'high';
       if (opaque) { ctx.fillStyle = backing; ctx.fillRect(0, 0, size, size); }
-      ctx.drawImage(image, 0, 0, size, size);
+      if (cropped) ctx.drawImage(image, crop.x, crop.y, crop.side, crop.side, 0, 0, size, size);
+      else ctx.drawImage(image, 0, 0, size, size);
       return canvas.toDataURL('image/png').split(',')[1];
     }
-    return { images: [16, 32, 48, 180, 192, 512].map(size => ({ size, png: render(size <= 48 ? favicon : image, size, size === 180) })),
-      maskable: render(image, 512, true) };
-  }, { png: (await readFile(master)).toString('base64'), faviconSvg, backing });
+    return { images: [16, 32, 48, 180, 192, 512].map(size => ({ size, png: render(size <= 48 ? favicon : artwork, size, size === 180, size > 48) })),
+      maskable: render(square, 512, true, true) };
+  }, { png: (await readFile(master)).toString('base64'), squarePng: (await readFile(squareMaster)).toString('base64'),
+    faviconSvg, maskSvg, crop, backing });
   const favicon = images.filter(image => image.size <= 48).map(image => ({ ...image, bytes: Buffer.from(image.png, 'base64') }));
   // ICO directory with embedded PNG entries: keeps alpha at each native size.
   const directory = Buffer.alloc(6 + favicon.length * 16);
