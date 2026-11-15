@@ -1,0 +1,52 @@
+name: Focused analysis browser diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      engine:
+        description: 'Browser for the existing geometry and diagram regressions'
+        type: choice
+        options: [chromium, webkit]
+        default: chromium
+
+permissions:
+  contents: read
+
+env:
+  DIAGNOSTIC_ENGINE: ${{ inputs.engine }}
+
+jobs:
+  cores:
+    uses: ./.github/workflows/prepare-cores.yml
+
+  diagrams:
+    name: Diagnose analysis diagrams
+    needs: cores
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: npm ci
+      - run: brew install ffmpeg
+      - run: npx playwright install --with-deps "$DIAGNOSTIC_ENGINE"
+      - uses: ./.github/actions/browser-display
+      - run: node scripts/run-tests.mjs --case "browser-bitstream-geometry-$DIAGNOSTIC_ENGINE,browser-bitstream-analysis-diagrams-$DIAGNOSTIC_ENGINE"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: focused-analysis-reports
+          path: .run/test-suites/selected/
+          if-no-files-found: error
+          retention-days: 14

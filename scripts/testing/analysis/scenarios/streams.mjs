@@ -256,16 +256,21 @@ const { page, artifact, limitsDir, requests, rows, call, analyze, stable, librar
       await page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); });
       const requested = page.waitForRequest(pattern, { timeout: 30000 });
       try {
-        await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='request_bitstream_stream').execute({slot:'A',product:'summary'}).catch(()=>{}); });
-        await requested;
-        assert.equal(await page.locator('.analysis-track-control[data-slot="A"]').getAttribute('data-state'), 'pending');
-        assert.equal(await page.locator('.analysis-track-control[data-slot="A"] .analysis-progress-ring').count(), 1, 'active inspection uses a circular progress indicator');
-        await call('cancel_bitstream_analysis',{});
-        await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({}).state === 'cancelled');
-        assert.match(await page.locator('.analysis-track-control[data-slot="A"] .analysis-chip').getAttribute('aria-description'), /已取消/);
-        assert.equal(await page.locator('.analysis-picture-overlay').count(), 0);
-        assert.deepEqual(await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing })), playback);
-      } finally { release(); await page.unroute(pattern); }
+        await context.phase(`cancel-cached-summary-${input}`, async () => {
+          context.checkpoint('cancel-summary-dispatch', {input});
+          await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='request_bitstream_stream').execute({slot:'A',product:'summary'}).catch(()=>{}); });
+          await requested;
+          context.checkpoint('cancel-summary-request-seen', {input});
+          assert.equal(await page.locator('.analysis-track-control[data-slot="A"]').getAttribute('data-state'), 'pending');
+          assert.equal(await page.locator('.analysis-track-control[data-slot="A"] .analysis-progress-ring').count(), 1, 'active inspection uses a circular progress indicator');
+          await call('cancel_bitstream_analysis',{});
+          context.checkpoint('cancel-summary-command-complete', {input});
+          await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({}).state === 'cancelled');
+          assert.match(await page.locator('.analysis-track-control[data-slot="A"] .analysis-chip').getAttribute('aria-description'), /已取消/);
+          assert.equal(await page.locator('.analysis-picture-overlay').count(), 0);
+          assert.deepEqual(await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing })), playback);
+        });
+      } finally { release(); await context.phase(`release-summary-gate-${input}`, () => page.unroute(pattern)); }
       rows.push({ kind: 'whole-stream', input, stream });
       await selectDiagrams(page, 'overview');
     }
