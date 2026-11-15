@@ -5,7 +5,7 @@ import {RETRY_FULL} from '../../shared/analysis/bitstream/execution-error.ts';
 import {AnalysisFailure, coreFailure} from '../../shared/analysis/bitstream/failure.ts';
 import {metadataBudgetBytes, PRODUCT_LIMIT} from '../../shared/analysis/bitstream/products.ts';
 import type {AnalysisOutput} from '../../shared/analysis/bitstream/products.ts';
-import {createThreadedAnalysisCore} from '../../server/analysis/bitstream/core-memory.ts';
+import {createThreadedAnalysisCore} from '../../shared/analysis/bitstream/core-memory.ts';
 const result=(au:number,attempt:string):AnalysisOutput=>({picture:{au},attempt,blocks:[]} as unknown as AnalysisOutput);
 const cost=(r:AnalysisOutput)=>metadataBudgetBytes(r)+40;
 const policyOptions=()=>({fast:true,policy:executionPolicy(),signal:new AbortController().signal});

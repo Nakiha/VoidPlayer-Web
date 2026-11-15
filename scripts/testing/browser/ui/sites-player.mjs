@@ -78,12 +78,13 @@ try {
     const first = await page.evaluate(() => window.voidPlayer.getState().tracks[0]);
     assert.ok(first.width > 0 && first.height > 0);
     await page.evaluate(async () => { await window.voidPlayer.step(1); await window.voidPlayer.seek(0); });
-    if (!isolated) {
+    {
       const analysis = await page.evaluate(async () => {
         const api = window.voidPlayer, position = api.getState().positionUs;
         const result = await api.tools.find(tool => tool.name === 'request_bitstream_analysis').execute({ slot: 'A' });
-        return { schema: result.schema, codec: result.codec, blocks: result.blocks.length, before: position, after: api.getState().positionUs };
+        return { buildId: result.buildId, threadsAvailable: navigator.hardwareConcurrency >= 4, schema: result.schema, codec: result.codec, blocks: result.blocks.length, before: position, after: api.getState().positionUs };
       });
+      assert.match(analysis.buildId, isolated && analysis.threadsAvailable ? /:mt-[0-9a-f]{16}$/ : /:refs-[0-9a-f]{16}$/);
       assert.equal(analysis.schema, 1); assert.equal(analysis.codec, 'h264');
       assert.ok(analysis.blocks > 0); assert.equal(analysis.after, analysis.before, 'local analysis leaves playback in place');
     }

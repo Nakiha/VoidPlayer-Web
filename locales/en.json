@@ -107,6 +107,10 @@
     "source": "添加目录",
     "translation": "Add directory"
   },
+  "admin.analysisAutomaticThreads": {
+    "source": "按编码和服务器负载分配解码线程",
+    "translation": "Allocate decoder threads by codec and server load"
+  },
   "admin.analysisConcurrency": {
     "source": "服务端分析并发数",
     "translation": "Server analysis concurrency"

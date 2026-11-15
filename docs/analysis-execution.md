@@ -8,20 +8,15 @@ execution must produce equivalent outputs.
 
 An explicit single-picture `blocks` request can use fast execution with a
 complete index and a syntax-proven closed anchor. `input.plan` supplies the
-actual reference preroll. A cold continuous HEVC or VVC `blocks` request can also use
-fast execution when the complete reference chain fits 128 pictures and the
-32 MiB input budget, starts at a verified closed anchor, and has one decoder
-configuration. The decoder carries syntax reference state across open GOPs.
-VVC also supports progressive no-pixels execution for sealed summary streams
-and blocks streams over 128 pictures. These streams retain one decoder across
-dependent GOPs and commit each validated output through the existing per-picture
+actual reference preroll. Sealed HEVC and VVC summary and blocks streams can
+request fast execution from a syntax-proven closed anchor. They retain one decoder across dependent GOPs and commit each validated output through the existing per-picture
 backpressure. The decoder checks the picture's AU, including suffix SEI, and
 completes its reference work before making that picture available. A later
 pixel requirement closes the pruned decoder and replays once with full pixels
 from the same verified anchor. The host remembers committed AU identities and
 suppresses duplicate publication and progress during replay.
 
-The server's threaded Core factory retains the imported WebAssembly memory and
+The threaded Core factory shared by server and isolated browser workers retains the imported WebAssembly memory and
 refreshes the host byte view when that memory grows. Pthread growth can leave
 the main runtime's old fixed SharedArrayBuffer view shorter than valid output
 pointers. Block/reference bounds checks use the current view; this does not
@@ -40,7 +35,7 @@ pruning. PCM/TQB/extensions stay full; VVC in-band parameter changes, film grain
 and decoded-picture-hash SEI restart the transaction exactly like their HEVC
 counterparts and report the same reasons. For HEVC Main10 the unsigned callback preserves positive luma QP exactly. If any block reports zero, the callback cannot distinguish zero from clipped negative QpY, so the entire picture retains unsupported QP and a null mean. VVC Main10 QP remains unsupported.
 
-Fast picture owners are private in the worker. Before allocating a block payload
+For exact-picture and viewport attempts, speculative picture owners are private in the worker. Before allocating a block payload
 or legacy block array, the producer reserves metadata+payload ownership under the
 existing 32 MiB in-flight limit. On overflow it allocates no new payload, drops
 all speculative owners, and chooses the full streaming attempt. This temporary
@@ -86,6 +81,13 @@ Block collection uses separate picture locks and atomically reserves storage
 under the existing shared 32 MiB ceiling. A bounded in-place radix sorter handles
 unique block coordinates; duplicate or unsupported coordinates preserve the
 original qsort behavior and record bytes.
+
+For ready CTUs in the same VVC entropy entry point and row, pthread analysis can
+continue on the current worker after its final dependency arrives. A row boundary,
+wavefront entropy coding or an outstanding reference dependency uses the executor.
+This avoids queueing the next serial parse step while preserving work for other frames.
+The [4K thread-scaling measurements](evidence/analysis-thread-scaling-2026-11-15.json)
+include a two-thread/one-frame-context control, first-output latency and whole-stream hashes.
 
 The threaded artifact applies configured frame contexts to H264 frame threads
 as well as VVC delayed-frame contexts, within the configured worker budget.

@@ -9,7 +9,7 @@ import {analyzePicture,analyzeRange,analyzeStream} from '../../shared/analysis/b
 import {openAnalysisInput} from '../../shared/analysis/bitstream/input.ts';
 import {countCore,emptyCounters} from '../../shared/analysis/bitstream/counters.ts';
 import {RETRY_FULL} from '../../shared/analysis/bitstream/execution-error.ts';
-import {createThreadedAnalysisCore} from '../../server/analysis/bitstream/core-memory.ts';
+import {createThreadedAnalysisCore} from '../../shared/analysis/bitstream/core-memory.ts';
 import {isProduct,readBlock} from '../../shared/analysis/bitstream/products.ts';
 import type {AnalysisOutput} from '../../shared/analysis/bitstream/products.ts';
 const manifest=JSON.parse(await readFile('public/vendor/voidplayer-analysis/manifest.json','utf8'));
@@ -110,7 +110,7 @@ for (const [name, fallback] of [
   assert.equal(fast.counters.fastOpen, 1);
   assert.equal(fast.counters.fallback, fallback);
   if (!fallback) {
-   assert.equal(fast.firstDecoded, count);
+   assert.ok(fast.firstDecoded < count);
    const cached = new Map(fast.output.map(result => [result.picture.au, result]));
    const delivered = new Set<number>();
    await analyzeStream(reader(data), target, () => { throw Error('Warm stream initialized decoder'); }, manifest.buildId,
@@ -137,16 +137,19 @@ test('a one-picture legacy range and a viewport with one missing blocks picture 
 });
 
 for (const [name, product, fallback] of [
+ ['normal', 'summary', 1], ['main10', 'summary', 0], ['late-hash', 'summary', 1],
+ ['late-grain', 'summary', 1], ['late-pps', 'summary', 1], ['main10-late-hash', 'summary', 1],
+ ['late-hash', 'blocks', 1], ['main10-late-grain', 'blocks', 1], ['main10-late-pps', 'blocks', 1],
  ['vvc-long', 'blocks', 0], ['vvc-long-late-hash', 'blocks', 1], ['vvc-late-hash', 'summary', 1],
 ] as const) {
  const fixture = `fixtures/analysis-execution/${name}.mp4`;
- test(`VVC progressive ${product} ${name}: verified prefix survives a full replay`, { skip: !extension || !existsSync(fixture) }, async () => {
+ test(`Progressive ${product} ${name}: verified prefix survives a full replay`, { skip: !extension || !existsSync(fixture) }, async () => {
   const data = await readFile(fixture), signal = new AbortController().signal;
   const input = await openAnalysisInput(reader(data), signal);
   const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts)), count = input.packets.length;
   const target = { mode: 'stream', product, sourceVersion: name, firstPtsUs, durationUs: input.sourceEndUs - firstPtsUs } as const;
   input.close();
-  if (product === 'blocks') assert.ok(count > 128);
+  if (name.startsWith('vvc-long')) assert.ok(count > 128);
   const run = async (full: boolean) => {
    const counters = emptyCounters(), outputs: AnalysisOutput[] = [];
    const core = countCore(await create(), counters);

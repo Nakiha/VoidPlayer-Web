@@ -29,6 +29,7 @@ export default {
   "activity.trackHidden": () => "［H~i~d~d~e~n~ ········］",
   "activity.waitingForSource": () => "［W~a~i~t~i~n~g~ f~o~r~ a~ s~o~u~r~c~e~ ········］",
   "admin.addDir": () => "［A~d~d~ d~i~r~e~c~t~o~r~y~ ········］",
+  "admin.analysisAutomaticThreads": () => "［A~l~l~o~c~a~t~e~ d~e~c~o~d~e~r~ t~h~r~e~a~d~s~ b~y~ c~o~d~e~c~ a~n~d~ s~e~r~v~e~r~ l~o~a~d~ ········］",
   "admin.analysisConcurrency": () => "［S~e~r~v~e~r~ a~n~a~l~y~s~i~s~ c~o~n~c~u~r~r~e~n~c~y~ ········］",
   "admin.analysisContexts": () => "［F~r~a~m~e~ c~o~n~t~e~x~t~s~ ········］",
   "admin.analysisReload": () => "［L~o~a~d~ c~o~n~f~i~g~u~r~a~t~i~o~n~ ········］",

@@ -8,6 +8,7 @@ export function analysisSettingsShell() {
     <form id="analysis-resources" aria-labelledby="analysis-settings-title" class="admin-settings-card">
     <div class="admin-analysis-fields">
       <label>${th(msg('admin.analysisConcurrency', '服务端分析并发数'))}<input id="analysis-concurrency" type="number" min="1" max="32" step="1" required disabled aria-describedby="analysis-resource-status"></label>
+      <label><input id="analysis-auto-threads" type="checkbox" disabled>${th(msg('admin.analysisAutomaticThreads', '按编码和服务器负载分配解码线程'))}</label>
       <label>${th(msg('admin.analysisThreads', '解码线程上限'))}<input id="analysis-threads" type="number" min="1" max="4" step="1" required disabled></label>
       <label>${th(msg('admin.analysisContexts', '帧上下文数'))}<input id="analysis-contexts" type="number" min="1" max="1" step="1" required disabled></label>
     </div>
@@ -26,12 +27,14 @@ export function installAnalysisSettings(
   const input = $('analysis-concurrency') as HTMLInputElement;
   const threads = $('analysis-threads') as HTMLInputElement;
   const contexts = $('analysis-contexts') as HTMLInputElement;
-  const inputs = [input, threads, contexts];
+  const automatic = $('analysis-auto-threads') as HTMLInputElement;
+  const inputs = [input, automatic, threads, contexts];
   const decoder = () => ({ threads: threads.valueAsNumber, contexts: contexts.valueAsNumber });
   let settings: Settings | undefined, dirty = false, busy = false;
   function controls() {
     for (const field of inputs) field.disabled = busy || !settings?.writable;
-    $('analysis-resource-save').toggleAttribute('disabled', busy || !dirty || !settings?.writable || inputs.some(field => !field.validity.valid));
+    if (automatic.checked) threads.disabled = contexts.disabled = true;
+    $('analysis-resource-save').toggleAttribute('disabled', busy || !dirty || !settings?.writable || inputs.some(field => !field.disabled && !field.validity.valid));
     $('analysis-resource-reload').toggleAttribute('disabled', busy);
     localizedText($('analysis-resource-save-state'), () => busy ? t(msg('admin.saving', '正在保存…'))
       : settings?.reasonCode ? rootReason(settings.reasonCode, null)
@@ -44,6 +47,7 @@ export function installAnalysisSettings(
   function accept(value: Settings) {
     settings = value; dirty = false; input.value = String(value.concurrency);
     input.min = String(value.min); input.max = String(value.max);
+    automatic.checked = value.automatic;
     threads.max = String(value.maxThreads);
     threads.value = contexts.max = String(value.decoder.threads);
     contexts.value = String(value.decoder.contexts);
@@ -59,8 +63,8 @@ export function installAnalysisSettings(
   for (const field of inputs) field.addEventListener('input', () => {
     const current = decoder();
     contexts.max = threads.validity.valid ? String(current.threads) : '1';
-    dirty = input.valueAsNumber !== settings?.concurrency || current.threads !== settings?.decoder.threads ||
-      current.contexts !== settings?.decoder.contexts;
+    dirty = input.valueAsNumber !== settings?.concurrency || automatic.checked !== settings?.automatic ||
+      (!automatic.checked && (current.threads !== settings?.decoder.threads || current.contexts !== settings?.decoder.contexts));
     controls();
   }, { signal });
   $('analysis-resource-reload').addEventListener('click', () => void load(true), { signal });
@@ -68,7 +72,7 @@ export function installAnalysisSettings(
     event.preventDefault();
     if (busy || !dirty || !settings?.writable || inputs.some(field => !field.reportValidity())) return;
     busy = true; controls();
-    void api<Settings>('/api/admin/analysis', 'PUT', { revision: settings.revision, concurrency: input.valueAsNumber, decoder: decoder() })
+    void api<Settings>('/api/admin/analysis', 'PUT', { revision: settings.revision, concurrency: input.valueAsNumber, decoder: automatic.checked ? 'auto' : decoder() })
       .then(accept).catch(error => { if (!signal.aborted) notice(() => requestError(error), true); })
       .finally(() => { busy = false; controls(); });
   }, { signal });

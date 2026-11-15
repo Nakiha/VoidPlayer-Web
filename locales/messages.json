@@ -119,6 +119,10 @@
     "source": "添加目录",
     "params": {}
   },
+  "admin.analysisAutomaticThreads": {
+    "source": "按编码和服务器负载分配解码线程",
+    "params": {}
+  },
   "admin.analysisConcurrency": {
     "source": "服务端分析并发数",
     "params": {}

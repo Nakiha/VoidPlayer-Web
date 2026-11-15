@@ -1,7 +1,7 @@
 type WasmMemory = { readonly buffer: ArrayBufferLike };
 type WasmImports = Record<string, Record<string, unknown>>;
 type WasmInstance = { readonly exports: object };
-// Node's server type environment intentionally excludes DOM declarations.
+// Both hosts use the same memory contract, including runtimes without DOM type declarations.
 type WasmRuntime = {
   compile(bytes: Uint8Array<ArrayBuffer>): Promise<object>;
   Memory: new (options: { initial: number; maximum?: number; shared?: boolean }) => WasmMemory;

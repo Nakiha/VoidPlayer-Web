@@ -29,6 +29,7 @@ export default {
   "activity.trackHidden": () => "Hidden",
   "activity.waitingForSource": () => "Waiting for a source",
   "admin.addDir": () => "Add directory",
+  "admin.analysisAutomaticThreads": () => "Allocate decoder threads by codec and server load",
   "admin.analysisConcurrency": () => "Server analysis concurrency",
   "admin.analysisContexts": () => "Frame contexts",
   "admin.analysisReload": () => "Load configuration",

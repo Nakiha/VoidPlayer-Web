@@ -28,7 +28,7 @@ const { page, artifact, limitsDir, requests, call, stable, library, gate } = con
         if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
         await chooseConcurrency(1);
         let release; const gate = new Promise(resolve=>{release=resolve;});
-        const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/voidplayer-analysis.wasm*' : '**/api/bitstream-analysis/requests/*';
+        const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/voidplayer-analysis*.wasm*' : '**/api/bitstream-analysis/requests/*';
         await page.route(pattern, async route => { await gate; await route.continue().catch(()=>{}); });
         try {
           await selectDiagrams(page,'nalu-size');

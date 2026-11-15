@@ -421,7 +421,11 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
 
       assert.ok(coreRequests.some(url => /voidplayer-core.*\.wasm$/.test(url.pathname)), 'playback Worker fetches a real core');
 
-      assert.ok(coreRequests.some(url => url.pathname.endsWith('/voidplayer-analysis.wasm')), 'analysis Worker fetches a real core');
+      assert.ok(coreRequests.some(url => /\/voidplayer-analysis(?:-mt)?\.wasm$/.test(url.pathname)), 'analysis Worker fetches a real core');
+      const localParallel = await page.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined' && navigator.hardwareConcurrency >= 4);
+      if (localParallel && rows.some(row => row.input === 'local-file' && ['h264','vvc'].includes(row.codec))) {
+        assert.ok(coreRequests.some(url => url.pathname.endsWith('/voidplayer-analysis-mt.wasm')), 'eligible local analysis loads the threaded artifact');
+      }
 
       for (const url of coreRequests) assert.equal(url.searchParams.get('v'), built.coreAssetDigests[url.pathname], `main/Worker core version: ${url.pathname}`);
 

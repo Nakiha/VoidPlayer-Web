@@ -29,6 +29,7 @@ export default {
   "activity.trackHidden": () => "已隐藏",
   "activity.waitingForSource": () => "等待添加片源",
   "admin.addDir": () => "添加目录",
+  "admin.analysisAutomaticThreads": () => "按编码和服务器负载分配解码线程",
   "admin.analysisConcurrency": () => "服务端分析并发数",
   "admin.analysisContexts": () => "帧上下文数",
   "admin.analysisReload": () => "载入配置",

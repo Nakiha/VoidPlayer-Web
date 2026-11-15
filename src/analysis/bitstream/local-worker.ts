@@ -2,6 +2,7 @@ import { emptyCounters, countCore, countProduct } from '../../../shared/analysis
 import { analysisIndexIdentity, isProduct } from '../../../shared/analysis/bitstream/products.ts';
 import type { AnalysisOutput } from '../../../shared/analysis/bitstream/products.ts';
 import { coreAssetUrl } from '../../media/decoding/core-url.ts';
+import { createThreadedAnalysisCore } from '../../../shared/analysis/bitstream/core-memory.ts';
 import { validateAnalysisCore } from '../../../shared/analysis/bitstream/core-abi.ts';
 import { RangeReader } from "../../../shared/media/io/range-reader.ts";
 import { analyzePicture, analyzeRange, analyzeStream } from "../../../shared/analysis/bitstream/runner.ts";
@@ -22,22 +23,29 @@ scope.onmessage = async ({ data }) => {
   if (data.event === 'index') { const reply = indexReply; indexReply = undefined; reply?.(data.index); return; }
   if(data.event==='coverage-miss'){const ack=acknowledgement;acknowledgement=undefined;ack?.(false);return;}
   if (data.ok) { const ack = acknowledgement; acknowledgement = undefined; ack?.(true); return; }
+  let threadedCore: any;
   try {
+    const threaded = data.threads === 2;
+    const asset = (name: string) => coreAssetUrl('/vendor/voidplayer-analysis/' + name, data.base);
     const counters=emptyCounters();const delivered=new Set<number>();
     const response = await fetch(
-      coreAssetUrl("/vendor/voidplayer-analysis/manifest.json", data.base),
+      asset(threaded ? 'threading.json' : 'manifest.json'),
     );
     if (!response.ok) throw new Error("Analysis core unavailable");
     const manifest = await response.json();
     const loadCore = async () => {
       const initStarted=performance.now();
-      const module = await import(
-        /* @vite-ignore */ coreAssetUrl(
-          "/vendor/voidplayer-analysis/voidplayer-analysis.js",
-          data.base,
-        )
-      );
-      const core = await module.default({ locateFile: (name: string) => coreAssetUrl(`/vendor/voidplayer-analysis/${name}`, data.base) });
+      const stem = threaded ? 'voidplayer-analysis-mt' : 'voidplayer-analysis';
+      const module = await import(/* @vite-ignore */ asset(stem + '.js'));
+      let core;
+      if (threaded) {
+        const response = await fetch(asset(stem + '.wasm'));
+        if (!response.ok) throw new Error('Analysis core unavailable');
+        core = threadedCore = await createThreadedAnalysisCore(module.default, new Uint8Array(await response.arrayBuffer()), 2);
+        if (core._vpa_configure_threads(2, 2) !== 0) throw new Error('Analysis decoder thread settings rejected');
+      } else {
+        core = await module.default({ locateFile: asset });
+      }
       validateAnalysisCore(core);
       counters.init++; counters.initMs+=performance.now()-initStarted; return countCore(core,counters);
     };
@@ -96,5 +104,7 @@ scope.onmessage = async ({ data }) => {
       error: error instanceof Error ? error.message : String(error),
       reason: failureInfo(error),
     });
+  } finally {
+    threadedCore?.PThread.terminateAllThreads();
   }
 };

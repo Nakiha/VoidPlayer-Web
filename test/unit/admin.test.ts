@@ -238,6 +238,17 @@ test('unexpected admin failures persist stack and request correlation while omit
   } finally { detach(); await logs.close(); }
 }));
 
+test('analysis workers reserve usable threads for the codec within the admitted budget', async () => {
+  const { decoderForCodec } = await import('../../server/analysis/bitstream/limits.ts');
+  assert.deepEqual(decoderForCodec('vvc', 4), { threads: 2, contexts: 2 });
+  assert.deepEqual(decoderForCodec('vvc', 1), { threads: 1, contexts: 1 });
+  assert.deepEqual(decoderForCodec('h264', 4), { threads: 4, contexts: 4 });
+  const manual = { threads: 4, contexts: 2 };
+  assert.deepEqual(decoderForCodec('vvc', 4, manual), manual);
+  assert.deepEqual(decoderForCodec('h264', 4, manual), { threads: 2, contexts: 2 });
+  assert.deepEqual(decoderForCodec('hevc', 4, manual), { threads: 1, contexts: 1 });
+});
+
 test('analysis settings persist, hot-apply across listeners and reject stale or invalid writes', async () => fixture(async ({ root, base, library, admin, config }) => {
   const second = createMediaServer({ roots: library.roots, library, admin, onLog: () => {} });
   await new Promise<void>(r => second.listen(0, '127.0.0.1', r));
@@ -245,6 +256,7 @@ test('analysis settings persist, hot-apply across listeners and reject stale or 
   try {
     const before = await (await fetch(base + '/api/admin/analysis')).json();
     assert.equal(before.concurrency, 8); assert.equal(before.writable, true);
+    assert.equal(before.automatic, true);
     assert.deepEqual(before.decoder, { threads: 1, contexts: 1 });
     for (const concurrency of [0, 33, 1.5, '8', null]) {
       assert.equal((await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: before.revision, concurrency }))).status, 400);
@@ -257,6 +269,7 @@ test('analysis settings persist, hot-apply across listeners and reject stale or 
     const decoder = { threads: 3, contexts: 2 };
     const saved = await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: before.revision, concurrency: 12, decoder }));
     assert.equal(saved.status, 200); const after = await saved.json();
+    assert.equal(after.automatic, false);
     assert.deepEqual(after.decoder, decoder);
     assert.equal(after.concurrency, 12); assert.notEqual(after.revision, before.revision);
     assert.equal(admin.analysis.resources().concurrency, 12);
@@ -272,6 +285,10 @@ test('analysis settings persist, hot-apply across listeners and reject stale or 
     assert.equal(admin.analysis.resources().concurrency, 32);
     const current = await (await fetch(base + '/api/admin/analysis')).json();
     assert.deepEqual(current.decoder, decoder);
+    const auto = await fetch(other + '/api/admin/analysis', mutation(other, 'PUT', { revision: current.revision, concurrency: current.concurrency, decoder: 'auto' }));
+    assert.equal(auto.status, 200);
+    assert.equal((await auto.json()).automatic, true);
+    assert.equal((await loadConfig([], 'production', root)).analysisDecoder, undefined);
     await fs.writeFile(config.origin!.file, JSON.stringify({ mediaRoots: config.mediaRoots, analysisConcurrency: 12 }));
     assert.equal((await (await fetch(base + '/api/admin/analysis')).json()).reasonCode, 'external-change');
     assert.equal((await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: current.revision, concurrency: 2 }))).status, 409);

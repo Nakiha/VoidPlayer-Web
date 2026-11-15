@@ -4,8 +4,9 @@ import type {DemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
 import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, SUMMARY_BATCH_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
 import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
-import { DEFAULT_ANALYSIS_CONCURRENCY, DEFAULT_ANALYSIS_DECODER, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
+import { DEFAULT_ANALYSIS_CONCURRENCY, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import type { AnalysisDecoderSettings } from './limits.ts';
+import { availableParallelism } from 'node:os';
 import { Worker } from "node:worker_threads";
 import { randomUUID, createHash } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
@@ -55,7 +56,8 @@ type Work = {
   chunks: string[];
   buildId: string;
   threaded: boolean;
-  decoder: AnalysisDecoderSettings;
+  decoder?: AnalysisDecoderSettings;
+  reservedThreads: number;
   state:
     | "queued"
     | "running"
@@ -82,14 +84,15 @@ export class AnalysisScheduler {
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
   private concurrency = DEFAULT_ANALYSIS_CONCURRENCY;
-  private decoder: AnalysisDecoderSettings = DEFAULT_ANALYSIS_DECODER;
+  private decoder?: AnalysisDecoderSettings;
+  private readonly cpuBudget = Math.max(1, availableParallelism() - 1);
   setConcurrency(value: number) {
     this.configure(value, this.decoder);
   }
-  configure(value: number, decoder: AnalysisDecoderSettings) {
+  configure(value: number, decoder?: AnalysisDecoderSettings) {
     if (!validAnalysisConcurrency(value)) throw new RangeError("Invalid analysis concurrency");
-    if (!validAnalysisDecoder(decoder)) throw new RangeError("Invalid analysis decoder settings");
-    this.decoder = { ...decoder };
+    if (decoder !== undefined && !validAnalysisDecoder(decoder)) throw new RangeError("Invalid analysis decoder settings");
+    this.decoder = decoder && { ...decoder };
     this.concurrency = value;
     // Reductions only affect future admission; existing workers keep their slots.
     this.pump();
@@ -155,7 +158,7 @@ export class AnalysisScheduler {
   async buildIdentity() {
     return (await this.resolveCore(this.decoder)).buildId;
   }
-  private async resolveCore(decoder: AnalysisDecoderSettings): Promise<{ buildId: string; threaded: boolean }> {
+  private async resolveCore(decoder?: AnalysisDecoderSettings): Promise<{ buildId: string; threaded: boolean }> {
     const manifest = JSON.parse(
       await readFile(path.join(this.coreDir, "manifest.json"), "utf8"),
     );
@@ -166,7 +169,7 @@ export class AnalysisScheduler {
     if (threaded && (threaded.abi !== 1 || threaded.revision !== manifest.revision ||
         !/^[a-f0-9]{40}:mt-[a-f0-9]{16}$/.test(threaded.buildId) || threaded.maxThreads !== MAX_ANALYSIS_THREADS))
       throw new Error('Analysis threading ABI/version mismatch');
-    if (!threaded && decoder.threads > 1)
+    if (!threaded && decoder && decoder.threads > 1)
       throw new AnalysisFailure('internal-error', 'Configured analysis threads require the server analysis core variant');
     const core = threaded ?? manifest;
     if (!Number.isSafeInteger(core.heapMaxBytes) || core.heapMaxBytes <= 0 || core.heapMaxBytes > ANALYSIS_WORKER_HEAP_BYTES)
@@ -294,7 +297,7 @@ export class AnalysisScheduler {
         filePath,
         target,
         chunks: chunks ?? (cached ? [id] : []),
-        buildId, threaded, decoder,
+        buildId, threaded, decoder, reservedThreads: 1,
         state: cached || chunks ? "complete" : "queued",
         consumers: new Set(),
         seq: 0,
@@ -485,8 +488,14 @@ export class AnalysisScheduler {
     // retains its decoder; a slot is released only after worker termination.
     const queued = [...this.work.values()].filter(w => w.state === 'queued' && w.consumers.size);
     queued.sort((a, b) => Number('mode' in a.target || 'startUs' in a.target) - Number('mode' in b.target || 'startUs' in b.target));
-    for (const work of queued) {
+    let free = this.cpuBudget;
+    for (const running of this.running) free -= running.reservedThreads;
+    for (const [index, work] of queued.entries()) {
       if (this.running.size >= this.concurrency) break;
+      // Each admitted job keeps one thread. Share spare CPU with queued jobs; manual reservations stay explicit.
+      const demand = Math.min(this.concurrency - this.running.size, queued.length - index);
+      work.reservedThreads = work.decoder?.threads ?? (work.threaded ? Math.max(1, Math.min(MAX_ANALYSIS_THREADS, Math.floor(free / demand))) : 1);
+      free -= work.reservedThreads;
       work.state = 'running'; work.seq++; this.running.add(work);
       work.done = this.run(work);
     }
@@ -534,7 +543,7 @@ export class AnalysisScheduler {
           workerData: {
             filePath: work.filePath,
             coreDir: this.coreDir,
-            buildId: work.buildId, threaded: work.threaded, decoder: work.decoder,
+            buildId: work.buildId, threaded: work.threaded, decoder: work.decoder, threadBudget: work.reservedThreads,
             target: work.target,
             externalIndex: !!index,
             flvSnapshot, jsSnapshot,
@@ -556,6 +565,13 @@ export class AnalysisScheduler {
           } catch (error) { reject(error); }
         };
         worker.on("message", async (m) => {
+          if (m.type === 'decoder-threads') {
+            if (Number.isInteger(m.threads) && m.threads >= 1 && m.threads < work.reservedThreads) {
+              work.reservedThreads = m.threads;
+              this.pump();
+            }
+            return;
+          }
           if(m.type==='counters'){work.counters=m.counters;work.seq++;return;}
           if(m.type==='plan'){try{if(!('mode' in work.target))throw Error('Unexpected demand plan');validateDemandPlan(m.plan,work.target);work.plan=m.plan;work.seq++;}catch(error){reject(error);}return;}
           if (m.type === 'cache') {

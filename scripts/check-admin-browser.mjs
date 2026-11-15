@@ -675,6 +675,10 @@ try {
   const analysisContexts = page.getByLabel('帧上下文数');
   assert.equal(await analysisThreads.inputValue(), '1');
   assert.equal(await analysisContexts.inputValue(), '1');
+  const automatic = page.locator('#analysis-auto-threads');
+  assert.equal(await automatic.isChecked(), true);
+  assert.equal(await analysisThreads.isDisabled(), true);
+  await automatic.uncheck();
   await analysisContexts.fill('2');
   assert.equal(await page.locator('#analysis-resource-save').isDisabled(), true);
   await analysisThreads.fill('3');

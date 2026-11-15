@@ -85,8 +85,9 @@ export function validateRecords(frame: FrameMetadata, count: number, at: (i: num
   if (frame.confidence === 'exact' && (!count || w % 4 || h % 4 || frame.reasons.length || frame.capabilities.blocks !== 'ready')) throw new AnalysisFailure('unsupported-picture-layout', 'Incomplete picture');
   // Dimensions are admitted before allocation, independent of producer claims.
   if (![w, h].every(n => Number.isInteger(n) && n > 0) || w > 4096 || h > 2304) throw new AnalysisFailure('resource-limit', 'Invalid analysis geometry');
-  const stride = Math.ceil(w / 4);
-  const cells = new Uint8Array(stride * Math.ceil(h / 4));
+  // One bit per 4x4 cell. Check whole spans in 32-cell words without assuming block order.
+  const stride = Math.ceil(w / 128);
+  const cells = new Uint32Array(stride * Math.ceil(h / 4));
   const qpRequired = frame.capabilities.qp === 'ready', maxQp = frame.codec === 'vvc' ? 63 : 51;
   const aligned = (n: number) => Number.isInteger(n) && n % 4 === 0;
   let area = 0, sum = 0;
@@ -98,11 +99,14 @@ export function validateRecords(frame: FrameMetadata, count: number, at: (i: num
         (qp === null ? qpRequired : !Number.isInteger(qp) || qp < (frame.qp.bitDepth === 10 ? 1 : 0) || qp > maxQp))
       throw new Error('Invalid packed analysis block');
     const startX = x / 4, endX = (x + width) / 4, endY = (y + height) / 4;
+    const first = startX >>> 5, last = (endX - 1) >>> 5;
+    const left = -1 << (startX & 31), right = 0xffffffff >>> (31 - ((endX - 1) & 31));
     for (let row = y / 4; row < endY; row++) {
-      const start = row * stride;
-      for (let cell = start + startX; cell < start + endX; cell++) {
-        if (cells[cell]) throw new AnalysisFailure('unsupported-picture-layout', 'Overlapping analysis blocks');
-        cells[cell] = 1;
+      const base = row * stride;
+      for (let word = first; word <= last; word++) {
+        const mask = (word === first ? left : -1) & (word === last ? right : -1);
+        if (cells[base + word] & mask) throw new AnalysisFailure('unsupported-picture-layout', 'Overlapping analysis blocks');
+        cells[base + word] |= mask;
       }
     }
     const blockArea = width * height;

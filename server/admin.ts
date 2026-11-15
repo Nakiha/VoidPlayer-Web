@@ -6,7 +6,7 @@ import {closeResources} from './shutdown.ts';
 import type {AdminStatus,RootConfiguration,LogPage,LogDocument,AnalysisSettings,RootReasonCode} from '../shared/service/admin.ts';
 export type {RootReasonCode} from '../shared/service/admin.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
-import { MAX_ANALYSIS_CONCURRENCY, DEFAULT_ANALYSIS_DECODER, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder } from './analysis/bitstream/limits.ts';
+import { MAX_ANALYSIS_CONCURRENCY, DEFAULT_MANUAL_DECODER, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder } from './analysis/bitstream/limits.ts';
 import { promises as fs, constants } from 'node:fs';
 import type { IncomingMessage } from './http.ts';
 import path from 'node:path';
@@ -61,7 +61,7 @@ export class AdminController {
     if (!this.analysisInstance) {
       this.analysisInstance = new AnalysisScheduler(this.library, coreDir, this.library.analysisDirectory);
       this.library.registerIndexReader(() => this.analysisInstance!.close());
-      this.analysisInstance.configure(this.config.analysisConcurrency, this.config.analysisDecoder ?? DEFAULT_ANALYSIS_DECODER);
+      this.analysisInstance.configure(this.config.analysisConcurrency, this.config.analysisDecoder);
     }
     return this.analysisInstance;
   }
@@ -133,7 +133,7 @@ export class AdminController {
     const origin = this.config.origin;
     const changed = !!origin && configRevision(await configText(origin.file)) !== origin.revision;
     const writeAccess = !!origin && await fs.access(path.dirname(origin.file), constants.W_OK).then(() => true, () => false);
-    return { ...this.analysis.resources(), decoder: this.config.analysisDecoder ?? DEFAULT_ANALYSIS_DECODER,
+    return { ...this.analysis.resources(), automatic: !this.config.analysisDecoder, decoder: this.config.analysisDecoder ?? DEFAULT_MANUAL_DECODER,
       maxThreads: MAX_ANALYSIS_THREADS, min: 1, max: MAX_ANALYSIS_CONCURRENCY, revision: origin?.revision ?? null,
       writable: !!origin && !changed && writeAccess,
       reasonCode: (changed ? 'external-change' : !origin ? 'no-source' : !writeAccess ? 'not-writable' : null) as RootReasonCode | null };
@@ -148,8 +148,8 @@ export class AdminController {
     const input = document as { revision?: unknown; concurrency?: unknown; decoder?: unknown } | null;
     if (!input || typeof input.revision !== 'string' || !validAnalysisConcurrency(input.concurrency))
       throw new AdminError(400, '请提供配置版本及 1–32 的分析并发数。');
-    const decoder = input.decoder === undefined ? this.config.analysisDecoder ?? DEFAULT_ANALYSIS_DECODER : input.decoder;
-    if (!validAnalysisDecoder(decoder))
+    const decoder = input.decoder === 'auto' ? undefined : input.decoder === undefined ? this.config.analysisDecoder : input.decoder;
+    if (decoder !== undefined && !validAnalysisDecoder(decoder))
       throw new AdminError(400, '请选择 1–4 个分析线程，帧上下文数须介于 1 和线程数之间。');
     const origin = this.config.origin;
     if (!origin || input.revision !== origin.revision) throw new AdminError(409, '配置已更新或无法写回，请重新载入后再编辑。');

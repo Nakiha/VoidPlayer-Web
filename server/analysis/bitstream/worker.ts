@@ -3,7 +3,7 @@ import { isProduct, isSummary, metadataBudgetBytes, SUMMARY_BATCH_LIMIT } from '
 import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import {sealJsIndex} from '../../../shared/media/indexing/js-index-proof.ts';
 import { validateAnalysisCore } from '../../../shared/analysis/bitstream/core-abi.ts';
-import { createThreadedAnalysisCore } from './core-memory.ts';
+import { createThreadedAnalysisCore } from '../../../shared/analysis/bitstream/core-memory.ts';
 import { parentPort, workerData } from "node:worker_threads";
 import { open, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -18,6 +18,8 @@ import {
   analyzeRange,
   analyzeStream,
 } from "../../../shared/analysis/bitstream/runner.ts";
+import { decoderForCodec } from './limits.ts';
+import type { AnalysisResult } from '../../../shared/analysis/bitstream/contract.ts';
 const buildId: string = workerData.buildId;
 let core: any;
 try {
@@ -61,12 +63,13 @@ try {
   };
   try {
     const counters=emptyCounters();const delivered=new Set<number>();
-    const loadCore = async () => {
+    const loadCore = async (codec: AnalysisResult['codec']) => {
       if (core) return core;
       const initStarted = performance.now();
       const stem = workerData.threaded ? 'voidplayer-analysis-mt' : 'voidplayer-analysis';
       const module = await import(pathToFileURL(path.join(workerData.coreDir, stem + '.js')).href);
-      const { threads, contexts } = workerData.decoder;
+      const { threads, contexts } = decoderForCodec(codec, workerData.threadBudget, workerData.decoder);
+      if (threads < workerData.threadBudget) parentPort!.postMessage({ type: 'decoder-threads', threads });
       const wasmBinary = await readFile(path.join(workerData.coreDir, stem + '.wasm'));
       core = workerData.threaded
         ? await createThreadedAnalysisCore(module.default, wasmBinary, threads > 1 ? threads : 0)
@@ -123,7 +126,7 @@ try {
       await send({ type: "chunk", result, counters:{...counters}, cacheHit:hit }, isProduct(result) && result.product === "blocks" ? [result.payload] : []);
     };
     if (workerData.target.mode === 'stream')
-      await analyzeStream(reader, workerData.target, loadCore, buildId,
+      await analyzeStream(reader, workerData.target, { forCodec: loadCore }, buildId,
         new AbortController().signal, publish,
         async progress => parentPort!.postMessage({ type: 'progress', progress }),
         workerData.externalIndex ? () => new Promise((resolve, reject) => {
@@ -135,7 +138,7 @@ try {
       await analyzeRange(
         reader,
         workerData.target,
-        loadCore,
+        { forCodec: loadCore },
         buildId,
         new AbortController().signal,
         publish,
@@ -148,7 +151,7 @@ try {
         await analyzePicture(
           reader,
           workerData.target,
-          await loadCore(),
+          { forCodec: loadCore },
           buildId,
           new AbortController().signal,
         ),

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AnalysisResult } from '../../shared/analysis/bitstream/contract.ts';
-import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, PRODUCT_LIMIT } from '../../shared/analysis/bitstream/products.ts';
+import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, validateRecords, PRODUCT_LIMIT } from '../../shared/analysis/bitstream/products.ts';
 import { DiagramStore } from '../../shared/analysis/bitstream/diagrams.ts';
 const result = (): AnalysisResult => ({
   schema: 1,
@@ -39,6 +39,18 @@ const result = (): AnalysisResult => ({
     recordBytes: 12,
     heapBytes: 67108864,
   },
+});
+
+test('coverage across 32-cell word boundaries detects overlap and holes even in unsorted rows', () => {
+  const frame = { ...result(), width: 392, height: 8 };
+  const block = (x: number, y: number, width: number) => ({ ...frame.blocks[0], x, y, width, height: 4 });
+  const records = [block(124, 4, 260), block(128, 0, 264), block(0, 4, 124), block(384, 4, 8), block(0, 0, 128)];
+  const mean = () => validateRecords(frame, records.length, i => records[i]);
+  assert.equal(mean(), 23);
+  records[4].width += 4;
+  assert.throws(mean, /Overlapping/);
+  records[4].width -= 8;
+  assert.throws(mean, /Incomplete block coverage/);
 });
 
 test('summary has independent readable coverage after blocks eviction', () => {

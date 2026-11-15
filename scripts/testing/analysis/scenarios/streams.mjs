@@ -252,7 +252,7 @@ const { page, artifact, limitsDir, requests, rows, call, analyze, stable, librar
       let release;
       const gate = new Promise(r => { release = r; });
       // Cached local streams still read the manifest to verify build identity.
-      const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/manifest.json*' : '**/bitstream-analysis/capabilities*';
+      const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/{manifest,threading}.json*' : '**/bitstream-analysis/capabilities*';
       await page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); });
       const requested = page.waitForRequest(pattern, { timeout: 30000 });
       try {

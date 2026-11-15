@@ -34,6 +34,13 @@ import type { AnalysisReader } from "./input.ts";
 import { AnalysisFailure, RetryFullAnalysis, coreFailure } from "./failure.ts";
 import { groupAnalysisGops, gopForAu, viewportAnalysisGops } from './stream.ts';
 import type { AnalysisIndexFrontier, StreamProgress } from './stream.ts';
+// Bind a host's codec-aware loader only after the input has identified its decoder.
+function coreForInput(core: any, codec: AnalysisResult['codec']) {
+  const factory = typeof core?.forCodec === 'function' ? () => core.forCodec(codec) : core;
+  if (typeof factory !== 'function') return core;
+  let instance: Promise<any> | undefined;
+  return () => instance ??= Promise.resolve().then(() => factory());
+}
 async function runPictureAttempt(
   reader: AnalysisReader,
   target: AnalysisTarget,
@@ -62,6 +69,7 @@ async function runPictureAttempt(
   validateTarget(options.stream || options.viewport || options.desiredAus ? {...target,product:undefined} : target);
   const started = performance.now(),
     input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity}));
+  core = coreForInput(core, input.codec);
   let opened = false;
   try {
     const firstPacket=input.packets[0];
@@ -530,7 +538,7 @@ async function runPicture(...args: Parameters<typeof runPictureAttempt>): Promis
   try {
     const planned = await input.plan(target);
     const policy = options.executionPolicy ?? executionPolicy();
-    let core = factory, fast = false, decodeEnd: number | undefined;
+    let core = coreForInput(factory, input.codec), fast = false, decodeEnd: number | undefined;
     if ((input.codec === 'hevc' || input.codec === 'vvc') && input.indexComplete && !policy.full) {
       const group = gopForAu(groupAnalysisGops(input.packets), planned.target.au);
       // Do not start a no-pixels DPB from a container-key/open-GOP guess.
@@ -578,14 +586,11 @@ async function runRange(
   cached?: (picture: SourcePictureKey) => Promise<AnalysisOutput | null>,
 ) {
   validateRange(target);
-  if(typeof core==='function') {
-    const factory=core;let instance:Promise<any> | undefined;
-    core=()=>instance ??= Promise.resolve().then(factory);
-  }
   const execution = executionPolicy();
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
   const input = await openAnalysisInput(reader, signal, false, {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
+  core = coreForInput(core, input.codec);
   const missing = new Set<number>();
   let lastCached: AnalysisOutput | undefined;
   try {
@@ -685,10 +690,10 @@ async function runStream(
         }
       } catch (error) { reader.close(); throw error; }
     }
-    if (typeof core === 'function') { const factory = core; let instance: Promise<any> | undefined; core = () => instance ??= Promise.resolve().then(factory); }
     const input = await openAnalysisInput(reader, signal, false, {
       sourceVersion: target.sourceVersion, indexIdentity: target.indexIdentity, perOutputBudget: true,
     });
+    core = coreForInput(core, input.codec);
     try {
       const demandPlan=makeDemandPlan(input.packets,target,buildId); if(demandPlan)onPlan?.(demandPlan);
       const groups = viewportAnalysisGops(input.packets, target.firstPtsUs, target.window);
@@ -730,18 +735,15 @@ async function runStream(
   const input = await openAnalysisInput(reader, signal, true, {  sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity,frontier,
     waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
   const first = input.packets[0];
+  core = coreForInput(core, input.codec);
   const pictureTarget = { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion,
     sourcePtsUs: first.pts, normalizedMediaUs: Math.max(0, first.pts - target.firstPtsUs) };
   const streamOptions = { input, sequential: true, stream: target, onResult, onProgress: report, cached };
-  // Bound the first publication delay and the work a late pixel requirement can replay.
-  const maxChainPictures = 128;
   const total = input.totalPackets;
-  // A completed VVC output has already passed its AU's pixel-requirement
-  // checks, including suffix SEI, and every dependency needed for that output.
-  // Later AUs may require a fresh full DPB without invalidating that prefix.
-  const progressiveVvc = input.codec === 'vvc' && (target.product === 'summary' ||
-    (target.product === 'blocks' && total !== null && total > maxChainPictures));
-  if (progressiveVvc && !input.acknowledge && (input.indexIntegrity === undefined || input.indexIntegrity === 'complete')) {
+  // A completed picture has passed its AU's pixel checks (including suffix SEI)
+  // and reference work. A later full replay can preserve that verified prefix.
+  const progressive = (target.product === 'summary' || target.product === 'blocks') && (input.codec === 'vvc' || input.codec === 'hevc');
+  if (progressive && !input.acknowledge && (input.indexIntegrity === undefined || input.indexIntegrity === 'complete')) {
     try {
       if (!input.indexComplete && total !== null && (!frontier || (await frontier()).complete)) {
         signal.throwIfAborted();
@@ -790,65 +792,7 @@ async function runStream(
       return await runPicture(reader, pictureTarget, core, buildId, signal, { ...streamOptions, keepInput: true });
     } finally { input.close(); }
   }
-  if (target.product !== 'blocks' || (input.codec !== 'vvc' && input.codec !== 'hevc') || input.acknowledge ||
-      (input.indexIntegrity !== undefined && input.indexIntegrity !== 'complete') ||
-      total === null || total < 1 || total > maxChainPictures)
-    return runPicture(reader, pictureTarget, core, buildId, signal, streamOptions);
-
-  try {
-    const confirmed = input.indexComplete || !frontier || (await frontier()).complete;
-    signal.throwIfAborted();
-    if (confirmed && !input.indexComplete) await input.ensure?.(total);
-    // Preserve one decoder and one configuration across dependent GOPs. The
-    // first AU must be independently decodable, even if the container calls it a key.
-    if (input.indexComplete && input.packets.length === total &&
-        input.packets.every((packet, i) => packet.configuration === first.configuration && (!i || !packet.discontinuity)) &&
-        input.packets.reduce((sum, packet) => sum + packet.size, 0) <= BUDGET.inputBytes &&
-        first.size <= BUDGET.packetBytes) {
-      const evidence = inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.readUnit(first));
-      if (evidence.singlePicture && evidence.closedRandomAccess) {
-        // A cached prefix or hole keeps the established incremental cache path.
-        // Reuse probed entries when handing the request back to that path.
-        const probed = new Map<number, AnalysisOutput | null>();
-        if (cached) {
-          streamOptions.cached = picture => probed.has(picture.au) ? Promise.resolve(probed.get(picture.au)!) : cached(picture);
-          for (const packet of input.packets) {
-            signal.throwIfAborted();
-            const hit = await cached(input.picture(packet, target.sourceVersion));
-            probed.set(packet.au, hit);
-            if (hit) return await runPicture(reader, pictureTarget, core, buildId, signal, { ...streamOptions, keepInput: true });
-          }
-        }
-        signal.throwIfAborted();
-        const instance = typeof core === 'function' ? await core() : core;
-        signal.throwIfAborted();
-        if (hasExecutionExtension(instance)) {
-          let pictures = 0;
-          await report({ ...latest, totalPictures: total, indexComplete: true });
-          const result = await executeAnalysisAttempt({
-            fast: true, policy: executionPolicy(), signal,
-            event: (event, bytes) => instance[EXECUTION_EVENT]?.(event, bytes),
-            publish: async value => {
-              await onResult(value);
-              signal.throwIfAborted();
-              pictures++;
-              await report({ ...latest, pictures, gopStartAu: value.gop?.startAu,
-                checkedUs: Math.min(target.durationUs - 1, Math.floor(target.durationUs * pictures / total)) });
-            },
-            attempt: (executionMode, publish, onExecution, reserve) => runPictureAttempt(reader, pictureTarget, instance, buildId, signal,
-              { input, keepInput: true, sequential: true, stream: target, executionMode, onResult: publish, onExecution, reserve }),
-          });
-          const totalUs = Math.max(target.durationUs, input.sourceEndUs - target.firstPtsUs);
-          await report({ ...latest, totalUs, checkedUs: totalUs });
-          return result;
-        }
-        core = instance;
-      }
-    }
-    return await runPicture(reader, pictureTarget, core, buildId, signal, { ...streamOptions, keepInput: true });
-  } finally {
-    input.close();
-  }
+  return runPicture(reader, pictureTarget, core, buildId, signal, streamOptions);
 }
 
 // Legacy defaults remain source-compatible. Products are explicit opt-in.

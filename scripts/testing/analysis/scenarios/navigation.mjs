@@ -48,7 +48,7 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         assert.equal(chart.count, 90, 'three disjoint windows analyze three intersecting GOPs, not the whole source');
         assert.equal((await call('get_review_session')).positionUs, playback.positionUs, 'automatic window analysis never seeks');
         // Withdrawing demand must abort preparation, including remote calls; it may not finish the old source in the background.
-        const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/manifest.json*' : '**/bitstream-analysis/capabilities*';
+        const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/{manifest,threading}.json*' : '**/bitstream-analysis/capabilities*';
         let release; const gate = new Promise(resolve => { release = resolve; });
         await page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); });
         const requested = page.waitForRequest(pattern); void requested.catch(() => {});
@@ -268,7 +268,7 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         // Hold real task preparation long enough to see expansion, then verify
         // completion contracts through intermediate widths, retaining the node.
         let release;const gate=new Promise(resolve=>{release=resolve;});
-        const pattern=input==='local-file'?'**/vendor/voidplayer-analysis/manifest.json*':'**/bitstream-analysis/capabilities*';
+        const pattern=input==='local-file'?'**/vendor/voidplayer-analysis/{manifest,threading}.json*':'**/bitstream-analysis/capabilities*';
         await page.route(pattern,async route=>{await gate;await route.continue().catch(()=>{});});
         const requested=page.waitForRequest(pattern);
         try {
