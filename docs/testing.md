@@ -299,6 +299,12 @@ node scripts/run-tests.mjs ci-node-media
 | `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台与 Sites 静态包汇总；需先生成对应产物 | decoder / native-release / sites-release / release-set；打包及草稿操作仍由 workflow 管理 |
 | `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | 不在 GitHub CI 执行；在明确的本机环境单独验收 |
 
+`sites-release` 复用现有 WebKit/Chromium 静态版用例，分别验证有／无隔离的本地路径和零媒体 API 请求，再制作静态附件。
+发布契约沿用 `node-release-pipeline` 的临时归档，补齐静态包缺失、版本／回执混用、既有 Site 身份残留和两套 core 不一致的负例；
+每组增加一个小型静态 tar 与八个元数据变体，不新增媒体或解码循环。三平台的压缩 core 表示仍逐字节比较，静态包比较相同的原始 core 和 provenance。
+基础 WebKit 的停滞载入回归保留原 Range 拦截、取消和替换操作，进度预期跟随启动包在线程选择前的索引准备阶段；
+修复前预期“解码首帧”而实际为“建立帧索引”，校准后同一场景通过，不增加重试、素材或等待预算。
+
 `browser` 是自动化浏览器套件。需要 Windows 可见桌面的 Chrome/Edge 色彩与 WebGPU 检查属于清单中的 `manual-regression`，仍使用原有专用命令；外部服务、用户指定媒体的诊断/实验/基准属于显式工具分类，不会自动变成发布门禁。清单记录限制和理由，不能把 `npm test` 当作 fast，也不能把旧 `test:browser` 当作完整浏览器套件。
 
 FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Linux Chromium 的隔离完整浏览器进程显式启用 SwiftShader WebGPU，macOS/Windows 使用本机图形后端；不提供 CPU 视频呈现兜底；这不代表物理 GPU 或大视口性能验收。普通本地命令仍按原有全部性能阈值必过。GitHub CI 不执行性能基准：FLV、Range、参考解码、HDR、分析矩阵与 HTTPS 功能流程验证实际呈现帧的推进、身份和暂停稳定性；HTTPS 继续做三轮双轨播放、队列容量和资源释放检查。`VOIDPLAYER_FUNCTIONAL_ONLY=1` 可在本机复现该功能路径，普通本地命令仍保留原基准阈值。历史云端性能报告只保留为历史证据，不作为当前验收结论。

@@ -2467,17 +2467,18 @@ try {
     try {
       let request = nextRequest();
       await add(entries[0]).click();
-      assert.ok((await request).headers().range, 'library MP4 reads the first packet via Range after obtaining its server index');
+      assert.ok((await request).headers().range, 'library MP4 reads its startup packet via Range after obtaining its server index');
       const cancel = page.locator('#source-list .source-file[aria-busy="true"]');
       await cancel.waitFor();
       assert.equal(await page.locator('.frame-loading').count(), 0, 'loading is represented only by the existing badge');
       assert.equal(await page.locator('#empty-A').isVisible(), true, 'the initial view remains until an actual frame is ready');
       assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'loading feedback creates no source track');
-      assert.equal(await page.locator('#source-activity-stage').textContent(), '正在解码首帧');
+      // Thread selection prepares the indexed startup packet before entering the decoder deadline.
+      assert.equal(await page.locator('#source-activity-stage').textContent(), '正在建立帧索引');
       assert.match(await page.locator('#source-activity-name').textContent(), /same\.mp4/);
       assert.equal(await page.locator('#source-activity-cancel').isVisible(), false, 'collapsed state only shows track controls');
       assert.equal(await page.locator('#source-activity-details').isVisible(),false,'incoming load retains the collapsed preference');
-      assert.equal(await page.locator('#source-activity-track-A [role=progressbar]').getAttribute('aria-valuenow'),null,'stalled first-frame decode has an indeterminate circle');
+      assert.equal(await page.locator('#source-activity-track-A [role=progressbar]').getAttribute('aria-valuenow'),null,'stalled startup IO has an indeterminate circle');
       await page.locator('#source-activity-toggle').click();
       assert.equal(await page.locator('#source-activity-cancel').isVisible(), true);
       await page.waitForFunction(() => !document.getElementById('source-activity-time').textContent.includes('0 秒'));

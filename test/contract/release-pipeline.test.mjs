@@ -131,6 +131,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   assert.deepEqual(jobs['sites-release'].needs, ['cores']);
   assert.match(jobs['sites-release'].body, /run: npm run package:sites/);
+  assert.match(jobs['sites-release'].body, /run: node scripts\/run-tests\.mjs --case browser-sites-webkit,browser-sites-chromium/);
   assert.match(jobs['sites-release'].body, /name: voidplayer-sites\n[\s\S]*path: artifacts\/\*-sites\.tar\.gz\*/);
   assert.deepEqual(jobs.unit.needs, ['cores', 'qa-media']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media-\$\{\{ matrix.part \}\}\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);

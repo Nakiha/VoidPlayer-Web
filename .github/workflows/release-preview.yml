@@ -647,7 +647,7 @@ jobs:
   sites-release:
     name: Package portable Sites static frontend
     needs: cores
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -664,6 +664,10 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
+      - run: brew install ffmpeg
+      - run: npx playwright install --with-deps chromium webkit
+      - uses: ./.github/actions/browser-display
+      - run: node scripts/run-tests.mjs --case browser-sites-webkit,browser-sites-chromium
       - run: npm run package:sites
       - uses: actions/upload-artifact@v7
         with:
@@ -671,6 +675,15 @@ jobs:
           path: artifacts/*-sites.tar.gz*
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sites-verification-reports
+          path: |
+            .run/sites-browser/
+            .run/test-suites/selected/
+          if-no-files-found: error
+          retention-days: 14
 
   release-set:
     name: Verify complete platform release set
