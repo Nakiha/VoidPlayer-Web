@@ -1,10 +1,11 @@
+import { isPredictionProduct } from './predictions.ts';
 import { parseMediaIndexIdentity } from "../../media/indexing/media-index-identity.ts";
 import { validateDiagram, validateContainerHeader } from "./diagram-validation.ts";
 import type { FrameDescription } from "../../media/frame-description.ts";
 import { AnalysisFailure, ANALYSIS_REASON_CODES } from "./failure.ts";
 import type { AnalysisReasonCode } from "./failure.ts";
 export const ANALYSIS_SCHEMA = 1;
-export const ANALYSIS_RECIPE = "blocks-basic-v3";
+export const ANALYSIS_RECIPE = "blocks-basic-v4";
 export const ANALYZER_VERSION = "0.1.0";
 export interface SourcePictureKey {
   sourceVersion: string;
@@ -33,7 +34,13 @@ export interface PresentedFrameToken {
     | "displayHeight"
   > & { rotation: number };
 }
+export type BlockDepth = 'hevc-cu' | 'vvc-qt';
+export function validBlockDepth(kind: BlockDepth | undefined, depth: number | undefined) {
+  if (!kind) return depth === undefined;
+  return depth !== undefined && Number.isInteger(depth) && depth >= 0 && depth <= (kind === 'hevc-cu' ? 3 : 5);
+}
 export interface AnalysisBlock {
+  depth?: number;
   x: number;
   y: number;
   width: number;
@@ -71,6 +78,7 @@ export interface AnalysisSourceLayout {
   provenance:'configuration-sps-v1';configuration:number;codedWidth:number;codedHeight:number;visibleRect:{x:number;y:number;width:number;height:number};
 }
 export interface AnalysisResult {
+  blockDepth?: BlockDepth;
   /** Parsed from this configuration SPS, independent of browser plane allocation. */
   sourceLayout?:AnalysisSourceLayout;
   containerHeader?: import("./diagrams.ts").ContainerHeader;
@@ -119,7 +127,7 @@ export type DeepReadonly<T> = T extends object
   : T;
 export type ReadonlyAnalysisResult = DeepReadonly<AnalysisResult>;
 export interface AnalysisTarget {
-  product?: "summary" | "blocks";
+  product?: "summary" | "blocks" | import('./predictions.ts').PredictionProduct;
   indexIdentity?: import('../../media/indexing/media-index-identity.ts').MediaIndexIdentity;
   sourceVersion: string;
   sourcePtsUs: number;
@@ -176,7 +184,7 @@ export function validateProductRequest(product: unknown) {
   if (product !== undefined && product !== "summary" && product !== "blocks") throw new AnalysisFailure("invalid-request", "Unknown analysis product");
 }
 export function validateTarget(target: AnalysisTarget): void {
-  validateProductRequest(target?.product);
+  if (!isPredictionProduct(target?.product)) validateProductRequest(target?.product);
   if(target?.product === "summary")throw new AnalysisFailure("invalid-request","Summary requires an explicit stream request");
   if (
     !target ||
@@ -234,6 +242,9 @@ export function validateMetadata(result: Omit<AnalysisResult, "blocks">): void {
     normalizedMediaUs: 0,
     picture: result.picture,
   });
+  if (result.blockDepth !== undefined && (result.confidence !== 'exact' ||
+      !(result.blockDepth === 'hevc-cu' && result.codec === 'hevc' || result.blockDepth === 'vvc-qt' && result.codec === 'vvc')))
+    throw new Error('Invalid block depth semantics');
   if(result.sourceLayout) {
     const l=result.sourceLayout,v=l.visibleRect;
     if(l.provenance!=='configuration-sps-v1'||!['h264','hevc'].includes(result.codec)||l.configuration!==result.picture.configuration||l.codedWidth!==result.width||l.codedHeight!==result.height||!v||![v.x,v.y,v.width,v.height].every(Number.isSafeInteger)||v.x<0||v.y<0||v.width<=0||v.height<=0||v.x+v.width>l.codedWidth||v.y+v.height>l.codedHeight)throw Error('Invalid analysis SPS layout');
@@ -289,7 +300,7 @@ export function validateResult(result: AnalysisResult): void {
   let area = 0, weightedQp=0;
   for (const b of blocks) {
     if (
-      ![b.x, b.y, b.width, b.height].every(
+      !validBlockDepth(result.blockDepth, b.depth) || ![b.x, b.y, b.width, b.height].every(
         (n) => Number.isInteger(n) && n % 4 === 0,
       ) ||
       b.x < 0 ||

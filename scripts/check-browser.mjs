@@ -1042,13 +1042,9 @@ try {
     await page.locator('#file-A').setInputFiles(path.join(fixtures,'ci_h264_smoke.mp4'));
     await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);
     await panels(page,false); await page.locator('#toggle-analysis-overlay').click();
-    const segments=await page.locator('#bitstream-mode').evaluate(e=>{
-      const r=e.getBoundingClientRect(),icon=document.querySelector('#bitstream-boundaries').getBoundingClientRect();
-      return {padding:getComputedStyle(e).padding,height:r.height,iconHeight:icon.height,buttons:[...e.querySelectorAll('button')].map(b=>({height:b.getBoundingClientRect().height,top:b.getBoundingClientRect().top-r.top}))};
-    });
-    assert.equal(segments.padding,'0px');
-    assert.equal(segments.height,segments.iconHeight,'segment bar matches adjacent icon height');
-    for(const b of segments.buttons)assert.deepEqual(b,{height:segments.height,top:0},'segments fill the complete bar height');
+    const heights = await page.locator('#analysis-overlay-panel').evaluate(panel =>
+      ['#bitstream-mode [data-mode="sizes"]', '#bitstream-boundaries'].map(id => panel.querySelector(id).getBoundingClientRect().height));
+    assert.equal(heights[0], heights[1], 'mode choices match the display controls in height');
     const read=control=>control.evaluate(e=>({fill:getComputedStyle(e).backgroundColor,edge:getComputedStyle(e).boxShadow}));
     const finish=control=>control.evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));
     for(const theme of ['dark','light']) {
@@ -1120,7 +1116,7 @@ try {
       },{png:[...png],point});
     };
     for(const mode of ['qp','modes']) {
-      await page.locator(`#bitstream-mode [data-value="${mode}"]`).click();
+      await page.locator(`#bitstream-mode [data-mode="${mode}"]`).click();
       const point=await page.locator('#bitstream-overlay-A').evaluate(canvas=>{
         const ctx=canvas.getContext('2d'),pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data,r=canvas.getBoundingClientRect();
         for(let y=Math.floor(canvas.height*.25);y<canvas.height*.65;y++)for(let x=Math.floor(canvas.width*.25);x<canvas.width*.65;x++) {
@@ -1147,10 +1143,11 @@ try {
     }
     const toggle=page.locator('#bitstream-labels');
     assert.equal(await toggle.getAttribute('aria-pressed'),'false','block labels start off');
-    assert.deepEqual(await toggle.evaluate(e=>[e.previousElementSibling.id,e.nextElementSibling.id]),['bitstream-mode','bitstream-opacity-control'],'text toggle sits between fill and opacity');
+    assert.deepEqual(await page.locator('#bitstream-display .bitstream-layer-buttons button').evaluateAll(items=>items.map(el=>el.id)),
+      ['bitstream-boundaries','bitstream-labels'], 'display groups the two independent block overlays');
     const requestsBeforeLabels=analysisRequests,positionBeforeLabels=await page.evaluate(()=>window.voidPlayer.getState().positionUs);
     for(const mode of ['qp','modes']) {
-      await page.locator(`#bitstream-mode [data-value="${mode}"]`).click();
+      await page.locator(`#bitstream-mode [data-mode="${mode}"]`).click();
       await page.waitForFunction(()=>!document.getAnimations().some(a=>a.playState==='running'&&a.effect?.getComputedTiming().iterations!==Infinity));
       const plain=await page.locator('#bitstream-overlay-A').evaluate(c=>{window.overlayPlain={width:c.width,height:c.height,bytes:c.getContext('2d').getImageData(0,0,c.width,c.height).data,viewport:window.voidPlayer.getViewport(),image:document.querySelector('#image-A').getBoundingClientRect().toJSON()};return c.toDataURL();});
       await toggle.click();
@@ -1483,9 +1480,14 @@ try {
     await page.locator('#inspect-playback').scrollIntoViewIfNeeded();
     await page.locator('#inspector-panel').screenshot({ path: path.join(screenshots, `${browserName}-track-performance.png`) });
     const replacement = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4').id;
+    const previousStats = await page.locator('#inspect-playback').elementHandle();
     await page.locator('#remove-track-A').click();
     await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), replacement);
+    // Removing the last track closes the inspector. Reopen it to publish the replacement's metadata and statistics.
+    if (!await page.locator('#inspector-panel').isVisible()) await page.locator('#toggle-inspector').click();
+    await page.waitForFunction(previous => !previous.isConnected, previousStats);
     await page.locator('#inspect-playback').waitFor({ state: 'attached' });
+    await previousStats.dispose();
     assert.deepEqual(await performanceRows.allTextContents(), ['—', '—', '—', '—', '—'], 'replacement does not inherit playback metrics');
   });
 
@@ -1943,7 +1945,7 @@ try {
       const manifest=await fetch(new URL('/vendor/voidplayer-analysis/manifest.json',location.href)).then(r=>r.json()),buildId=manifest.buildId??manifest.revision;
       const sourceVersion='recovery-source';
       window.recovery={streams:0,pictures:0,failure:'error',commit:0};
-      const result=au=>({schema:1,codec:'h264',analyzerVersion:'0.1.0',buildId,recipe:'blocks-basic-v3',
+      const result=au=>({schema:1,codec:'h264',analyzerVersion:'0.1.0',buildId,recipe:'blocks-basic-v4',
         picture:{sourceVersion,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'},sourcePtsUs:100+au*100,
         width:16,height:16,confidence:'exact',reasons:[],capabilities:{blocks:'ready',qp:'ready',modes:'ready',motion:'unsupported'},
         qp:{component:'luma',bitDepth:8,weighting:'pixel-area',mean:23},blocks:[{x:0,y:0,width:16,height:16,qp:23,mode:'intra'}],
@@ -2212,12 +2214,11 @@ try {
       const url = new URL(route.request().url());
       if (url.searchParams.get('root') !== nested.rootId || url.searchParams.get('directory') !== 'review/shots') return route.continue();
       const offset = Number(url.searchParams.get('offset') ?? 0);
-      // A revision-qualified first page revalidates the loaded view; it is not
-      // another locate. Pagination still must visit exactly offsets 0 and 60.
-      (offset === 0 && url.searchParams.has('revision') ? refreshes : offsets).push(offset);
+      // Background refresh conditionally revalidates the first page by ETag.
+      const headers = { ...route.request().headers() };
+      (offset === 0 && headers['if-none-match'] ? refreshes : offsets).push(offset);
       // This fixture replaces JSON pages, including conditional refreshes.
       // Ask the origin for a body rather than attempting to parse a 304.
-      const headers = { ...route.request().headers() };
       delete headers['if-none-match'];
       const response = await route.fetch({ headers }), data = await response.json();
       const entries = offset === 0 ? Array.from({length:60}, (_, i) => ({...nested, id:`decoy-${i}`, name:`review/shots/decoy-${i}.mp4`})) : [nested];
@@ -2244,7 +2245,7 @@ try {
           const url = new URL(response.url());
           return url.pathname === '/api/library/browse' && url.searchParams.get('root') === nested.rootId
             && url.searchParams.get('directory') === 'review/shots' && url.searchParams.get('offset') === '0'
-            && url.searchParams.has('revision');
+            && Boolean(response.request().headers()['if-none-match']);
         });
         // Exercise the existing background refresh while the located view is open.
         await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
@@ -2442,6 +2443,16 @@ try {
     assert.equal(await page.locator('#replace-source-dialog').count(), 0);
     assert.deepEqual(await identities(), before, 'library additions at capacity cannot alter sources or order');
     await page.screenshot({ path: path.join(screenshots, `${browserName}-tracks-full.png`) });
+    await panels(page, false);
+    await page.setViewportSize({width:320, height:786});
+    await page.locator('#toggle-analysis-overlay').click();
+    const badges = page.locator('#bitstream-tracks > button');
+    assert.equal(await badges.count(), 8);
+    await badges.last().focus();
+    const tops = await badges.evaluateAll(items => items.map(el => el.getBoundingClientRect().top));
+    assert.equal(new Set(tops).size, 1, 'all eight stream switches stay on the first row at 320px');
+    assert.ok(await page.locator('#bitstream-inspector').evaluate(el => el.scrollWidth <= el.clientWidth),
+      'badge overflow stays within the switch row');
   });
 
   await check('stalled incoming loads can be cancelled or superseded without locking the add buttons', async page => {

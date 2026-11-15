@@ -153,6 +153,20 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
             (await call("get_bitstream_analysis_state")).cacheHit,
             true,
           );
+          if (row.container === 'mp4' && decoding === 'software') {
+            const products = row.codec === 'h264' ? ['prediction-intra'] : ['prediction-intra', 'prediction-inter'];
+            for (const product of products) {
+              const prediction = await call('request_bitstream_analysis', {slot: 'A', product});
+              const bytes = Buffer.from(prediction.payloadBase64, 'base64');
+              assert.equal(prediction.product, product);
+              assert.deepEqual(prediction.picture, result.picture);
+              assert.equal(prediction.buildId, result.buildId);
+              assert.equal(bytes.length, prediction.recordCount * (product === 'prediction-intra' ? 16 : 32));
+              if (product === 'prediction-intra') assert.ok(prediction.recordCount > 0);
+            }
+            const blocks = await call('request_bitstream_analysis', {slot: 'A'});
+            assert.deepEqual(blocks.blocks, result.blocks, 'predictions preserve the independent block cache');
+          }
           if (
             input === "local-file" &&
             decoding === "browser" &&

@@ -1,6 +1,7 @@
 import {analysisFiles} from './core-artifacts.mjs';
 import {verifyCoreCapabilities} from './core-capabilities.mjs';
 import { pathToFileURL } from 'node:url';
+import { checkPredictionAbi } from '../shared/analysis/bitstream/predictions.ts';
 import { validateAnalysisCore } from '../shared/analysis/bitstream/core-abi.ts';
 import { readFile, mkdir, cp, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -24,7 +25,7 @@ for (const key of [
   "ffmpegRevision",
   "abi",
   "semanticVersion",
-  "referenceAbi", "demuxAbi", "qualityAbi", 'qualityInputAbi', 'xpsnrInputAbi',
+  "referenceAbi", "predictionAbi", "demuxAbi", "qualityAbi", 'qualityInputAbi', 'xpsnrInputAbi',
 ])
   assert.equal(manifest[key], lock[key], `Analysis provenance ${key}`);
 assert.ok(
@@ -35,6 +36,7 @@ assert.ok(!manifest.dirty || process.env.ANALYSIS_ALLOW_LOCAL_BUILD === '1', 'Un
 const create = (await import(pathToFileURL(path.join(source, 'voidplayer-analysis.js')).href)).default;
 const core=await create({wasmBinary:await readFile(path.join(source,'voidplayer-analysis.wasm'))});
 validateAnalysisCore(core);
+checkPredictionAbi(core);
 await verifyCoreCapabilities(source,lock,'analysis','',core);
 assert.equal(typeof core._vpa_feed_known,'function','Known timestamp feed ABI');
 const threaded = JSON.parse(await readFile(path.join(source, 'threading.json'), 'utf8'));
@@ -44,12 +46,14 @@ assert.equal(threaded.revision, lock.revision);
 assert.equal(threaded.ffmpegRevision, lock.threadedFfmpegRevision);
 assert.equal(threaded.buildId, lock.revision + ':mt-' + threadedDigest.slice(0, 16));
 assert.equal(threaded.abi, lock.threadingAbi);
+assert.equal(threaded.predictionAbi, lock.predictionAbi);
 assert.equal(threaded.heapMaxBytes, lock.threadedHeapMaxBytes);
 assert.equal(threaded.maxThreads, lock.maxThreads);
 const createThreaded = (await import(pathToFileURL(path.join(source, 'voidplayer-analysis-mt.js')).href)).default;
 const threadCore = await createThreaded({ wasmBinary: threadedWasm, analysisThreads: 2 });
 try {
   validateAnalysisCore(threadCore);
+  checkPredictionAbi(threadCore);
   assert.equal(threadCore._vpa_configure_threads(1, 1), 0);
   assert.equal(threadCore._vpa_configure_threads(2, 2), 0);
   assert.ok(threadCore._vpa_configure_threads(1, 2) < 0);
@@ -73,6 +77,7 @@ await writeFile(
       buildId: manifest.buildId ?? manifest.revision,
       dirty: manifest.dirty ?? false,
       referenceAbi: manifest.referenceAbi ?? null,
+      predictionAbi: manifest.predictionAbi,
       files: hashes,
     },
     null,

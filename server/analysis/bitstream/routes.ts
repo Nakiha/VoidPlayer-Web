@@ -93,8 +93,10 @@ export async function handleAnalysisRoutes(
       sendJson(res, 200, {
         buildId:await scheduler.buildIdentity(),
         productSchema:PRODUCT_SCHEMA,
-        products:{stream:["legacy","summary","blocks"],picture:["legacy","blocks"],range:["legacy"]},
-        encodings:["summary-json-v1","blocks-le12-v1"],
+        products:{stream:["legacy","summary","blocks"],picture:["legacy","blocks","prediction-intra","prediction-inter"],range:["legacy"]},
+        encodings:['summary-json-v1', 'blocks-le12-v2', 'intra-le16-v1', 'inter-le32-v1'],
+        predictionProducts:{h264:['prediction-intra'],hevc:['prediction-intra','prediction-inter'],vvc:['prediction-intra','prediction-inter']},
+        blockDepth: { hevc: "hevc-cu", vvc: "vvc-qt" },
         schema: 1,
         analyzerVersion: ANALYZER_VERSION,
         recipe: ANALYSIS_RECIPE,
@@ -103,7 +105,8 @@ export async function handleAnalysisRoutes(
         limits: {
           field: "unsupported",
           layer: "unsupported",
-          motion: "unsupported",
+          motion: 'unsupported', // Base block records carry no vectors.
+          predictionVectors: {codec: 'hevc', product: 'prediction-inter', unit: 'quarter-luma-sample'},
           vvc: "single-slice",
         },
         execution: "server",

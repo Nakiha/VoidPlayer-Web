@@ -1,3 +1,6 @@
+import { createThreadedAnalysisCore } from '../../shared/analysis/bitstream/core-memory.ts';
+import { decodeProduct, encodeProduct } from '../../shared/analysis/bitstream/products.ts';
+import { predictionStride, readPrediction, type PredictionProduct } from '../../shared/analysis/bitstream/predictions.ts';
 import { checkAcknowledgedInputBudget } from '../helpers/bitstream-input-budget.ts';
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -274,6 +277,7 @@ for (const fixture of fixtures)
                 y: view.getUint16(at + 2, true),
                 width: view.getUint16(at + 4, true),
                 height: view.getUint16(at + 6, true),
+                ...(fixture.codec !== 'h264' ? {depth: view.getUint8(at + 11)} : {}),
                 qp: view.getInt16(at + 8, true),
                 mode: ({ 1: "intra", 2: "inter", 3: "skip" } as any)[
                   view.getUint8(at + 10)
@@ -516,10 +520,10 @@ test("fixed-size HEVC CUs and fixed luma QP have an encoder-controlled independe
     );
     assert.equal(result.confidence, "exact");
     assert.deepEqual(result.blocks, [
-      { x: 0, y: 0, width: 32, height: 32, qp: 17, mode: "intra" },
-      { x: 32, y: 0, width: 32, height: 32, qp: 17, mode: "intra" },
-      { x: 0, y: 32, width: 32, height: 32, qp: 17, mode: "intra" },
-      { x: 32, y: 32, width: 32, height: 32, qp: 17, mode: "intra" },
+      { x: 0, y: 0, width: 32, height: 32, qp: 17, mode: "intra", depth: 0 },
+      { x: 32, y: 0, width: 32, height: 32, qp: 17, mode: "intra", depth: 0 },
+      { x: 0, y: 32, width: 32, height: 32, qp: 17, mode: "intra", depth: 0 },
+      { x: 32, y: 32, width: 32, height: 32, qp: 17, mode: "intra", depth: 0 },
     ]);
     assert.equal(result.qp.mean, 17);
   } finally {
@@ -784,6 +788,14 @@ test('VVC geometry, QP, intra/inter/skip and L0/L1 agree with independent VTM bl
     assert.equal(result.picture.au, answer.au);
     assert.equal(result.width, answer.width); assert.equal(result.height, answer.height);
     assert.equal(result.blocks.length, answer.blockCount);
+    assert.equal(result.blockDepth, 'vvc-qt');
+    // Independent VTM luma QT_Depth for rectangular CUs with MT_Depth 2 and 1 respectively.
+    const qtProbe = answer.poc === 0 ? [1248, 232, 32, 4, 2] : answer.poc === 16 ? [640, 128, 128, 64, 0] : null;
+    if (qtProbe) {
+      const [x, y, width, height, qtDepth] = qtProbe;
+      const block = result.blocks.find(b => b.x === x && b.y === y && b.width === width && b.height === height);
+      assert.equal(block?.depth, qtDepth);
+    }
     const blocks = result.blocks.map(b => [b.x, b.y, b.width, b.height, b.qp, b.mode] as const)
       .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3]);
     assert.equal(createHash('sha256').update(JSON.stringify(blocks)).digest('hex'), answer.blocksSha256, `all CUs for POC ${answer.poc}`);
@@ -844,4 +856,88 @@ for(const fixture of fixtures)test(`whole ${fixture.codec} cache resumes holes w
   if(get(groups[1].startAu).gop.anchor==='closed')assert.ok(fed.every(au=>au>=groups[1].startAu),'closed cached prefix is never decoded');
   else assert.ok(fed.some(au=>au<groups[1].startAu),'dependent hole retains reference preroll');
   assert.equal(module._vpa_record_bytes(),0);
+});
+
+
+function predictionProjection(codec: string, record: ReturnType<typeof readPrediction>) {
+  const row = [record.x, record.y, record.width, record.height];
+  if (record.kind === 'intra') {
+    const luma = record.components === 'Y';
+    row.push(luma ? 1 : 6, record.mode);
+    if (codec === 'hevc' && !luma) row.push(record.selector!);
+    if (codec === 'vvc' && luma) row.push(Number(record.family === 'MIP'), record.isp, record.referenceLine);
+    if (codec === 'vvc' && !luma) row.push(record.selection === 'chroma-selector' && record.selector === 4 ? 70 : record.mode);
+  } else if (codec === 'hevc') {
+    row.push(Number(record.skip), record.mergeIndex ?? -1, Number(!!record.l0) + 2 * Number(!!record.l1));
+    for (const ref of [record.l0, record.l1]) row.push(ref?.index ?? -1, ref?.au ?? -1, ref?.x ?? 0, ref?.y ?? 0);
+  } else {
+    const subtype = ['affine-4', 'affine-6', 'SbTMVP'].indexOf(record.model);
+    row.push(Number(record.skip), Number(record.merge), Number(record.mmvd), Number(record.ciip), record.gpmPartition ?? -1, subtype);
+  }
+  return row.join(',') + '\n';
+}
+
+const predictionAnswers = JSON.parse(await readFile(new URL('../../docs/fixtures/prediction-answers.json', import.meta.url), 'utf8'));
+for (const fixture of fixtures) test(`${fixture.codec} predictions match independent decoder traces and agree across thread variants`, async () => {
+  const signal = new AbortController().signal;
+  const input = await openAnalysisInput(await reader(fixture.file), signal);
+  const firstPts = Math.min(...input.packets.map(p => p.pts));
+  const packets = input.packets.slice(0, predictionAnswers[fixture.codec].length);
+  input.close();
+  const serial = new Map<string, string>();
+  for (const threads of [1, 2, 4]) {
+    const suffix = threads === 1 ? '' : '-mt';
+    const file = resolve(`public/vendor/voidplayer-analysis/voidplayer-analysis${suffix}.js`);
+    const create = (await import(pathToFileURL(file).href)).default;
+    const module = threads === 1 ? await create() : await createThreadedAnalysisCore(create, await readFile(file.replace(/\.js$/, '.wasm')), threads);
+    try {
+      if (threads > 1) assert.equal(module._vpa_configure_threads(threads, fixture.codec === 'hevc' ? 1 : threads), 0);
+      for (const {au, pts} of packets) {
+        for (const [family, answer] of Object.entries(predictionAnswers[fixture.codec][au])) {
+          const product: PredictionProduct = family === 'intra' ? 'prediction-intra' : 'prediction-inter';
+          const target = {product, sourceVersion: fixture.sha256, sourcePtsUs: pts, normalizedMediaUs: pts - firstPts};
+          const frame = await analyzePicture(await reader(fixture.file), target, module, 'test', signal);
+          assert.equal(frame.picture.au, au);
+          assert.equal(frame.product, product);
+          const transfer = await decodeProduct(await encodeProduct(frame));
+          assert.ok(transfer.product === product);
+          const view = new DataView(transfer.payload);
+          const count = view.byteLength / predictionStride(product);
+          const lines = Array.from({length: count}, (_, i) => predictionProjection(fixture.codec, readPrediction(view, product, i)));
+          assert.deepEqual([count, createHash('sha256').update(lines.sort().join('')).digest('hex')], answer, `${family} AU ${au}`);
+          const digest = createHash('sha256').update(new Uint8Array(view.buffer)).digest('hex');
+          const key = `${au}/${product}`;
+          if (threads === 1) serial.set(key, digest);
+          else assert.equal(digest, serial.get(key));
+          assert.equal(module._vpa_record_bytes(), 0);
+          assert.ok(module._vpa_prediction_count() < 0);
+        }
+      }
+    } finally {
+      module._vpa_close();
+      module.PThread?.terminateAllThreads();
+    }
+  }
+});
+
+
+test('unsupported prediction layouts release the selection and preserve ordinary block analysis', async () => {
+  const file = 'h264_high422p_1s_320x180.mp4', signal = new AbortController().signal, module = await core();
+  const input = await openAnalysisInput(await reader(file), signal);
+  const first = Math.min(...input.packets.map(p => p.pts));
+  input.close();
+  const target = {sourceVersion: file, sourcePtsUs: first, normalizedMediaUs: 0};
+  try {
+    await assert.rejects(analyzePicture(await reader(file), {...target, product: 'prediction-intra'}, module, 'test', signal),
+      {code: 'unsupported-picture-layout'});
+    await assert.rejects(analyzePicture(await reader(file), {...target, product: 'prediction-inter'}, module, 'test', signal),
+      {code: 'unsupported-codec'});
+    assert.equal(module._vpa_record_bytes(), 0);
+    const plain = await analyzePicture(await reader(file), target, module, 'test', signal);
+    assert.equal(plain.confidence, 'exact');
+    assert.ok(plain.blocks.length);
+    assert.ok(module._vpa_prediction_count() < 0);
+  } finally {
+    module._vpa_close();
+  }
 });

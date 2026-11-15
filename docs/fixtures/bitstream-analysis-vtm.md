@@ -8,6 +8,8 @@
 
 VTM 的局部双树可能输出 `[0x0]` 的空 luma 区域（实际是 chroma-only CU）；提取器明确排除零面积记录，只保留完整有效的 luma CU。标准内置统计中的 `PredMode=0/1` 映射为 inter/intra，`SkipFlag=1` 优先映射为 skip；未知模式或缺失记录会使生成失败。不能忽略冲突重复记录或用默认 QP 补值。
 
+树深度另取同一 trace 的两个亮度 CU 定点验证。POC 0 的 `(1248,232) 32×4` 为 `QT_Depth=2, MT_Depth=2, Depth=4`；POC 16 的 `(640,128) 128×64` 为 `QT_Depth=0, MT_Depth=1, Depth=1`。Web 导出的 VVC 深度分别为 2 和 0。
+
 ## 复现
 
 需要 Git、CMake、C++17 编译器、FFmpeg（含 `vvc_mp4toannexb`）、Python 3.11+ 与已同步 QA 样片。以仓库根目录执行：

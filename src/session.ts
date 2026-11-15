@@ -363,14 +363,17 @@ export class ReviewSession {
     return this.bitstream.queryChart(slot, this.tracks.get(slot), this.getPresentedFrame(slot), startUs, endUs, pixelWidth, axis);
   }
   cachedBitstreamAnalysis(slot:Slot,presented?:PresentedFrameToken){const token=presented??this.getPresentedFrame(slot);return token?this.bitstream.queries?.cached(token)??null:null;}
-  async requestBitstreamAnalysis(slot: Slot, signal?: AbortSignal) {
+  requestBitstreamAnalysis(slot: Slot, signal?: AbortSignal): Promise<import('../shared/analysis/bitstream/contract.ts').AnalysisResult>;
+  requestBitstreamAnalysis(slot: Slot, signal: AbortSignal | undefined, product: import('../shared/analysis/bitstream/predictions.ts').PredictionProduct):
+    Promise<import('../shared/analysis/bitstream/products.ts').AnalysisPredictions>;
+  async requestBitstreamAnalysis(slot: Slot, signal?: AbortSignal, product?: import('../shared/analysis/bitstream/predictions.ts').PredictionProduct) {
     const track = this.tracks.get(slot), token = this.getPresentedFrame(slot);
-    return this.runBitstreamTask(slot, signal, { state: 'pending' }, (service, taskSignal) => {
+    return this.runBitstreamTask<import('../shared/analysis/bitstream/products.ts').AnalysisPredictions | import('../shared/analysis/bitstream/contract.ts').AnalysisResult>(slot, signal, { state: 'pending' }, (service, taskSignal) => {
       if (!token?.picture) return service.fail(new AnalysisFailure(!['isobmff', 'flv'].includes(track!.source.info.container ?? '') ? 'unsupported-container' : 'unsupported-picture-layout', 'This playback picture cannot be precisely identified'));
       if (this.playing) return service.fail(new AnalysisFailure('invalid-request', 'Pause playback before requesting deep analysis'));
       const current = this.getPresentedFrame(slot);
       if (!current || current.commit !== token.commit || current.generation !== token.generation) throw new DOMException('Presented frame changed', 'AbortError');
-      return service.request(track!.source, token, taskSignal);
+      return product ? service.request(track!.source, token, taskSignal, product) : service.request(track!.source, token, taskSignal);
     });
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => this.listeners.delete(listener); }

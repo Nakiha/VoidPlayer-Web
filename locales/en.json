@@ -1938,22 +1938,38 @@
     "source": "无法唯一确定源画面，已隐藏精确遮罩",
     "translation": "The source picture cannot be uniquely identified; the exact overlay is hidden."
   },
+  "bitstream.analysisMode": {
+    "source": "分析模式",
+    "translation": "Analysis mode"
+  },
   "bitstream.analysisProgress": {
     "source": "分析进度",
     "translation": "Analysis progress",
     "needsReview": false
   },
+  "bitstream.blockCount": {
+    "source": "块数",
+    "translation": "Blocks"
+  },
   "bitstream.blockLabels": {
     "source": "块内文字",
     "translation": "Block labels"
   },
-  "bitstream.blockLabelsHint": {
-    "source": "显示 QP 或预测类型，小块自动隐藏文字",
-    "translation": "Show QP or prediction type; hide labels in small blocks"
+  "bitstream.blockSize": {
+    "source": "块尺寸",
+    "translation": "Block size"
   },
   "bitstream.boundaries": {
     "source": "块边界",
     "translation": "Block boundaries"
+  },
+  "bitstream.byArea": {
+    "source": "按编码面积",
+    "translation": "By coded area"
+  },
+  "bitstream.byCount": {
+    "source": "按块数",
+    "translation": "By block count"
   },
   "bitstream.cancelled": {
     "source": "分析已取消",
@@ -1964,22 +1980,54 @@
     "translation": "Close analysis overlay controls",
     "needsReview": false
   },
+  "bitstream.cuDepth": {
+    "source": "CU 深度",
+    "translation": "CU depth"
+  },
+  "bitstream.displayTab": {
+    "source": "画面显示",
+    "translation": "Display"
+  },
   "bitstream.editOpacity": {
     "source": "编辑不透明度",
     "translation": "Edit opacity"
   },
-  "bitstream.fillMode": {
-    "source": "填色",
-    "translation": "Fill"
+  "bitstream.enableTrack": {
+    "source": "请开启一个轨道遮罩",
+    "translation": "Enable a track overlay"
+  },
+  "bitstream.exportFrame": {
+    "source": "导出当前帧",
+    "translation": "Export current frame"
+  },
+  "bitstream.fieldUnavailable": {
+    "source": "此轨当前帧没有该模式的数据",
+    "translation": "This track has no data for this mode on the current frame"
+  },
+  "bitstream.frameDistribution": {
+    "source": "当前帧 · {metric}分布",
+    "translation": "Current frame · {metric} distribution"
   },
   "bitstream.hideTrackOverlay": {
     "source": "隐藏轨道 {slot} 的遮罩",
     "translation": "Hide overlay for track {slot}",
     "needsReview": false
   },
+  "bitstream.highQp": {
+    "source": "高 QP",
+    "translation": "High QP"
+  },
+  "bitstream.includeBlocks": {
+    "source": "附带块明细",
+    "translation": "Include block records"
+  },
   "bitstream.incompleteReferences": {
     "source": "参考状态不完整，无法生成精确遮罩",
     "translation": "Incomplete reference state prevents an exact overlay."
+  },
+  "bitstream.inspectTrack": {
+    "source": "检查轨道",
+    "translation": "Inspection track"
   },
   "bitstream.inter": {
     "source": "帧间",
@@ -1997,9 +2045,25 @@
     "source": "分析目标或区间无效",
     "translation": "The analysis target or interval is invalid."
   },
-  "bitstream.noFill": {
-    "source": "无",
-    "translation": "None"
+  "bitstream.lowQp": {
+    "source": "低 QP",
+    "translation": "Low QP"
+  },
+  "bitstream.maxQp": {
+    "source": "最高 QP",
+    "translation": "Max QP"
+  },
+  "bitstream.meanQp": {
+    "source": "平均 QP",
+    "translation": "Mean QP"
+  },
+  "bitstream.minQp": {
+    "source": "最低 QP",
+    "translation": "Min QP"
+  },
+  "bitstream.noFrameBlocks": {
+    "source": "当前帧暂无可用的块数据",
+    "translation": "No block data for this frame"
   },
   "bitstream.noSafeAnchor": {
     "source": "预滚预算内没有可验证的闭合 IDR 起点",
@@ -2014,13 +2078,25 @@
     "translation": "Analysis overlay",
     "needsReview": false
   },
-  "bitstream.prediction": {
-    "source": "预测模式",
-    "translation": "Prediction modes"
+  "bitstream.partitions": {
+    "source": "块划分",
+    "translation": "Partitions"
+  },
+  "bitstream.pauseInspect": {
+    "source": "暂停后检查当前帧",
+    "translation": "Pause to inspect this frame"
+  },
+  "bitstream.predictionTypes": {
+    "source": "预测类型",
+    "translation": "Prediction types"
   },
   "bitstream.qp": {
     "source": "QP 热图",
     "translation": "QP heatmap"
+  },
+  "bitstream.qtDepth": {
+    "source": "QT 深度",
+    "translation": "QT depth"
   },
   "bitstream.resourceLimit": {
     "source": "分析达到资源上限，请缩短区间或选择更近的起点",
@@ -2031,6 +2107,10 @@
     "translation": "Show overlay for track {slot}",
     "needsReview": false
   },
+  "bitstream.sizeFill": {
+    "source": "按块尺寸填色",
+    "translation": "Color by block size"
+  },
   "bitstream.skip": {
     "source": "跳过",
     "translation": "Skip"
@@ -2038,6 +2118,14 @@
   "bitstream.sourceChanged": {
     "source": "片源已变更，请重新载入后分析",
     "translation": "The source has changed. Reload it before analyzing."
+  },
+  "bitstream.totalBlocks": {
+    "source": "{count} 块",
+    "translation": "{count} blocks"
+  },
+  "bitstream.treeDepth": {
+    "source": "树深度",
+    "translation": "Tree depth"
   },
   "bitstream.unsupportedCodec": {
     "source": "此编码暂不支持码流分析",
@@ -2054,6 +2142,10 @@
   "bitstream.unsupportedQpDepth": {
     "source": "此位深的 QP 暂不支持，块和模式仍可查看",
     "translation": "QP is not yet supported at this bit depth; blocks and modes remain available."
+  },
+  "bitstream.weightBy": {
+    "source": "统计口径",
+    "translation": "Weight by"
   },
   "bootstrap.brandDescription": {
     "source": "· 视频对比",

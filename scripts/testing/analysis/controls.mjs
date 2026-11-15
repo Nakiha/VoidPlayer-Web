@@ -62,7 +62,15 @@ export async function createAnalysisControls(page) {
     const hideOverlay=async()=>{const button=page.locator(`#bitstream-tracks [data-slot="${overlaySlot}"]`);if(await button.getAttribute('aria-pressed')==='true')await button.click();};
 
     const setMode = async mode => {
-      await page.locator(`#bitstream-mode [data-value="${mode === 'blocks' ? 'none' : mode}"]`).click();
+      const partition = ['blocks', 'none', 'sizes'].includes(mode);
+      await page.locator(`#bitstream-mode [data-mode="${partition ? 'sizes' : mode}"]`).click();
+      if (partition) {
+        const check = page.locator('#bitstream-size-fill');
+        if (await check.isChecked() !== (mode === 'sizes')) {
+          if (!await check.isVisible()) await page.locator('#bitstream-show-display').click();
+          await check.setChecked(mode === 'sizes');
+        }
+      }
     };
 
     const stable = () =>

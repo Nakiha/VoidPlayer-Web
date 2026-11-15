@@ -17,7 +17,7 @@ export function countProduct(result:AnalysisOutput,hit:boolean,counters:Analysis
  counters.preroll=Math.max(0,counters.decodedAU-counters.products);counters.readBytes=result.metrics.bytesRead;
  if(coverage){counters.coverageBytes+=new TextEncoder().encode(JSON.stringify(coverage)).byteLength;return;}
  if(!isProduct(result)){counters.payloadBytes=null;return;}
- const header=result.product==='blocks'?{...result,payload:undefined}:result;
- const bytes=new TextEncoder().encode(JSON.stringify(header)).byteLength+(result.product==='blocks'?result.payload.byteLength:0);
+ const header=result.product!=='summary'?{...result,payload:undefined}:result;
+ const bytes=new TextEncoder().encode(JSON.stringify(header)).byteLength+(result.product!=='summary'?result.payload.byteLength:0);
  if(counters.payloadBytes!==null)counters.payloadBytes+=bytes;
 }

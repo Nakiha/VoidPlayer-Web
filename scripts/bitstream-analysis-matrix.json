@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "recipe": "blocks-basic-v3",
+  "recipe": "blocks-basic-v4",
   "rows": [
     {
       "codec": "h264",

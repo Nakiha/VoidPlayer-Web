@@ -644,9 +644,37 @@ jobs:
           echo '构建与独立运行测试通过。请下载本次运行的同名 artifact，解压后核验 .sha256。' >> "$GITHUB_STEP_SUMMARY"
           echo '最终用户无需安装 Node/Bun。分支构建提供预览产物；版本标签在全平台验证通过后生成 Release 草稿。' >> "$GITHUB_STEP_SUMMARY"
 
+  sites-release:
+    name: Package portable Sites static frontend
+    needs: cores
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: npm ci
+      - run: npm run package:sites
+      - uses: actions/upload-artifact@v7
+        with:
+          name: voidplayer-sites
+          path: artifacts/*-sites.tar.gz*
+          if-no-files-found: error
+          retention-days: 30
+
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, native-runtime, unit, playback, https-playback, cache-browser, source-logic, analysis-browser, analysis-matrix, hevc-browser, uncovered-regressions]
+    needs: [native-release, native-runtime, unit, playback, https-playback, cache-browser, source-logic, analysis-browser, analysis-matrix, hevc-browser, uncovered-regressions, sites-release]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10

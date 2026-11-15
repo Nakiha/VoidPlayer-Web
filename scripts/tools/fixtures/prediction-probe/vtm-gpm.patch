@@ -1,0 +1,10 @@
+--- a/source/Lib/CommonLib/dtrace_blockstatistics.cpp
++++ b/source/Lib/CommonLib/dtrace_blockstatistics.cpp
+@@ -825,6 +825,7 @@
+             std::vector<Position> geoPartitions[2];
+             Position linePositions[2];
+             retrieveGeoPolygons(cu, geoPartitions, linePositions);
++            DTRACE_BLOCK_SCALAR(g_trace_ctx, D_BLOCK_STATISTICS_ALL, cu, "GpmPartitionIndex", cu.firstPU->geoSplitDir);
+             DTRACE_LINE(g_trace_ctx, D_BLOCK_STATISTICS_ALL, cu, GetBlockStatisticName(BlockStatistic::GeoPartitioning), linePositions[0].x, linePositions[0].y, linePositions[1].x, linePositions[1].y);
+ 
+             if(geoMergeCtxtsOfCurrentCtu.size() > 0)

@@ -11,9 +11,10 @@ export function installChoiceMenu(id:string, choices:Choice[] | (() => Choice[])
   const menu = document.createElement('div'); menu.id = `${id}-menu`; menu.className = 'choice-menu';
   menu.setAttribute('popover','auto'); menu.setAttribute('role','menu'); menu.setAttribute('aria-label',button.getAttribute('aria-label')!);
   button.setAttribute('aria-controls',menu.id); button.setAttribute('aria-haspopup','menu');
+  // A modal or an explicitly scoped toolbar owns its controls, including top-layer menus.
   const dialog = button.closest('dialog');
-  // A body sibling would be inert while the settings dialog is modal.
-  (dialog ?? document.body).append(menu);
+  const owner = button.closest('[data-menu-host]') ?? dialog;
+  (owner ?? document.body).append(menu);
   const label = document.createElement('span');
   if (glyph) button.innerHTML = icon(glyph); else button.replaceChildren();
   const sample = options.length ? preview?.(options[0].value) : undefined; if (sample) button.append(sample);

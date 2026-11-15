@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { selectDiagrams, inspectCurrentWindow } from '../controls.mjs';
 import { assertCachedDisplayReuse } from '../display-reuse.mjs';
+import { settleAppearance } from '../../browser-contracts.mjs';
 
 
 export async function run(context) {
@@ -60,6 +61,23 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         // Keep automatic chart demand out of the overlay-only cache assertion.
         // A picture inspection may preempt and then resume a summary stream.
         await selectDiagrams(page, 'overview');
+        async function checkOverlaySections() {
+          const layout = await page.locator('#bitstream-inspector').evaluate(host => {
+            const head = host.firstElementChild, tracks = head.querySelector('#bitstream-tracks'), body = head.nextElementSibling;
+            const grip = head.firstElementChild, close = head.lastElementChild;
+            const rail = tracks.getBoundingClientRect(), bottom = head.getBoundingClientRect().bottom;
+            return {
+              badges: [...tracks.children].map(el => el.matches('button.bitstream-track-control') && el.dataset.slot),
+              railHeight: head.offsetHeight,
+              header: grip.id === 'bitstream-grip' && close.id === 'bitstream-close' &&
+                grip.getBoundingClientRect().right <= rail.left && close.getBoundingClientRect().left >= rail.right,
+              lower: [...host.querySelectorAll('button,select,input')].filter(el => el.getClientRects().length && !head.contains(el))
+                .every(el => body.contains(el) && el.getBoundingClientRect().top >= bottom - 1),
+            };
+          });
+          assert.deepEqual(layout.badges, ['A','B']);
+          assert.ok(layout.header && layout.railHeight <= 32 && layout.lower, 'the grip, stream switches and close action share the first row');
+        }
         for (const slot of ['A','B']) {
           await openAnalysis(slot);
           assert.equal(await page.locator('#inspector-analysis-tab').count(), 0);
@@ -83,9 +101,9 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
 
           for(const colorScheme of ['dark','light']) {
             await page.emulateMedia({colorScheme});
-            const geometry=await page.locator('#bitstream-inspector').evaluate(host=>({font:getComputedStyle(host).fontSize,width:host.clientWidth,content:host.scrollWidth,height:host.offsetHeight}));
+            const geometry=await page.locator('#bitstream-inspector').evaluate(host=>({font:getComputedStyle(host).fontSize,width:host.clientWidth,content:host.scrollWidth}));
             assert.equal(geometry.font,'12px');assert.ok(geometry.content<=geometry.width);
-            assert.ok(geometry.height<=48,'wide overlay toolbar stays on one compact row');
+            await checkOverlaySections();
           }
           await hideOverlay();
         }
@@ -96,7 +114,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await openAnalysis('A');
         await page.locator('#bitstream-overlay-A').waitFor({state:'visible'});
         await page.locator('#bitstream-opacity').click();
-        await page.locator('#bitstream-opacity-menu [data-value="50"]').click();
+        await page.locator('#analysis-overlay-panel #bitstream-opacity-menu [data-value="50"]').click();
         assert.equal(await page.locator('#bitstream-opacity-value').textContent(),'50%');
         await page.locator('#bitstream-opacity-value').click();
         await page.locator('#bitstream-opacity-input').fill('63'); await page.locator('#bitstream-opacity-input').press('Enter');
@@ -104,12 +122,12 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await page.locator('#bitstream-opacity-value').click(); await page.locator('#bitstream-opacity-input').fill('90'); await page.locator('#bitstream-opacity-input').press('Escape');
         assert.equal(await page.locator('#bitstream-opacity-value').textContent(),'63%');
         assert.equal(await page.locator('#analysis-overlay-panel').isVisible(),true,'Escape in the value editor keeps the panel open');
-        await page.locator('#bitstream-opacity').click(); await page.locator('#bitstream-opacity-menu [data-value="75"]').click();
+        await page.locator('#bitstream-opacity').click(); await page.locator('#analysis-overlay-panel #bitstream-opacity-menu [data-value="75"]').click();
         await page.setViewportSize({width:520,height:786});
         assert.equal(await page.locator('.bitstream-toolbar-title').count(),0,'overlay toolbar has no redundant heading');
-        assert.equal(await page.locator('#bitstream-boundaries').textContent(),'','boundaries use only an icon');
+        assert.equal(await page.locator('#bitstream-boundaries').textContent(),'块边界','display toggles have visible labels');
         assert.equal(await page.locator('#bitstream-boundaries').getAttribute('aria-label'),'块边界');
-        assert.ok(await page.locator('#bitstream-inspector').evaluate(el=>el.offsetHeight<=28),'compact dual-track toolbar stays on one row at 520px');
+        await checkOverlaySections();
         // 窄视口下帧号列表整行换位，而不是把轨道控件挤到只剩一条缝。
         await page.waitForFunction(()=>document.querySelector('.analysis-head').classList.contains('status-stacked'));
         const headRows=await page.evaluate(()=>{const head=document.querySelector('.analysis-head'),tools=document.querySelector('.analysis-tools'),status=document.querySelector('.analysis-status');const toolRect=tools.getBoundingClientRect(),statusRect=status.getBoundingClientRect(),headRect=head.getBoundingClientRect();return {stacked:head.classList.contains('status-stacked'),separate:Math.round(statusRect.top-toolRect.bottom)>=-2,statusFullWidth:Math.abs(statusRect.width-(headRect.width-16))<=2,toolsInsideHead:toolRect.right<=headRect.right+1};});
@@ -118,8 +136,8 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await page.waitForFunction(()=>!document.querySelector('.analysis-head').classList.contains('status-stacked'));
         await page.setViewportSize({width:821,height:786});
         await page.waitForFunction(()=>{const popup=document.querySelector('#analysis-overlay-panel'), bar=document.querySelector('#annotation-toolbar');const a=popup.getBoundingClientRect(), b=bar.getBoundingClientRect();return a.bottom<=b.top-4 || a.top>=b.bottom+4;});
-        const sharedChrome=await page.evaluate(()=>['analysis-overlay-panel','annotation-toolbar'].map(id=>{const e=document.getElementById(id),s=getComputedStyle(e);return {padding:s.padding,background:s.backgroundColor,border:s.border,borderRadius:s.borderRadius,shadow:s.boxShadow,filter:s.backdropFilter,height:e.getBoundingClientRect().height};}));
-        assert.deepEqual(sharedChrome[0],sharedChrome[1],'viewport toolbars share material, inset and height');
+        const sharedChrome=await page.evaluate(()=>['analysis-overlay-panel','annotation-toolbar'].map(id=>{const e=document.getElementById(id),s=getComputedStyle(e);return {padding:s.padding,background:s.backgroundColor,border:s.border,borderRadius:s.borderRadius,shadow:s.boxShadow,filter:s.backdropFilter};}));
+        assert.deepEqual(sharedChrome[0],sharedChrome[1],'viewport tools share the same outer material and padding');
         const closeStyle = selector => page.locator(selector).evaluate(el => { const s=getComputedStyle(el); return {color:s.color,background:s.backgroundColor}; });
         for (const colorScheme of ['dark', 'light']) {
           await page.emulateMedia({colorScheme});
@@ -140,9 +158,11 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await page.mouse.move(0,0);
         const overlayGrip=await page.locator('#bitstream-grip').boundingBox();
         const overlayBeforeDrag=await page.locator('#analysis-overlay-panel').boundingBox();
+        const surface = await page.locator('.viewport-surface').boundingBox();
+        const dragX = overlayBeforeDrag.x + overlayBeforeDrag.width / 2 < surface.x + surface.width / 2 ? 70 : -70;
         await page.mouse.move(overlayGrip.x+overlayGrip.width/2,overlayGrip.y+overlayGrip.height/2);await page.mouse.down();
-        await page.mouse.move(overlayGrip.x+overlayGrip.width/2-20,overlayGrip.y+overlayGrip.height/2-70,{steps:8});await page.mouse.up();
-        await page.waitForFunction(top=>document.querySelector('#analysis-overlay-panel').getBoundingClientRect().top<top-40,overlayBeforeDrag.y);
+        await page.mouse.move(overlayGrip.x+overlayGrip.width/2+dragX,overlayGrip.y+overlayGrip.height/2,{steps:8});await page.mouse.up();
+        await page.waitForFunction(x=>Math.abs(document.querySelector('#analysis-overlay-panel').getBoundingClientRect().left-x)>40,overlayBeforeDrag.x);
         const draggedPanel=await page.locator('#analysis-overlay-panel').boundingBox(),viewportBounds=await page.locator('.viewport-surface').boundingBox();
         assert.ok(draggedPanel.x>=viewportBounds.x+7 && draggedPanel.y>=viewportBounds.y+7,'overlay handle drags inside the viewport');
         const grip=await page.locator('#drawing-grip').boundingBox();
@@ -204,19 +224,87 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.ok((await readOverlay()).visible > 0, 'boundaries alone draw pixels');
         await page.locator('#bitstream-boundaries').click();
         assert.deepEqual(await readOverlay(), { visible: 0, cyan: 0, checksum: 0 }, 'no fill and no boundaries leave a transparent canvas');
-        for (const fill of ['qp', 'modes']) {
+        for (const fill of ['qp', 'modes', 'sizes']) {
           await setMode(fill);
           assert.equal(await page.locator('#bitstream-boundaries').getAttribute('aria-pressed'), 'false', 'fill selection never enables boundaries');
           const filled = await readOverlay();
           assert.ok(filled.visible > 0, `${fill} works with no boundary strokes`);
           await page.locator('#bitstream-boundaries').press('Enter');
           assert.equal(await page.locator('#bitstream-boundaries').getAttribute('aria-pressed'), 'true', 'Enter activates the focused boundary button');
-          assert.equal(await page.locator(`#bitstream-mode [data-value="${fill}"]`).getAttribute('aria-pressed'), 'true');
+          assert.equal(await page.locator('#bitstream-mode [aria-pressed="true"]').getAttribute('data-mode'), fill);
           assert.notDeepEqual(await readOverlay(), filled, 'boundaries can be combined with either fill');
           await page.locator('#bitstream-boundaries').click();
         }
         await setMode('none');
         assert.deepEqual(await readOverlay(), { visible: 0, cyan: 0, checksum: 0 });
+        const drawer = page.locator('#analysis-overlay-panel #bitstream-frame-inspector');
+        const display = page.locator('#bitstream-show-display'), frameToggle = page.locator('#bitstream-inspect-frame');
+        const fold = async (button, expanded) => {
+          if (await button.getAttribute('aria-expanded') !== String(expanded)) await button.press('Enter');
+        };
+        assert.deepEqual(await page.locator('#bitstream-mode button').allTextContents(), ['块划分','预测类型','QP 热图','树深度']);
+        assert.ok(await page.locator('#bitstream-mode [data-mode="depth"]').isDisabled(), 'AVC macroblocks have no tree depth');
+        await setMode('modes');
+        assert.deepEqual(await page.locator('#bitstream-prediction-key span').allTextContents(), ['帧内','帧间','跳过']);
+        await fold(frameToggle, true);
+        await drawer.locator('[data-inspect-track]').selectOption('A');
+        await fold(display, false);
+        assert.ok(await page.locator('#bitstream-display').isHidden());
+        assert.ok(await drawer.locator('[data-readings]').isHidden(), 'prediction has its own statistics');
+        const predictionLabels = await drawer.locator('[data-bins] button > :first-child').allTextContents();
+        assert.ok(predictionLabels.length && predictionLabels.every(name => ['帧内','帧间','跳过'].includes(name)));
+        const predictionColors = await readOverlay();
+        await fold(frameToggle, false);
+        assert.deepEqual(await readOverlay(), predictionColors, 'folding both sections preserves the prediction overlay');
+        await setMode('qp');
+        assert.ok(await page.locator('#bitstream-qp-key').isVisible());
+        await setMode('modes');
+        assert.equal(await display.getAttribute('aria-expanded'), 'false', 'the prediction settings remember their folded state');
+        await fold(display, true);
+        await setMode('none');
+        await fold(frameToggle, true);
+        await checkOverlaySections();
+        const bin = drawer.locator('[data-bins] button').first();
+        await bin.click();
+        assert.equal(await bin.getAttribute('aria-pressed'), 'true');
+        assert.ok((await readOverlay()).visible > 0, 'inspector highlights the selected size even with fill and edges off');
+        const highlighted = await readOverlay();
+        await fold(frameToggle, false);
+        assert.deepEqual(await readOverlay(), highlighted, 'folding leaves the selected class highlighted');
+        await fold(frameToggle, true);
+        assert.equal(await bin.getAttribute('aria-pressed'), 'true');
+        await drawer.locator('[data-weight]').selectOption('count');
+        assert.equal(await bin.getAttribute('aria-pressed'), 'true');
+        await bin.click();
+        assert.deepEqual(await readOverlay(), { visible: 0, cyan: 0, checksum: 0 });
+        await drawer.locator('[data-blocks]').check();
+        await setMode('qp');
+        await fold(frameToggle, true);
+        await fold(display, false);
+        if (input === 'local-file') {
+          await page.mouse.move(0, 0);
+          await page.locator('#analysis-overlay-panel').screenshot({path: artifact('frame-inspector.png')});
+        }
+        const [download] = await Promise.all([page.waitForEvent('download'), drawer.locator('[data-export]').click()]);
+        const report = JSON.parse(await readFile(await download.path(), 'utf8'));
+        assert.equal(report.slot, 'A');
+        assert.equal(report.statistics.blockCount, report.blocks.length);
+        const qpValues = report.blocks.map(block => block.qp);
+        const numbers = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
+        assert.deepEqual(await drawer.locator('dd').allTextContents(),
+          [report.blocks.length, Math.min(...qpValues), report.frame.qp.mean, Math.max(...qpValues)].map(value => numbers.format(value)),
+          'visible metrics match the exported picture');
+        const firstQp = Math.min(...qpValues);
+        const share = qpValues.filter(qp => qp === firstQp).length / qpValues.length * 100;
+        const firstRow = drawer.locator('[data-bins] button').first();
+        assert.equal(await firstRow.getAttribute('data-key'), String(firstQp));
+        assert.equal(await firstRow.locator('span').last().textContent(), numbers.format(share) + '%');
+        assert.equal(report.statistics.distributions.sizes.reduce((sum, bin) => sum + bin.pixels, 0), report.frame.width * report.frame.height);
+        assert.equal(report.frame.picture.au, (await call('get_presented_frame', {slot:'A'})).picture.au);
+        await drawer.locator('[data-inspect-track]').selectOption('B');
+        await fold(frameToggle, false);
+        await fold(display, true);
+        assert.ok(await drawer.isHidden());
         const boxWithoutDrawing = await page.locator('#bitstream-overlay-A').boundingBox();
         await page.locator('#stage-A').dispatchEvent('pointermove', { clientX: boxWithoutDrawing.x + boxWithoutDrawing.width / 2, clientY: boxWithoutDrawing.y + boxWithoutDrawing.height / 2 });
         await page.locator('.bitstream-hit-tooltip:visible').waitFor();
@@ -233,13 +321,18 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           await page.setViewportSize({ width, height: 786 });
           await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           assert.ok(await page.locator('#bitstream-inspector').evaluate(host => host.scrollWidth <= host.clientWidth), `toolbar fits ${width}px`);
-          const segments = await page.locator('#bitstream-mode button').evaluateAll(buttons => buttons.map(b => b.getBoundingClientRect().top));
-          assert.ok(Math.max(...segments) - Math.min(...segments) < 1, 'fill choices stay together on a single row');
-          if (width >= 520) assert.ok(await page.locator('#bitstream-inspector').evaluate(host => host.offsetHeight <= 28), 'narrow dual-track controls stay on a single row without forced breakpoints');
-          if (width === 520) await page.locator('#analysis-overlay-panel').screenshot({ path: artifact('overlay-segments-narrow.png') });
+          assert.ok(await page.locator('#analysis-overlay-panel #bitstream-mode').isVisible());
+          await checkOverlaySections();
+          if (width === 320) {
+            await page.locator('#bitstream-inspect-frame').click();
+            await checkOverlaySections();
+            assert.ok(await drawer.evaluate(el => el.clientWidth >= el.scrollWidth), 'current frame fits the narrow viewport');
+            await page.locator('#bitstream-inspect-frame').click();
+          }
+          if (width === 520) await page.locator('#analysis-overlay-panel').screenshot({ path: artifact('overlay-display-narrow.png') });
         }
         await page.setViewportSize({ width: 1280, height: 786 });
-        await page.locator('#analysis-overlay-panel').screenshot({ path: artifact('overlay-segments-wide.png') });
+        await page.locator('#analysis-overlay-panel').screenshot({ path: artifact('overlay-display.png') });
         if (input === 'library') {
           for (const locale of ['en', 'zh-CN']) {
             await page.locator('#settings-open').click();
@@ -248,7 +341,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
             await page.locator(`#language-choice-menu [data-value="${locale}"]`).click();
             await page.waitForFunction(locale => document.documentElement.lang === locale, locale);
             await page.locator('#settings-close').click();
-            assert.equal(await page.locator('#bitstream-mode [data-value="qp"]').getAttribute('aria-pressed'), 'true', 'localization retains the selected fill');
+            assert.equal(await page.locator('#bitstream-mode [aria-pressed="true"]').getAttribute('data-mode'), 'qp', 'localization retains the selected fill');
             for (const width of [821, 520, 375, 320]) {
               await page.setViewportSize({ width, height: 786 });
               await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -265,7 +358,23 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           return overlay && !overlay.hidden && overlay.dataset.picture===JSON.stringify([token.picture.sourceVersion,token.picture.stream,token.picture.configuration,token.picture.au,0,0,'frame']);
         }));
         assert.ok(await page.locator('#analysis-overlay-panel').isHidden(),'both enabled track overlays follow their own current picture with controls closed');
-        for(const slot of ['A','B']) {await openAnalysis(slot);assert.equal(await page.locator('#bitstream-mode [data-value="qp"]').getAttribute('aria-pressed'),'true','display type survives a missing current-frame cache and remains selected across track toggles');await hideOverlay();}
+        if (input === 'local-file') {
+          await openAnalysis('A'); await setMode('modes'); await fold(frameToggle, true);
+          await drawer.locator('[data-inspect-track]').selectOption('A');
+          const classes = await drawer.locator('[data-bins] button').evaluateAll(items => items.map(el => el.dataset.key));
+          assert.ok(classes.includes('inter') || classes.includes('skip'), 'the inter-coded fixture exposes actual prediction classes');
+          await page.mouse.move(0, 0);
+          await settleAppearance(page);
+          const size = await page.locator('#analysis-overlay-panel').evaluate(panel => ({
+            available: document.querySelector('.transport').getBoundingClientRect().top - panel.closest('.viewport-surface').getBoundingClientRect().top - 20,
+            content: panel.scrollHeight, visible: panel.clientHeight,
+          }));
+          assert.ok(size.visible >= Math.min(size.content, size.available) - 3, 'expanding a mode after dragging uses the available height');
+          await page.locator('#analysis-overlay-panel').screenshot({path: artifact('prediction-distribution.png')});
+          await fold(frameToggle, false); await setMode('qp');
+          await page.locator('#bitstream-close').click();
+        }
+        for(const slot of ['A','B']) {await openAnalysis(slot);assert.equal(await page.locator('#bitstream-mode [aria-pressed="true"]').getAttribute('data-mode'),'qp','display type survives a missing current-frame cache and remains selected across track toggles');await hideOverlay();}
         await page.locator('#bitstream-close').click();
         await call('seek_review',{ptsUs:1000000});
         await page.setViewportSize({width:1280,height:720});

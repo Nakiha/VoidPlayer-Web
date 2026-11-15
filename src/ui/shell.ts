@@ -86,7 +86,7 @@ export function shell() {
         ${iconButton({ glyph: 'focus', label: t(msg("shell.focusMode", "专注模式")), tooltip: shortcutTooltip(t(msg("shell.focusMode", "专注模式")), 'focusMode'), className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
         </div>
 
-<section id="analysis-overlay-panel" class="analysis-overlay-panel viewport-tool-panel" aria-label="${th(msg("bitstream.overlayControls", "分析遮罩"))}" hidden><div id="bitstream-inspector" class="bitstream-inspector"></div></section>
+<section id="analysis-overlay-panel" data-menu-host class="analysis-overlay-panel viewport-tool-panel" aria-label="${th(msg("bitstream.overlayControls", "分析遮罩"))}" hidden><div id="bitstream-inspector" class="bitstream-inspector"></div></section>
 <section id="annotation-toolbar" class="annotation-toolbar viewport-tool-panel" aria-label="${th(msg("shell.annotationToolbar", "标注工具条"))}" hidden>
   <div class="drawing-tools" role="toolbar" aria-label="${th(msg("shell.annotationTools", "标注工具"))}">
     <button id="drawing-grip" class="icon-button viewport-tool-grip" aria-label="${th(msg("shell.dragToolbar", "拖动工具条"))}" data-tooltip="${th(msg("shell.dragToolbar", "拖动工具条"))}">${icon('grip')}</button>

@@ -1,0 +1,41 @@
+--- a/source/Lib/TLibDecoder/TDecCu.cpp
++++ b/source/Lib/TLibDecoder/TDecCu.cpp
+@@ -397,6 +397,38 @@
+   m_ppcYuvResi[uiDepth]->clear();
+ 
+   m_ppcCU[uiDepth]->copySubCU( pCtu, uiAbsPartIdx );
++  TComDataCU *cu = m_ppcCU[uiDepth];
++  for (UInt part = 0; part < cu->getNumPartitions(); part++) {
++    UInt addr; Int w, h;
++    cu->getPartIndexAndSize(part, addr, w, h);
++    UInt raster = g_auiZscanToRaster[uiAbsPartIdx + addr];
++    Int x = pCtu->getCUPelX() + g_auiRasterToPelX[raster];
++    Int y = pCtu->getCUPelY() + g_auiRasterToPelY[raster];
++    Int poc = pcSlice->getPOC();
++    if (cu->isIntra(0)) {
++      Int mode = cu->getIntraDir(CHANNEL_TYPE_LUMA, addr);
++      fprintf(stderr, "VP %d Y %d %d %d %d %d\n", poc, x, y, w, h, mode);
++      if (!part) {
++        UInt c = cu->getIntraDir(CHANNEL_TYPE_CHROMA, 0);
++        UInt candidates[NUM_CHROMA_MODE]; cu->getAllowedChromaDir(0, candidates);
++        UInt index=0; while (index<NUM_CHROMA_MODE && candidates[index]!=c) index++;
++        fprintf(stderr, "VP %d C %d %d %d %d %d %u\n", poc,x,y,cu->getWidth(0),cu->getHeight(0),
++          c == DM_CHROMA_IDX ? mode : (Int)c,index);
++      }
++    } else {
++      Int dir = cu->getInterDir(addr);
++      fprintf(stderr, "VP %d P %d %d %d %d %d %d %d",poc,x,y,w,h,(int)cu->isSkipped(addr),
++        cu->getMergeFlag(addr) ? (int)cu->getMergeIndex(addr) : -1,dir);
++      for (int list=0;list<2;list++) {
++        if (!(dir & (1 << list))) { fprintf(stderr," -1 -1 0 0"); continue; }
++        RefPicList l=RefPicList(list); int idx=cu->getCUMvField(l)->getRefIdx(addr);
++        TComMv mv=cu->getCUMvField(l)->getMv(addr);
++        fprintf(stderr," %d %d %d %d",idx,pcSlice->getRefPOC(l,idx),mv.getHor(),mv.getVer());
++      }
++      fputc('\n',stderr);
++    }
++  }
++
+ 
+   switch( m_ppcCU[uiDepth]->getPredictionMode(0) )
+   {

@@ -1,9 +1,11 @@
-/* The overlay controller is a peer of the annotation toolbar. */
-.analysis-overlay-panel { right:12px; bottom:60px; overflow:auto; transform:translateY(var(--floating-offset-y,0px)); transition:transform 180ms ease,max-height 180ms ease; }
-.bitstream-inspector { display:flex; align-items:center; flex-wrap:wrap; gap:3px; padding:0; font:12px/1.45 var(--font-ui); }
-
-.bitstream-tracks { display:flex; align-items:center; flex-wrap:wrap; gap:3px; }
-.bitstream-track-control { display:inline-flex; align-items:center; padding:3px; gap:0; border:0; border-radius:6px; min-height:var(--button-size); height:var(--button-size); background:transparent; }
+/* Keep the grip and close button accessible while the track rail scrolls. */
+.analysis-overlay-panel.viewport-tool-panel {
+  width:304px; box-sizing:border-box; right:12px; bottom:60px; overflow:auto;
+  transform:translateY(var(--floating-offset-y,0px)); transition:transform 180ms ease,max-height 180ms ease;
+}
+.bitstream-inspector { display:grid; gap:4px; min-width:0; font:12px/1.45 var(--font-ui); }
+.bitstream-tracks { display:flex; min-width:0; align-items:center; gap:3px; padding-inline:2px; overflow-x:auto; }
+.bitstream-track-control { display:inline-flex; flex:none; align-items:center; padding:3px; gap:0; border:0; border-radius:6px; min-height:var(--button-size); height:var(--button-size); background:transparent; }
 .bitstream-track-control[aria-pressed=true] { background:var(--annotation-toolbar-selected); }
 .bitstream-track-control[aria-pressed=false] .slot { opacity:.4; }
 .bitstream-tracks .slot { width:22px; height:22px; font-size:12px; border-radius:5px; }
@@ -12,21 +14,66 @@
 .bitstream-track-progress .ring-value { transition:stroke-dashoffset .2s ease; }
 .bitstream-track-progress.is-waiting .ring-value { stroke-dashoffset:75; }
 .bitstream-track-progress.is-waiting .analysis-progress-ring { animation:inspection-spin 1.2s linear infinite; }
-.bitstream-toolbar-divider { width:1px; height:22px; background:var(--divider); flex:none; }
+
+.bitstream-panel-head { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:2px; }
+.bitstream-panel-body { min-width:0; padding:6px; border-radius:6px; background:var(--surface-panel); }
+#bitstream-mode { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+#bitstream-mode button,.bitstream-layer-buttons button,.bitstream-export button,#bitstream-retries button {
+  min-height:var(--button-size); padding:2px 8px; font:inherit;
+}
+#bitstream-mode button,.bitstream-layer-buttons button,.bitstream-export label,.bitstream-frame-head label,#bitstream-size-style {
+  display:flex; align-items:center; gap:5px;
+}
+#bitstream-mode button { background:var(--surface-control); }
+#bitstream-mode button[aria-pressed=true] { color:var(--accent); background:var(--annotation-toolbar-selected); font-weight:600; }
+#bitstream-mode svg,.bitstream-layer-buttons svg,#bitstream-retries svg { width:16px; height:16px; }
+.bitstream-fold {
+  display:flex; align-items:center; justify-content:space-between; width:100%; min-height:var(--button-size);
+  padding:3px 5px; margin-top:4px; background:transparent; font:inherit; font-weight:600;
+}
+.bitstream-fold svg { width:13px; height:13px; color:var(--text-secondary); }
+.bitstream-fold[aria-expanded=false] svg { transform:rotate(-90deg); }
+.bitstream-inspector .icon-button { padding:0; background:transparent; }
+.bitstream-inspector :is(.bitstream-frame-head label,.bitstream-distribution,.bitstream-metrics,.bitstream-export)[hidden] { display:none; }
+#bitstream-retries { display:flex; gap:4px; flex-wrap:wrap; }
+#bitstream-retries button:not([hidden]) { display:inline-flex; align-items:center; gap:5px; width:auto; margin-top:6px; }
+#bitstream-retries button[hidden] { display:none; }
+#bitstream-display,#bitstream-frame-inspector { display:grid; min-width:0; gap:6px; padding:2px 5px 4px; }
+#analysis-overlay-panel :is(#bitstream-display,#bitstream-frame-inspector,#bitstream-size-style,.bitstream-legend)[hidden] { display:none; }
+.bitstream-field,.bitstream-frame-head,.bitstream-export { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.bitstream-field label,.bitstream-field > span,.bitstream-frame-head label > span { color:var(--text-secondary); }
+#analysis-overlay-panel select {
+  max-width:100%; min-width:0; height:var(--button-size); min-height:var(--button-size); padding:0 6px; appearance:menulist-button;
+  color:var(--text); background:var(--surface); font:inherit; border:0; border-radius:5px;
+}
+.bitstream-legend,.bitstream-legend span { display:flex; align-items:center; gap:5px; }
+.bitstream-legend { gap:12px; color:var(--text-secondary); }
+#bitstream-prediction-key i { width:9px; height:9px; border-radius:2px; }
+#bitstream-qp-key i { height:5px; flex:1; border-radius:3px; background:linear-gradient(to right,#0b0bf2,#0bf2f2,#0bf20b,#f2f20b,#f20b0b); }
+.bitstream-distribution { display:flex; align-items:center; justify-content:space-between; color:var(--text-secondary); }
+.bitstream-layer-buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+.bitstream-layer-buttons button { justify-content:center; gap:6px; background:var(--surface-control); }
 .bitstream-inspector .choice-trigger { min-width:0; min-height:var(--button-size); font:inherit; background:transparent; }
 .bitstream-inspector .choice-trigger:not(.numeric-choice) { padding:3px 6px; }
 #bitstream-opacity-control { width:64px; flex:none; }
-.bitstream-inspector .icon-button { padding:0; background:transparent; }
+.bitstream-frame-head { flex-wrap:wrap; }
+.bitstream-frame-head label { gap:6px; }
+.bitstream-frame-head strong { font-size:12px; font-weight:600; }
+.bitstream-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:3px; margin:0; padding:5px; border-radius:5px; background:var(--surface); }
+.bitstream-metrics dt,.bitstream-metrics dd { padding:0; text-align:center; }
+.bitstream-metrics dt { color:var(--text-secondary); font-size:11px; }
+.bitstream-metrics dd { margin:1px 0 0; font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+.bitstream-bins { display:grid; max-height:120px; min-width:0; overflow:auto; }
+.bitstream-bins:empty { display:none; }
+.bitstream-bins button {
+  display:grid; grid-template-columns:minmax(48px,auto) 1fr 54px; align-items:center; gap:6px;
+  min-height:24px; padding:2px 5px; background:transparent; text-align:start; font:inherit; font-variant-numeric:tabular-nums;
+}
+.bitstream-meter { height:5px; background:var(--surface-group); border-radius:3px; overflow:hidden; }
+.bitstream-meter i { display:block; height:100%; border-radius:inherit; }
+.bitstream-bins button > :last-child { text-align:end; }
+.bitstream-export { flex-wrap:wrap; }
+.bitstream-export label { gap:4px; }
 .bitstream-hit-tooltip { position:absolute; z-index:6; padding:5px 8px; width:max-content; max-width:calc(100% - 16px); box-sizing:border-box; border-radius:6px; color:var(--text); background:var(--preview-fill); box-shadow:var(--popover-shadow); font:12px/1.45 var(--font-ui); white-space:pre-line; overflow-wrap:anywhere; pointer-events:none; }
 #toggle-analysis-overlay[aria-expanded=true] { color:var(--accent); background:var(--annotation-toolbar-selected); }
 @media (prefers-reduced-motion:reduce) { .analysis-overlay-panel,.bitstream-track-progress { transition:none; animation:none; } .bitstream-track-progress.is-waiting .analysis-progress-ring { animation:none; } }
-
-.bitstream-track-item { display:inline-flex; align-items:center; gap:2px; }
-
-.bitstream-boundaries { flex:none; }
-.bitstream-boundaries[aria-pressed=true] { color:var(--accent); background:var(--annotation-toolbar-selected); }
-/* No fixed viewport breakpoint forces a second row. Keep fill choices together
- * when the available width actually runs out. */
-.bitstream-fill.segmented { flex:none; gap:2px; padding:0; border:0; max-width:100%; box-sizing:border-box; }
-.bitstream-fill.segmented button { min-height:var(--button-size); height:var(--button-size); padding:0 7px; font:inherit; min-width:0; }
-.bitstream-fill button:disabled { opacity:.4; }

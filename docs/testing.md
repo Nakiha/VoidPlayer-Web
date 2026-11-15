@@ -296,7 +296,7 @@ node scripts/run-tests.mjs ci-node-media
 | `npm run test:suite -- unit` | 全部 Node 测试，包括真实 WASM 与媒体断言；准备完整媒体环境 | CI 为 `source-logic: source` 与 `unit: ci-node-media` 的互斥并集 |
 | `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | 全量流水线的 `ci-audio`、`ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-ui`、`ci-analysis-matrix-*`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
 | `npm run test:media` | 真实媒体 Node / 浏览器检查；包括特殊的可信 HTTPS 功能用例 | playback / hevc-browser job；可信 HTTPS 仅在一次性 CI 主机执行 |
-| `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台汇总；需先生成对应产物 | decoder / native-release / release-set；打包及草稿操作仍由 workflow 管理 |
+| `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台与 Sites 静态包汇总；需先生成对应产物 | decoder / native-release / sites-release / release-set；打包及草稿操作仍由 workflow 管理 |
 | `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | 不在 GitHub CI 执行；在明确的本机环境单独验收 |
 
 `browser` 是自动化浏览器套件。需要 Windows 可见桌面的 Chrome/Edge 色彩与 WebGPU 检查属于清单中的 `manual-regression`，仍使用原有专用命令；外部服务、用户指定媒体的诊断/实验/基准属于显式工具分类，不会自动变成发布门禁。清单记录限制和理由，不能把 `npm test` 当作 fast，也不能把旧 `test:browser` 当作完整浏览器套件。

@@ -1,3 +1,6 @@
+import {checkPredictionAbi, copyPredictions, isPredictionProduct} from './predictions.ts';
+import type {PredictionProduct} from './predictions.ts';
+import type {AnalysisPredictions} from './products.ts';
 import { executionPolicy, hasExecutionExtension, executeAnalysisAttempt } from './execution.ts';
 import type { ExecutionPolicy } from './execution.ts';
 import { EXECUTION_EVENT } from './execution-error.ts';
@@ -70,7 +73,7 @@ async function runPictureAttempt(
   const started = performance.now(),
     input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity}));
   core = coreForInput(core, input.codec);
-  let opened = false;
+  let opened = false, selectedPrediction = false;
   try {
     const firstPacket=input.packets[0];
     const cachedAnchor=(hit: AnalysisOutput | null | undefined, packet: typeof firstPacket) =>
@@ -115,6 +118,11 @@ async function runPictureAttempt(
       if (typeof core === 'function') core = await core();
       signal.throwIfAborted();
       validateAnalysisCore(core);
+      if (isPredictionProduct(target.product)) {
+        checkPredictionAbi(core);
+        if (input.codec === 'h264' && target.product === 'prediction-inter')
+          throw new AnalysisFailure('unsupported-codec', 'AVC inter prediction details are unavailable');
+      }
       const execution = hasExecutionExtension(core);
       if (execution && core._vpa_execution_mode(options.executionMode ?? 0) !== 0)
         throw new AnalysisFailure('internal-error', 'Analysis execution mode rejected');
@@ -127,6 +135,11 @@ async function runPictureAttempt(
         );
       try {
         core.HEAPU8.set(description, pointer);
+        if (isPredictionProduct(target.product)) {
+          if (core._vpa_prediction_select(target.product === 'prediction-intra' ? 1 : 2, plan.target.au) !== 0)
+            throw new AnalysisFailure('internal-error', 'Prediction selection rejected');
+          selectedPrediction = true;
+        }
         const ret = core._vpa_open(
           { h264: 1, hevc: 2, vvc: 3 }[input.codec],
           pointer,
@@ -273,9 +286,11 @@ async function runPictureAttempt(
             if (view.getInt16(i * 12 + 8, true) === 0) { qpReady = false; break; }
           }
         }
+        const blockDepth = invalid || input.codec === 'h264' ? undefined : input.codec === 'hevc' ? 'hevc-cu' : 'vvc-qt';
         const blockAt = (i: number): AnalysisBlock => ({
           x: view.getUint16(i*12, true), y: view.getUint16(i*12+2, true),
           width: view.getUint16(i*12+4, true), height: view.getUint16(i*12+6, true),
+          ...(blockDepth ? {depth: view.getUint8(i * 12 + 11)} : {}),
           qp: qpReady ? view.getInt16(i*12+8,true) : null,
           mode: ({1:'intra',2:'inter',3:'skip'} as const)[view.getUint8(i*12+10) as 1|2|3],
         });
@@ -284,6 +299,7 @@ async function runPictureAttempt(
         let frame: FrameMetadata = {
           ...(layout&&layout.codedWidth===width&&layout.codedHeight===height?{sourceLayout:{provenance:'configuration-sps-v1' as const,configuration:selected.configuration,codedWidth:layout.codedWidth,codedHeight:layout.codedHeight,visibleRect:{x:layout.x,y:layout.y,width:layout.width,height:layout.height}}}:{}),
           schema: 1,
+          ...(blockDepth ? {blockDepth} : {}),
           nalus: nalus.get(au),
           containerHeader: containerHeaders.get(selected.configuration),
           references: (() => {
@@ -338,7 +354,7 @@ async function runPictureAttempt(
         try { frame.qp.mean=validateRecords(frame, blockCount, blockAt); }
         catch (error) {
           if (!(error instanceof AnalysisFailure) || error.code !== 'unsupported-picture-layout') throw error;
-          frame = { ...frame, confidence: 'partial', reasons: [error.message], reasonCodes: ['unsupported-picture-layout'],
+          frame = { ...frame, confidence: 'partial', blockDepth: undefined, reasons: [error.message], reasonCodes: ['unsupported-picture-layout'],
             qp: {...frame.qp, mean: null}, capabilities: {blocks:'unsupported',qp:'unsupported',modes:'unsupported',motion:'unsupported'} };
           blockCount = 0;
         }
@@ -346,17 +362,22 @@ async function runPictureAttempt(
           const summary: AnalysisSummary = { ...frame, product:'summary', productSchema:PRODUCT_SCHEMA, encoding:'summary-json-v1', indexIdentity:analysisIndexIdentity(target.indexIdentity), validatedBlockCount:blockCount };
           options.reserve?.(au, () => metadataBudgetBytes(summary) + 40 + (target.product === 'blocks' ? blockCount * 12 : 0));
           if (target.product === 'summary') { result = summary; validateOutput(result); }
-          else {
+          else if (isPredictionProduct(target.product)) {
+            if (frame.confidence !== 'exact') throw new AnalysisFailure('unsupported-picture-layout', 'Incomplete base picture for prediction analysis');
+            const payload = copyPredictions(core, target.product);
+            result = {...summary, product:target.product, encoding:target.product === 'prediction-intra' ? 'intra-le16-v1' : 'inter-le32-v1', payload};
+            validateOutput(result);
+          } else {
             if (blockCount*12 + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new AnalysisFailure('resource-limit','Packed analysis allocation budget exceeded');
             // Copy the validated little-endian records before the core frees
-            // them. The wire format uses a null QP sentinel and a reserved byte.
+            // them. The wire format uses a null QP sentinel and depth + 1 (zero is unavailable).
             const payload = new Uint8Array(view.buffer, view.byteOffset, blockCount * 12).slice().buffer;
             const packed = new DataView(payload);
             for (let offset = 0; offset < payload.byteLength; offset += 12) {
               if (!qpReady) packed.setInt16(offset + 8, -32768, true);
-              packed.setUint8(offset + 11, 0);
+              packed.setUint8(offset + 11, blockDepth ? packed.getUint8(offset + 11) + 1 : 0);
             }
-            result = {...summary,product:'blocks',encoding:'blocks-le12-v1',payload};
+            result = {...summary,product:'blocks',encoding:'blocks-le12-v2',payload};
             // Producer already checked geometry directly in the WASM view.
           }
         } else { if(blockCount*128+metadataBudgetBytes(frame)>BUDGET.resultBytes)throw new AnalysisFailure('resource-limit','Legacy analysis allocation budget exceeded');options.reserve?.(au, () => metadataBudgetBytes(frame) + 40 + blockCount * 128);result = {...frame,blocks:Array.from({length:blockCount},(_,i)=>blockAt(i))}; validateMetadata(result); }
@@ -515,7 +536,7 @@ async function runPictureAttempt(
       }
     }
   } finally {
-    if (opened) core._vpa_close();
+    if (opened || selectedPrediction) core._vpa_close();
     if (!options.keepInput) input.close();
   }
 }
@@ -796,6 +817,7 @@ async function runStream(
 }
 
 // Legacy defaults remain source-compatible. Products are explicit opt-in.
+export function analyzePicture(reader: AnalysisReader,target: AnalysisTarget & {product:PredictionProduct},core:any,buildId:string,signal:AbortSignal):Promise<AnalysisPredictions>;
 export function analyzePicture(reader: AnalysisReader, target: AnalysisTarget & {product:'blocks'}, core:any, buildId:string, signal:AbortSignal): Promise<AnalysisProduct>;
 export function analyzePicture(reader: AnalysisReader, target: AnalysisTarget & {product?:undefined}, core:any, buildId:string, signal:AbortSignal, options?: Parameters<typeof runPicture>[5]): Promise<AnalysisResult>;
 export function analyzePicture(...args: Parameters<typeof runPicture>) { return runPicture(...args); }

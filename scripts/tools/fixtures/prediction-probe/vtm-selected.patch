@@ -1,0 +1,13 @@
+diff --git a/source/Lib/CommonLib/dtrace_blockstatistics.cpp b/source/Lib/CommonLib/dtrace_blockstatistics.cpp
+index 40a268d..22c8855 100644
+--- a/source/Lib/CommonLib/dtrace_blockstatistics.cpp
++++ b/source/Lib/CommonLib/dtrace_blockstatistics.cpp
+@@ -920,6 +920,8 @@ void writeAllData(const CodingStructure& cs, const UnitArea& ctuArea)
+                   const uint32_t chFinalMode = PU::getFinalIntraMode(pu, ChannelType(chType));
+                   DTRACE_BLOCK_SCALAR_CHROMA(g_trace_ctx, D_BLOCK_STATISTICS_ALL, pu,
+                                              GetBlockStatisticName(BlockStatistic::Chroma_IntraMode), chFinalMode);
++                  DTRACE_BLOCK_SCALAR_CHROMA(g_trace_ctx, D_BLOCK_STATISTICS_ALL, pu,
++                                             "Chroma_SelectedMode", pu.intraDir[ChannelType::CHROMA]);
+                   assert(0);
+                 }
+               }

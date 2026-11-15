@@ -62,7 +62,8 @@
         "width": 8,
         "height": 8,
         "qp": 33,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 2
       },
       {
         "x": 8,
@@ -70,7 +71,8 @@
         "width": 8,
         "height": 8,
         "qp": 33,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 2
       },
       {
         "x": 16,
@@ -78,7 +80,8 @@
         "width": 16,
         "height": 16,
         "qp": 33,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 1
       },
       {
         "x": 0,
@@ -86,7 +89,8 @@
         "width": 8,
         "height": 8,
         "qp": 33,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 2
       },
       {
         "x": 8,
@@ -94,12 +98,14 @@
         "width": 8,
         "height": 8,
         "qp": 33,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 2
       }
     ],
     "referenceBlockCount": 20658,
     "referenceRevision": "59196ee81d09cd5312acf7d3b3896ad530d1248b",
-    "reference": "Independent preexisting macOS native void_ffmpeg_analyzer, VCK1 CU4R; first displayed picture. Geometry clipped to visible edges by the old writer; compare interior records only."
+    "reference": "Independent preexisting macOS native void_ffmpeg_analyzer, VCK1 CU4R; first displayed picture. Geometry clipped to visible edges by the old writer; compare interior records only.",
+    "depthReference": "SPS MinCbLog2SizeY=3 and log2_diff_max_min_luma_coding_block_size=2 give a 32px CTU. Interior 8px and 16px square CUs have quadtree depths 2 and 1."
   },
   {
     "codec": "vvc",
@@ -113,7 +119,8 @@
         "width": 64,
         "height": 64,
         "qp": 26,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 1
       },
       {
         "x": 64,
@@ -121,7 +128,8 @@
         "width": 64,
         "height": 64,
         "qp": 26,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 1
       },
       {
         "x": 128,
@@ -129,7 +137,8 @@
         "width": 64,
         "height": 64,
         "qp": 26,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 1
       },
       {
         "x": 0,
@@ -137,7 +146,8 @@
         "width": 64,
         "height": 64,
         "qp": 26,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 1
       },
       {
         "x": 64,
@@ -145,11 +155,13 @@
         "width": 64,
         "height": 64,
         "qp": 26,
-        "mode": "intra"
+        "mode": "intra",
+        "depth": 1
       }
     ],
     "referenceBlockCount": 27584,
     "referenceRevision": "59196ee81d09cd5312acf7d3b3896ad530d1248b",
-    "reference": "Independent preexisting macOS native void_ffmpeg_analyzer, VCK1 CU4R; first displayed picture. Geometry clipped to visible edges by the old writer; compare interior records only."
+    "reference": "Independent preexisting macOS native void_ffmpeg_analyzer, VCK1 CU4R; first displayed picture. Geometry clipped to visible edges by the old writer; compare interior records only.",
+    "depthReference": "VTM D_BLOCK_STATISTICS_ALL QT_Depth at the five listed POC 0 luma CU positions; see bitstream-analysis-vtm.md."
   }
 ]

@@ -126,7 +126,7 @@ try {
       // delivered together before decoding that missing part of the GOP.
       await flushCachedGop();
       const hit=cachedResults.has(JSON.stringify([result.picture,result.buildId]));countProduct(result,hit,counters);delivered.add(result.picture.au);counters.uniqueDelivered=delivered.size;
-      await send({ type: "chunk", result, counters:{...counters}, cacheHit:hit }, isProduct(result) && result.product === "blocks" ? [result.payload] : []);
+      await send({ type: "chunk", result, counters:{...counters}, cacheHit:hit }, isProduct(result) && result.product !== "summary" ? [result.payload] : []);
     };
     if (workerData.target.mode === 'stream')
       await analyzeStream(reader, workerData.target, { forCodec: loadCore }, buildId,

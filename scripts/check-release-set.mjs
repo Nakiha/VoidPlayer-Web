@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readReleaseIdentity, readReleaseNotes } from './release-version.mjs';
+import { readReleaseIdentity, readReleaseNotes, verifyFrontendIdentity } from './release-version.mjs';
 
 export const releasePlatforms = ['linux-x64', 'windows-x64', 'darwin-arm64'];
 export const sha256 = data => createHash('sha256').update(data).digest('hex');
@@ -13,40 +13,72 @@ export const sha256 = data => createHash('sha256').update(data).digest('hex');
 export async function verifyReleaseSet(directory, identity, { bunVersion, coreSource, analysisSource }) {
   const files = (await readdir(directory)).sort();
   const archives = files.filter(name => name.endsWith('.tar.gz'));
-  assert.equal(archives.length, releasePlatforms.length, 'one archive per supported platform');
+  assert.equal(archives.length, releasePlatforms.length + 1, 'one archive per supported platform plus Sites');
   assert.equal(files.filter(name => name.endsWith('.sha256')).length, archives.length, 'one checksum per archive');
   const assets = [], platforms = new Set();
-  let sharedCore, sharedAnalysis;
+  let sites = false;
+  let sharedCore, sharedAnalysis, sitesCore, sitesAnalysis;
   const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
   for (const name of archives) {
     assert.match(name, /^voidplayer-[0-9A-Za-z.-]+\.tar\.gz$/);
     const archive = path.join(directory, name), bytes = await readFile(archive);
     const checksum = await readFile(archive + '.sha256');
     assert.equal(checksum.toString().trim(), `${sha256(bytes)}  ${name}`, `archive checksum: ${name}`);
-    const manifest = JSON.parse(execFileSync(tar, ['-xOf', archive, `${name.slice(0, -7)}/release.json`], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }));
-    assert.equal(manifest.schema, 'voidplayer-release'); assert.equal(manifest.version, 2);
+    const isSites = name === `voidplayer-${identity.version}-sites.tar.gz`;
+    const readEntry = entry => execFileSync(tar, ['-xOf', archive, entry], {maxBuffer: 4 * 1024 * 1024});
+    const manifest = JSON.parse(readEntry(isSites ? './sites-release.json' : `${name.slice(0, -7)}/release.json`));
+    assert.equal(manifest.schema, isSites ? 'voidplayer-sites-release' : 'voidplayer-release');
+    assert.equal(manifest.version, isSites ? 1 : 2);
     assert.equal(manifest.appVersion, identity.version, 'version matches selected ref');
     assert.equal(manifest.revision, identity.revision, 'all platforms use the same selected revision');
     assert.equal(manifest.dirty, false, 'CI builds must be clean');
-    const platform = manifest.target?.replace(/^bun-/, '');
-    assert.ok(releasePlatforms.includes(platform) && !platforms.has(platform), 'supported platform, no duplicates');
-    assert.equal(manifest.target, `bun-${platform}`);
-    assert.ok(name.startsWith(`voidplayer-${identity.version}-${platform}`));
-    if (identity.tag) assert.equal(name, `voidplayer-${identity.version}-${platform}.tar.gz`);
-    platforms.add(platform);
-    assert.deepEqual(manifest.runtime, { name: 'bun', version: bunVersion });
+    if (isSites) {
+      assert.equal(sites, false, 'one Sites archive');
+      sites = true;
+      assert.equal(manifest.tag, identity.tag);
+      const readChecked = entry => {
+        const bytes = readEntry('./' + entry);
+        assert.equal(sha256(bytes), manifest.files[entry], `Sites asset checksum: ${entry}`);
+        return bytes;
+      };
+      const frontend = JSON.parse(readChecked('dist/build-info.json'));
+      verifyFrontendIdentity(frontend, identity);
+      const receipt = JSON.parse(readChecked('sites-build.json'));
+      assert.equal(receipt.profile, 'sites');
+      for (const key of ['buildId', 'revision', 'sourceDigest']) assert.equal(receipt[key], frontend[key], `Sites receipt ${key}`);
+      assert.deepEqual(JSON.parse(readChecked('.openai/hosting.json')), {static: {directory: 'dist'}}, 'portable Sites identity');
+      assert.ok(readChecked('dist/index.html').length, 'Sites entrypoint');
+    } else {
+      const platform = manifest.target?.replace(/^bun-/, '');
+      assert.ok(releasePlatforms.includes(platform) && !platforms.has(platform), 'supported platform, no duplicates');
+      assert.equal(manifest.target, `bun-${platform}`);
+      assert.ok(name.startsWith(`voidplayer-${identity.version}-${platform}`));
+      if (identity.tag) assert.equal(name, `voidplayer-${identity.version}-${platform}.tar.gz`);
+      platforms.add(platform);
+      assert.deepEqual(manifest.runtime, { name: 'bun', version: bunVersion });
+    }
     assert.deepEqual(manifest.decoder?.source, coreSource, 'decoder source matches lock');
     const coreHashes = Object.fromEntries(Object.entries(manifest.files).filter(([name]) => name.startsWith('dist/vendor/voidplayer-core/')).sort(([a], [b]) => a.localeCompare(b)));
     for (const file of ['voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm', 'provenance.json', 'LICENSES/COPYING.LGPLv2.1', 'LICENSES/dav1d-COPYING']) assert.match(coreHashes[`dist/vendor/voidplayer-core/${file}`] ?? '', /^[a-f0-9]{64}$/, file);
-    if (sharedCore) assert.deepEqual(coreHashes, sharedCore, 'all platforms ship identical decoder bytes and provenance');
+    if (isSites) sitesCore = coreHashes;
+    else if (sharedCore) assert.deepEqual(coreHashes, sharedCore, 'all platforms ship identical decoder bytes and provenance');
     else sharedCore = coreHashes;
     assert.deepEqual(manifest.analysis?.source, analysisSource, 'analysis source matches lock');
     const analysisHashes = Object.fromEntries(Object.entries(manifest.files).filter(([name]) => name.startsWith('dist/vendor/voidplayer-analysis/')).sort(([a], [b]) => a.localeCompare(b)));
     for (const file of ['voidplayer-analysis.js','voidplayer-analysis.wasm','voidplayer-analysis-mt.js','voidplayer-analysis-mt.wasm','threading.json','manifest.json','provenance.json','LICENSE']) assert.match(analysisHashes[`dist/vendor/voidplayer-analysis/${file}`] ?? '', /^[a-f0-9]{64}$/, file);
-    if(sharedAnalysis) assert.deepEqual(analysisHashes,sharedAnalysis,'all platforms ship identical analysis bytes and provenance');else sharedAnalysis=analysisHashes;
+    if (isSites) sitesAnalysis = analysisHashes;
+    else if (sharedAnalysis) assert.deepEqual(analysisHashes, sharedAnalysis, 'all platforms ship identical analysis bytes and provenance');
+    else sharedAnalysis = analysisHashes;
     for (const [assetName, contents] of [[name, bytes], [name + '.sha256', checksum]]) assets.push({ name: assetName, bytes: contents.length, sha256: sha256(contents) });
   }
-  return { schema: 'voidplayer-release-set', version: 1, appVersion: identity.version, revision: identity.revision, tag: identity.tag, platforms: [...platforms].sort(), assets };
+  assert.ok(sites, 'Sites archive is required');
+  assert.equal(platforms.size, releasePlatforms.length, 'every native platform is required');
+  // Sites hosts original assets; full servers also ship precompressed representations.
+  const originals = hashes => Object.fromEntries(Object.entries(hashes).filter(([name]) => !/\.(br|gz)$/.test(name)));
+  assert.deepEqual(sitesCore, originals(sharedCore), 'Sites ships identical decoder bytes and provenance');
+  assert.deepEqual(sitesAnalysis, originals(sharedAnalysis), 'Sites ships identical analysis bytes and provenance');
+  return { schema: 'voidplayer-release-set', version: 1, appVersion: identity.version, revision: identity.revision, tag: identity.tag,
+    platforms: [...platforms].sort(), sites, assets };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -1,3 +1,5 @@
+import type {PredictionProduct} from '../../../shared/analysis/bitstream/predictions.ts';
+import type {AnalysisPredictions} from '../../../shared/analysis/bitstream/products.ts';
 import { configuredPicturePixels } from '../../../shared/media/codecs/coding-features.ts';
 import { decoderForCodec } from '../../../shared/analysis/bitstream/threading.ts';
 import {analysisIndexIdentity} from '../../../shared/analysis/bitstream/products.ts';
@@ -139,18 +141,16 @@ export class BitstreamAnalysisService {
     const context=token.picture?this.contexts.get(token.picture.sourceVersion):undefined;
     const hit=token.picture&&context?this.cache.peekProduct(token.picture,context.buildId,context.indexIdentity):null;return hit&&matchesAnalysisLayout(hit,token)?hit:null;
   }
-  async request(
-    source: MediaSource,
-    token: PresentedFrameToken,
-    signal?: AbortSignal,
-  ): Promise<AnalysisResult> {
+  request(source:MediaSource, token:PresentedFrameToken, signal?:AbortSignal):Promise<AnalysisResult>;
+  request(source:MediaSource, token:PresentedFrameToken, signal:AbortSignal | undefined, product:PredictionProduct):Promise<AnalysisPredictions>;
+  async request(source:MediaSource, token:PresentedFrameToken, signal?:AbortSignal, product:'blocks'|PredictionProduct='blocks') {
     if (!token.picture)
       throw new AnalysisFailure(
         "unsupported-picture-layout",
         "This playback path has no verified picture identity",
       );
     const target: AnalysisTarget = {
-      product:"blocks",
+      product,
       sourceVersion: token.picture.sourceVersion,
       sourcePtsUs: token.sourcePtsUs,
       normalizedMediaUs: token.normalizedMediaUs,
@@ -166,7 +166,7 @@ export class BitstreamAnalysisService {
     const expectedBuild=await this.currentBuild(source,preparationSequence,signal);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');if(signal?.aborted)this.fail(new AnalysisFailure('cancelled','Analysis cancelled'));
     try{this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null,admissionTicket);}catch(error){return this.fail(restoreFailure(failureInfo(error)));}
-    const cached=this.cache.getMatching(token.picture,expectedBuild,target.indexIdentity ?? null);
+    const cached=product==='blocks' ? this.cache.getMatching(token.picture,expectedBuild,target.indexIdentity ?? null) : null;
     if(preparationSequence!==this.sequence)throw new AnalysisFailure("cancelled","Analysis preparation superseded");
     signal?.throwIfAborted();
     if (cached && matchesAnalysisLayout(cached,token)) {
@@ -202,7 +202,7 @@ export class BitstreamAnalysisService {
             );
       controller.signal.throwIfAborted();
       this.validateReception(result);
-      if(!isProduct(result)||result.product!=='blocks'||result.buildId!==expectedBuild||JSON.stringify(result.indexIdentity)!==JSON.stringify(analysisIndexIdentity(target.indexIdentity)))throw Error('Exact picture product identity mismatch');
+      if(!isProduct(result)||result.product!==product||result.buildId!==expectedBuild||JSON.stringify(result.indexIdentity)!==JSON.stringify(analysisIndexIdentity(target.indexIdentity)))throw Error('Exact picture product identity mismatch');
       if (
         pictureId(result.picture) !== pictureId(token.picture) ||
         result.sourcePtsUs !== token.sourcePtsUs
@@ -210,7 +210,9 @@ export class BitstreamAnalysisService {
         throw new Error("Analysis result identity mismatch");
       if(!matchesAnalysisLayout(result,token))throw new AnalysisFailure('unsupported-picture-layout','Analysis coded layout does not match the presented crop');
       this.context(result.picture.sourceVersion,result.buildId,isProduct(result)?result.indexIdentity:target.indexIdentity ?? null);
-      if (!isSummary(result)) this.cache.put(result,target.indexIdentity ?? null); this.diagrams.putSummary(summaryOf(result,target.indexIdentity ?? null));
+      if (result.product === 'blocks') this.cache.put(result, target.indexIdentity ?? null);
+      else validateOutput(result);
+      this.diagrams.putSummary(summaryOf(result,target.indexIdentity ?? null));
       if (seq === this.sequence) {
         this.state = {
           state: result.confidence === "exact" ? "ready" : "unsupported",
@@ -226,7 +228,7 @@ export class BitstreamAnalysisService {
         };
         this.changed();
       }
-      return isProduct(result) ? (result.product === "blocks" ? legacyOf(result) : (()=>{throw Error("Unexpected summary for exact picture");})()) : result;
+      return result.product === 'blocks' ? legacyOf(result) : result;
     } catch (error) {
       if (seq === this.sequence) {
         const reason = controller.signal.aborted
@@ -418,6 +420,7 @@ export class BitstreamAnalysisService {
       controller.signal.throwIfAborted(); this.validateReception(result);
       if(result.buildId!==expectedBuild)throw Error('Stream build identity mismatch');
       this.context(target.sourceVersion,expectedBuild,target.indexIdentity??null);
+      if (isProduct(result) && result.product !== 'blocks' && result.product !== 'summary') throw Error('Unexpected prediction product in stream');
       if ((isProduct(result) ? result.product !== target.product || JSON.stringify(result.indexIdentity) !== JSON.stringify(analysisIndexIdentity(target.indexIdentity)) : target.product !== undefined)) throw new Error('Stream product identity mismatch');
       if (seq !== this.sequence || result.picture.sourceVersion !== target.sourceVersion || !result.gop)
         throw new Error('Stream result identity mismatch');

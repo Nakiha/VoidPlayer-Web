@@ -7,6 +7,8 @@ import { createServer } from "node:net";
 import path from "node:path";
 import os from "node:os";
 import { validateResult } from "../shared/analysis/bitstream/contract.ts";
+import { decodeProduct } from '../shared/analysis/bitstream/products.ts';
+import { predictionStride } from '../shared/analysis/bitstream/predictions.ts';
 const root = path.resolve(import.meta.dirname, "..");
 const archive = path.resolve(
   process.argv[2] ??
@@ -109,16 +111,24 @@ try {
     assert.equal(response.status, 202, await response.clone().text());
     return response.json();
   }
-  async function result(request) {
+  async function result(request, product) {
     for (let i = 0; i < 200; i++) {
       const state = await (
         await fetch(
           `${base}/api/bitstream-analysis/requests/${request.requestId}`,
         )
       ).json();
-      assert.notEqual(state.state, "error", state.error ?? output);
+      assert.ok(!['error', 'unsupported', 'limited', 'cancelled'].includes(state.state), state.reason?.message ?? state.error ?? output);
       if (state.state === "complete") {
-        const result = await (await fetch(base + state.resultUrl)).json();
+        const response = await fetch(base + state.resultUrl);
+        assert.ok(response.ok);
+        if (product) {
+          assert.equal(response.headers.get('content-type'), 'application/vnd.voidplayer.analysis-v1');
+          const frame = await decodeProduct(new Uint8Array(await response.arrayBuffer()));
+          assert.equal(frame.product, product);
+          return frame;
+        }
+        const result = await response.json();
         validateResult(result);
         assert.equal(result.confidence, "exact");
         assert.equal(result.references?.state, "ready", "packaged core provides verified reference lists");
@@ -171,10 +181,31 @@ try {
   ]) {
     const entry = entries.find((e) => e.name === name);
     assert.ok(entry, name);
+    const {products, predictionProducts, encodings, limits} = await (
+      await fetch(`${base}/api/media/${entry.id}/bitstream-analysis/capabilities?v=${entry.version}`)
+    ).json();
+    const supported = codec === 'h264' ? ['prediction-intra'] : ['prediction-intra', 'prediction-inter'];
+    assert.deepEqual(predictionProducts[codec], supported);
+    for (const product of supported) assert.ok(products.picture.includes(product) && !products.stream.includes(product));
+    assert.ok(encodings.includes('intra-le16-v1') && encodings.includes('inter-le32-v1'));
+    assert.equal(limits.predictionVectors.codec, 'hevc');
     const r = await result(await request(entry));
     assert.equal(r.codec, codec);
     rows.push({ codec, picture: r.picture, blocks: r.blocks.length });
-    ranges.push({ entry, firstPtsUs: r.sourcePtsUs, results: await range(entry, r.sourcePtsUs, 0, 100000) });
+    const results = await range(entry, r.sourcePtsUs, 0, 100000);
+    ranges.push({entry, firstPtsUs: r.sourcePtsUs, results});
+    for (const product of supported) {
+      const picture = product === 'prediction-intra' ? r : results.find(frame => frame.blocks.some(block => block.mode !== 'intra'));
+      assert.ok(picture);
+      const target = {product, picture: picture.picture, sourcePtsUs: picture.sourcePtsUs, sourceVersion: picture.picture.sourceVersion,
+        normalizedMediaUs: picture.sourcePtsUs - r.sourcePtsUs};
+      const predictions = await result(await request(entry, target), product);
+      assert.deepEqual(predictions.picture, picture.picture);
+      assert.equal(predictions.buildId, r.buildId);
+      const count = predictions.payload.byteLength / predictionStride(product);
+      assert.ok(Number.isInteger(count) && count > 0);
+      rows.at(-1)[product] = count;
+    }
   }
   await stop();
   await start();

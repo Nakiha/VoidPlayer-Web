@@ -127,8 +127,11 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const cores = workflowJobs(await readFile(new URL('../../.github/workflows/prepare-cores.yml', import.meta.url), 'utf8'));
   assert.match(jobs.cores.body, /uses: \.\/\.github\/workflows\/prepare-cores\.yml/);
   assert.match(cores['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'native-runtime', 'unit', 'playback', 'https-playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'native-runtime', 'unit', 'playback', 'https-playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions', 'sites-release'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
+  assert.deepEqual(jobs['sites-release'].needs, ['cores']);
+  assert.match(jobs['sites-release'].body, /run: npm run package:sites/);
+  assert.match(jobs['sites-release'].body, /name: voidplayer-sites\n[\s\S]*path: artifacts\/\*-sites\.tar\.gz\*/);
   assert.deepEqual(jobs.unit.needs, ['cores', 'qa-media']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media-\$\{\{ matrix.part \}\}\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
   assert.match(jobs.unit.body,/part: \[playback, containers, analysis\]/);
@@ -401,20 +404,48 @@ async function makeSet(root        , mutate = (_     , __        ) => {}) {
     const name = `voidplayer-0.1.0-${platform}`, folder = path.join(root, name);
     await mkdir(folder, { recursive: true });
     const manifest = { schema: 'voidplayer-release', version: 2, appVersion: '0.1.0', revision, dirty: false, target: `bun-${platform}`, runtime: { name: 'bun', version: locked.bunVersion }, decoder: { source: locked.coreSource }, analysis: {source:locked.analysisSource}, files: Object.fromEntries(['voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm', 'provenance.json', 'LICENSES/COPYING.LGPLv2.1', 'LICENSES/dav1d-COPYING'].map(f => [`dist/vendor/voidplayer-core/${f}`, sha256(f)]).concat(['voidplayer-analysis.js','voidplayer-analysis.wasm','voidplayer-analysis-mt.js','voidplayer-analysis-mt.wasm','threading.json','manifest.json','provenance.json','LICENSE'].map(f=>[`dist/vendor/voidplayer-analysis/${f}`,sha256(f)]))) };
+    manifest.files['dist/vendor/voidplayer-core/voidplayer-core.js.gz'] = sha256('compressed decoder');
+    manifest.files['dist/vendor/voidplayer-analysis/voidplayer-analysis.wasm.br'] = sha256('compressed analysis');
     mutate(manifest, platform);
     await writeFile(path.join(folder, 'release.json'), JSON.stringify(manifest));
     const archive = path.join(directory, name + '.tar.gz');
     execFileSync(tar, ['-czf', archive, '-C', root, name]);
     await writeFile(archive + '.sha256', `${sha256(await readFile(archive))}  ${name}.tar.gz\n`);
   }
+  await makeSites(root);
   return directory;
+}
+
+async function makeSites(root, mutate = () => {}) {
+  const folder = path.join(root, 'sites'), directory = path.join(root, 'set');
+  await mkdir(path.join(folder, 'dist'), {recursive: true});
+  await mkdir(path.join(folder, '.openai'), {recursive: true});
+  const frontend = {...identity, buildId: 'sites-fixture', sourceDigest: 'd'.repeat(64)};
+  const receipt = {profile: 'sites', buildId: frontend.buildId, revision, sourceDigest: frontend.sourceDigest};
+  const hosting = {static: {directory: 'dist'}};
+  const native = JSON.parse(execFileSync('tar', ['-xOf', path.join(directory, 'voidplayer-0.1.0-linux-x64.tar.gz'),
+    'voidplayer-0.1.0-linux-x64/release.json'], {encoding: 'utf8'}));
+  const manifest = {schema: 'voidplayer-sites-release', version: 1, appVersion: identity.version, revision, dirty: false,
+    tag: identity.tag, decoder: {source: locked.coreSource}, analysis: {source: locked.analysisSource},
+    files: Object.fromEntries(Object.entries(native.files).filter(([name]) => !/\.(br|gz)$/.test(name)))};
+  mutate({manifest, frontend, receipt, hosting});
+  for (const [name, content] of Object.entries({'dist/index.html': '<html>VoidPlayer</html>',
+    'dist/build-info.json': JSON.stringify(frontend), 'sites-build.json': JSON.stringify(receipt),
+    '.openai/hosting.json': JSON.stringify(hosting)})) {
+    await writeFile(path.join(folder, name), content);
+    manifest.files[name] = sha256(content);
+  }
+  await writeFile(path.join(folder, 'sites-release.json'), JSON.stringify(manifest));
+  const archive = path.join(directory, 'voidplayer-0.1.0-sites.tar.gz');
+  execFileSync('tar', ['-czf', archive, '-C', folder, '.']);
+  await writeFile(archive + '.sha256', `${sha256(await readFile(archive))}  ${path.basename(archive)}\n`);
 }
 
 test('release aggregation rejects corrupt, incomplete, duplicate and mixed-revision/core platform sets', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'voidplayer-set-'));
   try {
     const directory = await makeSet(root);
-    assert.equal((await verifyReleaseSet(directory, identity, locked)).assets.length, 6);
+    assert.equal((await verifyReleaseSet(directory, identity, locked)).assets.length, 8);
     const archive = path.join(directory, 'voidplayer-0.1.0-linux-x64.tar.gz');
     await writeFile(archive, 'corrupt'); await assert.rejects(verifyReleaseSet(directory, identity, locked), /checksum/);
     await makeSet(root); await rm(archive); await assert.rejects(verifyReleaseSet(directory, identity, locked), /one archive/);
@@ -426,11 +457,35 @@ test('release aggregation rejects corrupt, incomplete, duplicate and mixed-revis
       m => {m.analysis.source={};},
       m => {delete m.files['dist/vendor/voidplayer-analysis/voidplayer-analysis.wasm'];},
       (m     ) => { m.files['dist/vendor/voidplayer-core/voidplayer-core.wasm'] = 'd'.repeat(64); },
+      m => {m.files['dist/vendor/voidplayer-core/voidplayer-core.js.gz'] = 'e'.repeat(64);},
     ]) {
       await makeSet(root, (m, platform) => { if (platform === 'windows-x64') mutate(m); });
       await assert.rejects(verifyReleaseSet(directory, identity, locked));
     }
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('release aggregation requires a portable Sites build with matching frontend, receipt and core bytes', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'voidplayer-sites-set-'));
+  try {
+    const directory = await makeSet(root);
+    assert.equal((await verifyReleaseSet(directory, identity, locked)).sites, true);
+    await rm(path.join(directory, 'voidplayer-0.1.0-sites.tar.gz'));
+    await assert.rejects(verifyReleaseSet(directory, identity, locked), /one archive/);
+    for (const mutate of [
+      ({frontend}) => {frontend.revision = 'e'.repeat(40);},
+      ({frontend}) => {frontend.dirty = true;},
+      ({receipt}) => {receipt.profile = 'full';},
+      ({receipt}) => {receipt.buildId = 'stale';},
+      ({receipt}) => {receipt.sourceDigest = 'stale';},
+      ({hosting}) => {hosting.project_id = 'existing-site';},
+      ({manifest}) => {manifest.analysis.source = {};},
+      ({manifest}) => {manifest.files['dist/vendor/voidplayer-analysis/voidplayer-analysis.wasm'] = 'f'.repeat(64);},
+    ]) {
+      await makeSites(root, mutate);
+      await assert.rejects(verifyReleaseSet(directory, identity, locked));
+    }
+  } finally { await rm(root, {recursive: true, force: true}); }
 });
 
 test('draft preflight reads both committed core locks and rejects mismatched analysis provenance', async () => {
@@ -442,7 +497,7 @@ test('draft preflight reads both committed core locks and rejects mismatched ana
     const analysisLock = path.join(root, 'scripts/release-analysis.json');
     await writeFile(analysisLock, JSON.stringify(locked.analysisSource));
     const directory = await makeSet(root);
-    assert.equal((await verifyDraftReleaseSet(root, directory, identity)).assets.length, 6);
+    assert.equal((await verifyDraftReleaseSet(root, directory, identity)).assets.length, 8);
     await writeFile(analysisLock, JSON.stringify({ revision: 'd'.repeat(40) }));
     await assert.rejects(verifyDraftReleaseSet(root, directory, identity), /analysis source matches lock/);
   } finally { await rm(root, { recursive: true, force: true }); }

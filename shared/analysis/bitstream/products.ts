@@ -1,5 +1,7 @@
+import { isPredictionProduct, predictionStride, PREDICTION_BYTES, validatePredictions } from './predictions.ts';
+import type {PredictionProduct} from './predictions.ts';
 import {parseBudgetedJson} from './json-budget.ts';
-import { ANALYSIS_RECIPE, ANALYZER_VERSION, BUDGET, pictureId, validateMetadata, validateResult } from './contract.ts';
+import { ANALYSIS_RECIPE, ANALYZER_VERSION, BUDGET, pictureId, validBlockDepth, validateMetadata, validateResult } from './contract.ts';
 import type { AnalysisBlock, AnalysisResult, SourcePictureKey } from './contract.ts';
 import { parseMediaIndexIdentity } from '../../media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../../media/indexing/media-index-identity.ts';
@@ -8,7 +10,7 @@ import { AnalysisFailure } from './failure.ts';
 export const MP4_ANALYSIS_INDEX = Object.freeze({kind:'mp4-analysis' as const,streamKey:'video:0',schemaVersion:1,indexerBuild:'mp4-input-v1'});
 export type ProductIndexIdentity = MediaIndexIdentity | typeof MP4_ANALYSIS_INDEX;
 export const analysisIndexIdentity = (identity?:ProductIndexIdentity|null):ProductIndexIdentity => identity ?? MP4_ANALYSIS_INDEX;
-export const PRODUCT_SCHEMA = 2;
+export const PRODUCT_SCHEMA = 3;
 export const PRODUCT_LIMIT = Object.freeze({ metadata: 1024 * 1024, page: 1024 * 1024, frame: 3 * 1024 * 1024, inFlight: 32 * 1024 * 1024, pageItems: 32 });
 /** Transport only: cached GOPs reuse the existing per-picture disk records. */
 export const SUMMARY_BATCH_LIMIT = Object.freeze({ bytes: 8 * 1024 * 1024, pictures: 8192 });
@@ -30,10 +32,10 @@ export async function readSummaryStatus(response: Response): Promise<any> {
 }
 export type FrameMetadata = Omit<AnalysisResult, 'blocks'>;
 interface ProductMetadata extends FrameMetadata {
-  productSchema: 2;
+  productSchema: typeof PRODUCT_SCHEMA;
   indexIdentity: ProductIndexIdentity;
   validatedBlockCount: number;
-  encoding: 'summary-json-v1' | 'blocks-le12-v1';
+  encoding: 'summary-json-v1' | 'blocks-le12-v2' | 'intra-le16-v1' | 'inter-le32-v1';
 }
 export interface AnalysisSummary extends ProductMetadata { product: 'summary'; encoding: 'summary-json-v1' }
 /** Validate a complete transport packet before publishing any of its pictures. */
@@ -57,8 +59,16 @@ export function validateSummaryPacket(packet: { cachedGop?: unknown; summaryBatc
   }
   return { results: batch as AnalysisSummary[], cached, cursor: packet.cursor as number };
 }
-export interface AnalysisBlocks extends ProductMetadata { product: 'blocks'; encoding: 'blocks-le12-v1'; payload: ArrayBuffer }
-export type AnalysisProduct = AnalysisSummary | AnalysisBlocks;
+export interface AnalysisBlocks extends ProductMetadata { product: 'blocks'; encoding: 'blocks-le12-v2'; payload: ArrayBuffer }
+export interface AnalysisPredictions extends ProductMetadata {
+  product: PredictionProduct;
+  encoding: 'intra-le16-v1' | 'inter-le32-v1';
+  payload: ArrayBuffer;
+}
+export type AnalysisProduct = AnalysisSummary | AnalysisBlocks | AnalysisPredictions;
+export function productEncoding(product: AnalysisProduct['product']) {
+  return ({summary:'summary-json-v1', blocks:'blocks-le12-v2', 'prediction-intra':'intra-le16-v1', 'prediction-inter':'inter-le32-v1'} as const)[product];
+}
 export type AnalysisOutput = AnalysisResult | AnalysisProduct;
 export const isProduct = (value: AnalysisOutput): value is AnalysisProduct => 'product' in value;
 export const isSummary = (value: AnalysisOutput): value is AnalysisSummary => isProduct(value) && value.product === 'summary';
@@ -66,17 +76,17 @@ export const metadata = (value: AnalysisOutput): FrameMetadata => {
   if (isProduct(value)) { const { product, productSchema, encoding, indexIdentity, validatedBlockCount, ...frame } = value; const { payload: _payload, ...rest } = frame as FrameMetadata & {payload?: ArrayBuffer}; return rest; }
   const { blocks, ...frame } = value; return frame;
 };
-export function productKey(picture: SourcePictureKey, buildId: string, indexIdentity: ProductIndexIdentity | null, product: 'summary' | 'blocks') {
-  return JSON.stringify([pictureId(picture), buildId, ANALYSIS_RECIPE, ANALYZER_VERSION, PRODUCT_SCHEMA, product, product === 'summary' ? 'summary-json-v1' : 'blocks-le12-v1', analysisIndexIdentity(indexIdentity)]);
+export function productKey(picture: SourcePictureKey, buildId: string, indexIdentity: ProductIndexIdentity | null, product: AnalysisProduct['product']) {
+  return JSON.stringify([pictureId(picture), buildId, ANALYSIS_RECIPE, ANALYZER_VERSION, PRODUCT_SCHEMA, product, productEncoding(product), analysisIndexIdentity(indexIdentity)]);
 }
 export function summaryOf(value: AnalysisOutput, indexIdentity: ProductIndexIdentity | null = null): AnalysisSummary {
-  if (isProduct(value)) return { ...metadata(value), product: 'summary', productSchema: 2, encoding: 'summary-json-v1', indexIdentity: value.indexIdentity, validatedBlockCount: value.validatedBlockCount };
-  return { ...metadata(value), product: 'summary', productSchema: 2, encoding: 'summary-json-v1', indexIdentity:analysisIndexIdentity(indexIdentity), validatedBlockCount: value.blocks.length };
+  if (isProduct(value)) return { ...metadata(value), product: 'summary', productSchema: PRODUCT_SCHEMA, encoding: 'summary-json-v1', indexIdentity: value.indexIdentity, validatedBlockCount: value.validatedBlockCount };
+  return { ...metadata(value), product: 'summary', productSchema: PRODUCT_SCHEMA, encoding: 'summary-json-v1', indexIdentity:analysisIndexIdentity(indexIdentity), validatedBlockCount: value.blocks.length };
 }
 const modes = [undefined, 'intra', 'inter', 'skip'] as const;
 export function readBlock(view: DataView, i: number): AnalysisBlock {
-  const at = i * 12, q = view.getInt16(at + 8, true);
-  return { x: view.getUint16(at, true), y: view.getUint16(at + 2, true), width: view.getUint16(at + 4, true), height: view.getUint16(at + 6, true), qp: q === -32768 ? null : q, mode: modes[view.getUint8(at + 10)]! };
+  const at = i * 12, q = view.getInt16(at + 8, true), depthCode = view.getUint8(at + 11);
+  return { x: view.getUint16(at, true), y: view.getUint16(at + 2, true), width: view.getUint16(at + 4, true), height: view.getUint16(at + 6, true), qp: q === -32768 ? null : q, mode: modes[view.getUint8(at + 10)]!, ...(depthCode ? {depth: depthCode - 1} : {}) };
 }
 /** Validate directly over bounded records, without a retained array of JS blocks. */
 export function validateRecords(frame: FrameMetadata, count: number, at: (i: number) => AnalysisBlock) {
@@ -92,8 +102,8 @@ export function validateRecords(frame: FrameMetadata, count: number, at: (i: num
   const aligned = (n: number) => Number.isInteger(n) && n % 4 === 0;
   let area = 0, sum = 0;
   for (let i = 0; i < count; i++) {
-    const { x, y, width, height, mode, qp } = at(i);
-    if (!aligned(x) || !aligned(y) || !aligned(width) || !aligned(height) ||
+    const { x, y, width, height, mode, qp, depth } = at(i);
+    if (!validBlockDepth(frame.blockDepth, depth) || !aligned(x) || !aligned(y) || !aligned(width) || !aligned(height) ||
         x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > w || y + height > h ||
         (mode !== 'intra' && mode !== 'inter' && mode !== 'skip') ||
         (qp === null ? qpRequired : !Number.isInteger(qp) || qp < (frame.qp.bitDepth === 10 ? 1 : 0) || qp > maxQp))
@@ -133,7 +143,7 @@ export function metadataBudgetBytes(value:unknown) {
 }
 export function validateProduct(value: AnalysisProduct) {
   metadataBudgetBytes(value);
-  if (!value || value.productSchema !== PRODUCT_SCHEMA || !['summary','blocks'].includes(value.product) || value.encoding !== (value.product === 'summary' ? 'summary-json-v1' : 'blocks-le12-v1') || 'blocks' in value) throw new Error('Invalid analysis product');
+  if (!value || value.productSchema !== PRODUCT_SCHEMA || !['summary','blocks','prediction-intra','prediction-inter'].includes(value.product) || value.encoding !== productEncoding(value.product) || 'blocks' in value) throw new Error('Invalid analysis product');
   validateMetadata(value);
   if (value.confidence==='exact' && (value.reasons.length || value.capabilities.blocks!=='ready' || value.capabilities.modes!=='ready' || (value.capabilities.qp==='ready' && value.qp.mean===null)))throw Error('Invalid exact product quality');
   if (!Number.isSafeInteger(value.validatedBlockCount) || value.validatedBlockCount < 0 || value.validatedBlockCount > BUDGET.blocks || (value.confidence === 'exact' && !value.validatedBlockCount)) throw new Error('Invalid validated block count');
@@ -142,9 +152,13 @@ export function validateProduct(value: AnalysisProduct) {
   const { payload, ...header } = value as AnalysisBlocks;
   if (new TextEncoder().encode(JSON.stringify(header)).byteLength > PRODUCT_LIMIT.metadata) throw new AnalysisFailure('resource-limit', 'Analysis metadata budget exceeded');
   if (value.product === 'summary') { if ('payload' in value) throw new Error('Summary cannot contain blocks'); return; }
+  if (isPredictionProduct(value.product)) {
+    if (value.confidence !== 'exact' || ![8, 10].includes(value.qp.bitDepth)) throw Error('Unsupported prediction picture');
+    validatePredictions(value.product, payload, value);
+    return;
+  }
   if (!(payload instanceof ArrayBuffer) || payload.byteLength !== value.validatedBlockCount * 12 || payload.byteLength + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new Error('Invalid packed payload length');
   const view = new DataView(payload);
-  for (let i = 0; i < value.validatedBlockCount; i++) if (view.getUint8(i * 12 + 11)) throw new Error('Unknown packed reserved byte');
   const mean = validateRecords(value, value.validatedBlockCount, i => readBlock(view, i));
   if (mean !== value.qp.mean) throw new Error('Packed QP mismatch');
 }
@@ -156,11 +170,11 @@ function packValidatedLegacy(value:AnalysisResult,indexIdentity:ProductIndexIden
   const summary=summaryOf(value,indexIdentity);metadataBudgetBytes(summary);
   const payload = new ArrayBuffer(value.blocks.length * 12), view = new DataView(payload);
   value.blocks.forEach((b, i) => writeBlock(view, i, b));
-  return { ...summary, product: 'blocks', encoding: 'blocks-le12-v1', payload };
+  return { ...summary, product: 'blocks', encoding: 'blocks-le12-v2', payload };
 }
 export function writeBlock(view: DataView, i: number, b: AnalysisBlock) {
   const at = i * 12;
-  [b.x,b.y,b.width,b.height].forEach((v,j) => view.setUint16(at + j * 2, v, true)); view.setInt16(at + 8, b.qp === null ? -32768 : b.qp, true); view.setUint8(at + 10, modes.indexOf(b.mode)); view.setUint8(at + 11, 0);
+  [b.x,b.y,b.width,b.height].forEach((v,j) => view.setUint16(at + j * 2, v, true)); view.setInt16(at + 8, b.qp === null ? -32768 : b.qp, true); view.setUint8(at + 10, modes.indexOf(b.mode)); view.setUint8(at + 11, b.depth === undefined ? 0 : b.depth + 1);
 }
 export function legacyOf(value: AnalysisBlocks): AnalysisResult {
   validateProduct(value); const view = new DataView(value.payload);
@@ -209,6 +223,10 @@ export async function decodeProduct(bytes: Uint8Array): Promise<AnalysisProduct>
   if (header.product === 'blocks') {
     if (!Number.isSafeInteger(header.validatedBlockCount) || header.validatedBlockCount < 0 || header.validatedBlockCount > BUDGET.blocks || end - 8 - length !== header.validatedBlockCount * 12) throw new Error('Invalid analysis payload budget');
     header.payload = bytes.slice(8+length,end).buffer;
+  } else if (header.product === 'prediction-intra' || header.product === 'prediction-inter') {
+    const size = end - 8 - length;
+    if (size > PREDICTION_BYTES || size % predictionStride(header.product)) throw Error('Invalid prediction payload budget');
+    header.payload = bytes.slice(8 + length, end).buffer;
   } else if (end !== 8 + length) throw new Error('Unexpected summary payload');
   validateProduct(header); return header;
 }

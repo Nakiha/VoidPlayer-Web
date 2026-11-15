@@ -34,8 +34,15 @@ const { page, limitsDir, checkpointOnly, call, analyze, hideOverlay, stable, lib
           await page
             .locator("#bitstream-overlay-A")
             .waitFor({ state: "visible" });
-          assert.equal(await page.locator('#bitstream-mode [data-value="qp"]').isDisabled(), false);
-          await page.locator('#bitstream-mode [data-value="qp"]').click();
+          assert.equal(await page.locator('#bitstream-mode [data-mode="qp"]').isDisabled(), false);
+          await page.locator('#bitstream-mode [data-mode="depth"]').click();
+          assert.equal(result.blockDepth, 'hevc-cu');
+          await page.locator('#bitstream-inspect-frame').click();
+          const drawer = page.locator('#analysis-overlay-panel #bitstream-frame-inspector');
+          const depths = await drawer.locator('[data-bins] button').evaluateAll(buttons => buttons.map(b => Number(b.dataset.key)));
+          assert.deepEqual(depths, [...new Set(result.blocks.map(b => b.depth))].sort((a,b) => a-b));
+          await page.locator('#bitstream-inspect-frame').click();
+          await page.locator('#bitstream-mode [data-mode="qp"]').click();
         } else {
           await page
             .locator("#bitstream-overlay-A")

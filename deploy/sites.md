@@ -7,7 +7,7 @@
 
 - `npm run dev:sites`：开发预览，不代理媒体 API，也不提供跨源隔离响应头。
 - `npm run build:sites`：检查并生成 `artifacts/sites/`，不覆盖完整版 `dist/`。
-- `npm run package:sites`：额外生成 `artifacts/voidplayer-sites.tar.gz`。
+- `npm run package:sites`：额外生成 `artifacts/voidplayer-<版本>-sites.tar.gz` 和 `.sha256` 校验文件。
 
 以上命令在 VoidPlayer-Web 源码仓库运行。交付目录是无需再次构建的静态项目，不需要安装 Node 服务或 npm 依赖。
 
@@ -55,5 +55,9 @@ Sites 浏览器回归用纯静态 HTTP 服务，不启动媒体 API；对所有 
 真实浏览器层用于验证 Worker/WASM、文件下载/拖入、IndexedDB 与隔离能力，
 不另加源码布局断言或重复模拟解码测试。生成文件与报告均在 `.run/sites-browser/`。
 
-打包校验播放/分析 core 的 release lock、来源与逐文件哈希，并生成归档 SHA-256。
+GitHub Release 从 v2.3.0 起同时提供这套静态分发包。解压后以静态 HTTP 服务托管 `dist/`，
+使用 HTTPS 或 localhost 打开；也可以将项目绑定到自己的 Sites。分发包不携带现有公开站点的身份。
+
+打包校验前端版本、修订、Sites 构建回执、静态资源以及播放/分析 core 的 release lock、来源与逐文件哈希，并生成归档 SHA-256。
+`sites-release.json` 记录版本与文件哈希。发布汇总要求静态包与三平台程序包来自同一修订且携带相同的两套 core，缺少静态包时拒绝发布。
 发布前仍需在最终托管 URL 做实际验收；本地通过不代表 Sites 响应头或内嵌权限已经验证。

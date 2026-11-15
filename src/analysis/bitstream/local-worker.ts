@@ -98,7 +98,7 @@ scope.onmessage = async ({ data }) => {
       new AbortController().signal,
     );
     countProduct(result,false,counters);counters.uniqueDelivered=1;
-    scope.postMessage({ ok: true, result, counters }, isProduct(result) && result.product === "blocks" ? [result.payload] : []);
+    scope.postMessage({ ok: true, result, counters }, isProduct(result) && 'payload' in result ? [result.payload] : []);
   } catch (error) {
     scope.postMessage({
       ok: false,

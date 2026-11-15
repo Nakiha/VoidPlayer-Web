@@ -2132,20 +2132,36 @@
     "source": "无法唯一确定源画面，已隐藏精确遮罩",
     "params": {}
   },
+  "bitstream.analysisMode": {
+    "source": "分析模式",
+    "params": {}
+  },
   "bitstream.analysisProgress": {
     "source": "分析进度",
+    "params": {}
+  },
+  "bitstream.blockCount": {
+    "source": "块数",
     "params": {}
   },
   "bitstream.blockLabels": {
     "source": "块内文字",
     "params": {}
   },
-  "bitstream.blockLabelsHint": {
-    "source": "显示 QP 或预测类型，小块自动隐藏文字",
+  "bitstream.blockSize": {
+    "source": "块尺寸",
     "params": {}
   },
   "bitstream.boundaries": {
     "source": "块边界",
+    "params": {}
+  },
+  "bitstream.byArea": {
+    "source": "按编码面积",
+    "params": {}
+  },
+  "bitstream.byCount": {
+    "source": "按块数",
     "params": {}
   },
   "bitstream.cancelled": {
@@ -2156,13 +2172,35 @@
     "source": "关闭分析遮罩",
     "params": {}
   },
+  "bitstream.cuDepth": {
+    "source": "CU 深度",
+    "params": {}
+  },
+  "bitstream.displayTab": {
+    "source": "画面显示",
+    "params": {}
+  },
   "bitstream.editOpacity": {
     "source": "编辑不透明度",
     "params": {}
   },
-  "bitstream.fillMode": {
-    "source": "填色",
+  "bitstream.enableTrack": {
+    "source": "请开启一个轨道遮罩",
     "params": {}
+  },
+  "bitstream.exportFrame": {
+    "source": "导出当前帧",
+    "params": {}
+  },
+  "bitstream.fieldUnavailable": {
+    "source": "此轨当前帧没有该模式的数据",
+    "params": {}
+  },
+  "bitstream.frameDistribution": {
+    "source": "当前帧 · {metric}分布",
+    "params": {
+      "metric": "string | number"
+    }
   },
   "bitstream.hideTrackOverlay": {
     "source": "隐藏轨道 {slot} 的遮罩",
@@ -2170,8 +2208,20 @@
       "slot": "string | number"
     }
   },
+  "bitstream.highQp": {
+    "source": "高 QP",
+    "params": {}
+  },
+  "bitstream.includeBlocks": {
+    "source": "附带块明细",
+    "params": {}
+  },
   "bitstream.incompleteReferences": {
     "source": "参考状态不完整，无法生成精确遮罩",
+    "params": {}
+  },
+  "bitstream.inspectTrack": {
+    "source": "检查轨道",
     "params": {}
   },
   "bitstream.inter": {
@@ -2190,8 +2240,24 @@
     "source": "分析目标或区间无效",
     "params": {}
   },
-  "bitstream.noFill": {
-    "source": "无",
+  "bitstream.lowQp": {
+    "source": "低 QP",
+    "params": {}
+  },
+  "bitstream.maxQp": {
+    "source": "最高 QP",
+    "params": {}
+  },
+  "bitstream.meanQp": {
+    "source": "平均 QP",
+    "params": {}
+  },
+  "bitstream.minQp": {
+    "source": "最低 QP",
+    "params": {}
+  },
+  "bitstream.noFrameBlocks": {
+    "source": "当前帧暂无可用的块数据",
     "params": {}
   },
   "bitstream.noSafeAnchor": {
@@ -2206,12 +2272,24 @@
     "source": "分析遮罩",
     "params": {}
   },
-  "bitstream.prediction": {
-    "source": "预测模式",
+  "bitstream.partitions": {
+    "source": "块划分",
+    "params": {}
+  },
+  "bitstream.pauseInspect": {
+    "source": "暂停后检查当前帧",
+    "params": {}
+  },
+  "bitstream.predictionTypes": {
+    "source": "预测类型",
     "params": {}
   },
   "bitstream.qp": {
     "source": "QP 热图",
+    "params": {}
+  },
+  "bitstream.qtDepth": {
+    "source": "QT 深度",
     "params": {}
   },
   "bitstream.resourceLimit": {
@@ -2224,12 +2302,26 @@
       "slot": "string | number"
     }
   },
+  "bitstream.sizeFill": {
+    "source": "按块尺寸填色",
+    "params": {}
+  },
   "bitstream.skip": {
     "source": "跳过",
     "params": {}
   },
   "bitstream.sourceChanged": {
     "source": "片源已变更，请重新载入后分析",
+    "params": {}
+  },
+  "bitstream.totalBlocks": {
+    "source": "{count} 块",
+    "params": {
+      "count": "string | number"
+    }
+  },
+  "bitstream.treeDepth": {
+    "source": "树深度",
     "params": {}
   },
   "bitstream.unsupportedCodec": {
@@ -2246,6 +2338,10 @@
   },
   "bitstream.unsupportedQpDepth": {
     "source": "此位深的 QP 暂不支持，块和模式仍可查看",
+    "params": {}
+  },
+  "bitstream.weightBy": {
+    "source": "统计口径",
     "params": {}
   },
   "bootstrap.brandDescription": {

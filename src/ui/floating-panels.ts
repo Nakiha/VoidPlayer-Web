@@ -1,6 +1,6 @@
 /** Viewport tools are peers: the overlay controls make room for the annotation
  * toolbar when their rectangles overlap, including while the toolbar is dragged. */
-export function installFloatingPanelAvoidance(panel: HTMLElement, peer: HTMLElement, signal: AbortSignal) {
+export function installFloatingPanelAvoidance(panel: HTMLElement, content: HTMLElement, peer: HTMLElement, signal: AbortSignal) {
   const viewport = panel.closest<HTMLElement>('.viewport-surface')!;
   const transport = viewport.querySelector<HTMLElement>('.transport')!;
   let frame = 0;
@@ -67,6 +67,8 @@ export function installFloatingPanelAvoidance(panel: HTMLElement, peer: HTMLElem
     grip.addEventListener('pointercancel', end, {signal});
   }, {signal});
   const resize = new ResizeObserver(update); resize.observe(viewport); resize.observe(panel); resize.observe(peer); resize.observe(transport);
+  // An expanded section can grow inside a capped panel without resizing its outer box.
+  resize.observe(content);
   const changes = new MutationObserver(update);
   changes.observe(peer, {attributes:true, attributeFilter:['hidden','style']});
   changes.observe(panel, {attributes:true, attributeFilter:['hidden']});

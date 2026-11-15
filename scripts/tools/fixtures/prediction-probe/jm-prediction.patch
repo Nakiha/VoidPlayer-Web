@@ -1,0 +1,21 @@
+--- a/ldecod/src/image.c
++++ b/ldecod/src/image.c
+@@ -2521,6 +2521,18 @@
+     // Get the syntax elements from the NAL
+     currSlice->read_one_macroblock(currMB);
+     decode_one_macroblock(currMB, currSlice->dec_picture);
++    if (currMB->mb_type == I4MB || currMB->mb_type == I8MB || currMB->mb_type == I16MB) {
++      int size = currMB->mb_type == I4MB ? 4 : currMB->mb_type == I8MB ? 8 : 16;
++      for (int y = 0; y < 16; y += size)
++        for (int x = 0; x < 16; x += size) {
++          int mode = size == 16 ? currMB->i16mode : currSlice->ipredmode[currMB->block_y+y/4][currMB->block_x+x/4];
++          fprintf(stderr, "VP %d Y %d %d %d %d %d\n", currSlice->dec_picture->poc,
++            currMB->block_x*4+x, currMB->block_y*4+y, size, size, mode);
++        }
++      fprintf(stderr, "VP %d C %d %d 16 16 %d\n", currSlice->dec_picture->poc,
++        currMB->block_x*4, currMB->block_y*4, currMB->c_ipred_mode);
++    }
++
+ 
+     if(currSlice->mb_aff_frame_flag && currMB->mb_field)
+     {

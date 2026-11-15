@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 自动回归与基础设施 | `testing/`、`run-tests.mjs`、`run-browser-regressions.mjs`；专用 `check-*` 在清单中登记 | 使用 suite/case 筛选；required 决定门禁 |
 | 开发与资源维护 | `tools/development/make-icons.mjs`；`dev.ts`、`service.mjs`、`service-runner.mjs`、`clean.mjs` | 显式开发命令；服务启动器捕获有界日志；不加入回归门禁 |
-| 夹具准备 | `tools/fixtures/{make-library-fixtures,sync-fate-samples}.mjs`；`sync-samples.sh`、`sync-wasm-core.sh`、`make-{flv,hlg}-fixture*`、`tools/fixtures/read-vtm-analysis.py`（独立 VTM 块统计冻结） | 每个 job 准备一次只读素材；合成可写素材由 case 独占 |
+| 夹具准备 | `tools/fixtures/{make-library-fixtures,sync-fate-samples}.mjs`；`sync-samples.sh`、`sync-wasm-core.sh`、`make-{flv,hlg}-fixture*`、`tools/fixtures/read-vtm-analysis.py`（独立 VTM 块统计冻结）；[预测字段采集与独立对照](../docs/fixtures/bitstream-prediction-probe.md) | 每个 job 准备一次只读素材；合成可写素材由 case 独占 |
 | 诊断与复现 | `tools/diagnostics/repro-native-yuv-color.mjs`；其余 `repro-*`、`diagnose-*` | 操作者显式运行；诊断成功不代表验收通过 |
 | 性能 | `tools/perf/bench-frame-index.mjs`；其余 `bench-*`、`compare-index-scan-modes.mjs` | `perf` 套件或专用参数；显式 informational |
 | 发布与产物 | `tools/release/release-version.mjs`；`package-release.mjs`、`prepare-release-core.mjs`、`check-release*.mjs`、`stage-release.mjs` | workflow 管理原生平台、产物依赖和草稿；回归不触发发布 |
@@ -21,7 +21,8 @@
 
 Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建必须在构建网页和打包两个步骤使用同一个 `VOIDPLAYER_RELEASE_TAG`；标签必须匹配包版本、指向当前修订且工作区干净。分支构建保留 `-preview.<修订>`（有未提交改动时附加 `.dirty`）；无 Git 的源码网页构建标为 `-development`，不能据此制作正式包。
 
-`build-sites.mjs` / `package-sites.mjs` 生成并校验 Sites 专用静态项目与归档，不启动服务或发布站点；使用方式见 [Sites 分发](../deploy/sites.md)。
+`build-sites.mjs` / `package-sites.mjs` 生成并校验 Sites 专用静态项目、版本化归档与 SHA-256，不启动服务或发布站点；使用方式见 [Sites 分发](../deploy/sites.md)。
+完整发布的 `sites-release` job 使用同一标签和 core 产物制作静态包，`release-set` 要求三平台程序包与静态包齐全、同修订且 core 字节相同，再统一上传八份附件到草稿。
 
 `build-frontend.mjs` 生成独立候选，`publish-frontend.mjs` 校验并发布到服务数据目录；部署操作见[前端发布](../deploy/operations.md#只发布前端)。
 

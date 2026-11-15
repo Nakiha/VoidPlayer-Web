@@ -245,8 +245,8 @@ export class AnalysisScheduler {
     } finally { await probe.close(); }
     const decoder = this.decoder;
     const { buildId, threaded } = await this.resolveCore(decoder);
-    const id = target.product==='blocks' && 'picture' in target && target.picture
-      ? createHash("sha256").update(productKey(target.picture,buildId,target.indexIdentity ?? null,'blocks')).digest("hex")
+    const id = target.product && target.product !== 'summary' && 'picture' in target && target.picture
+      ? createHash("sha256").update(productKey(target.picture,buildId,target.indexIdentity ?? null,target.product)).digest("hex")
       : createHash("sha256")
       .update(
         JSON.stringify([
@@ -678,7 +678,7 @@ export class AnalysisScheduler {
                   throw reason;
                 }
                 const chunk = 'startUs' in work.target || 'mode' in work.target ? this.pictureChunk(work,result.picture) : work.id;
-                const resultBytes = isProduct(result) ? (result.product === 'blocks' ? result.payload.byteLength : 0) + Buffer.byteLength(JSON.stringify(isProduct(result) && result.product === 'blocks' ? {...result,payload:undefined} : result)) + 40 : Math.min(BUDGET.resultBytes,result.blocks.length*128+metadataBudgetBytes(metadata(result))+64);
+                const resultBytes = isProduct(result) ? (result.product !== 'summary' ? result.payload.byteLength : 0) + Buffer.byteLength(JSON.stringify(isProduct(result) && result.product !== 'summary' ? {...result,payload:undefined} : result)) + 40 : Math.min(BUDGET.resultBytes,result.blocks.length*128+metadataBudgetBytes(metadata(result))+64);
                 if (resultBytes > (isProduct(result) ? PRODUCT_LIMIT.frame : BUDGET.resultBytes)) throw new AnalysisFailure('resource-limit','Analysis frame budget exceeded');
                 if (!("mode" in work.target) && work.chunks.length >= 32)
                   throw new AnalysisFailure(
@@ -687,6 +687,7 @@ export class AnalysisScheduler {
                   );
                 if ('mode' in work.target) {
                   if (!result.gop) throw new Error('Missing stream GOP');
+                  if (isProduct(result) && result.product !== 'summary' && result.product !== 'blocks') throw Error('Unexpected prediction stream product');
                   const ref: StreamChunkRef = { id: chunk, cursor: work.published + 1, gop: result.gop, picture:result.picture, au:result.picture.au, bytes:resultBytes, ...(batch ? { cached: true, batchEnd } : {}), ...(isProduct(result)?{product:result.product,encoding:result.encoding}:{}) };
                   work.writing = new Set([this.outputFile(work,chunk),
                     this.store.streamPageFile(work.id, Math.floor(work.published / 32))]);

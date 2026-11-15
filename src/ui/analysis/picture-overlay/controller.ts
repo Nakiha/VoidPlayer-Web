@@ -10,7 +10,8 @@ import type { PresentationGeometry } from "../../../presentation/presentation-su
 import type { ReviewSession } from "../../../session.ts";
 import type { Slot } from "../../../../shared/review/model.ts";
 import { t, msg } from "../../../i18n.ts";
-type FillMode = "none" | "qp" | "modes";
+import { blockColor, blockKey } from './block-display.ts';
+import type { BlockFilter, FillMode } from './block-display.ts';
 export function createAnalysisOverlay(
   session: ReviewSession,
   slot: Slot,
@@ -25,12 +26,14 @@ export function createAnalysisOverlay(
   let token: PresentedFrameToken | null = session.getPresentedFrame(slot),
     result: ReadonlyAnalysisResult | null = null,
     geometry: PresentationGeometry | null = null,
+    filter: BlockFilter | null = null,
     fill: FillMode = "none",
     boundaries = true,
     labels = false;
   let lastDraw: {
     result: ReadonlyAnalysisResult;
     geometry: string;
+    filter: BlockFilter | null;
     fill: FillMode;
     boundaries: boolean;
     labels: boolean;
@@ -74,7 +77,7 @@ export function createAnalysisOverlay(
     if (
       lastDraw?.result === result &&
       lastDraw.geometry === signature &&
-      lastDraw.fill === fill &&
+      lastDraw.fill === fill && lastDraw.filter === filter &&
       lastDraw.boundaries === boundaries && lastDraw.labels === labels
     ) {
       metrics.skippedDraws++;
@@ -120,6 +123,8 @@ export function createAnalysisOverlay(
     // blocks creates holes exactly where partitioning is most detailed.
     // One batched stroke keeps shared edges from accumulating opacity.
     ctx.beginPath();
+    const colors = new Map<string, string>();
+    const highlight = filter?.picture === result ? filter : null;
     for (const b of result.blocks) {
       const a = codedToViewport(b.x, b.y, token, g),
         z = codedToViewport(b.x + b.width, b.y + b.height, token, g),
@@ -127,21 +132,20 @@ export function createAnalysisOverlay(
         y = Math.min(a.y, z.y),
         w = Math.abs(z.x - a.x),
         h = Math.abs(z.y - a.y);
-      if (fill === "qp" && b.qp !== null) {
-        ctx.fillStyle = `hsl(${240 - (b.qp / (result.codec === "vvc" ? 63 : 51)) * 240},90%,50%)`;
+      const key = fill === 'none' ? null : blockKey(b, fill);
+      const match = highlight && blockKey(b, highlight.dimension) === highlight.key;
+      if (match) {
+        ctx.fillStyle = 'rgb(255,224,76)';
         ctx.fillRect(x, y, w, h);
-      } else if (fill === "modes") {
-        ctx.fillStyle =
-          b.mode === "intra"
-            ? "rgb(64,200,255)"
-            : b.mode === "skip"
-              ? "rgb(80,220,110)"
-              : "rgb(255,160,60)";
+      } else if (!highlight && key !== null && fill !== 'none') {
+        let color = colors.get(key);
+        if (!color) { color = blockColor(fill, key, result.codec); colors.set(key, color); }
+        ctx.fillStyle = color;
         ctx.fillRect(x, y, w, h);
       }
       if (boundaries) ctx.rect(x, y, w, h);
-      if (labels && fill !== "none" && h >= 18) {
-        const text = fill === "qp" ? (b.qp === null ? null : String(b.qp)) : modeLabels[b.mode];
+      if (labels && h >= 18) {
+        const text = fill === 'none' ? blockKey(b, 'sizes') : fill === 'modes' ? modeLabels[b.mode] : key;
         if (text) {
           let textWidth = textWidths.get(text);
           if (textWidth === undefined) { textWidth = ctx.measureText(text).width; textWidths.set(text, textWidth); }
@@ -170,7 +174,7 @@ export function createAnalysisOverlay(
     canvas.dataset.commit = String(token.commit);
     canvas.dataset.blocks = String(result.blocks.length);
     canvas.dataset.labels = String(textLabels.length);
-    lastDraw = { result, geometry: signature, fill, boundaries, labels };
+    lastDraw = { result, geometry: signature, fill, boundaries, labels, filter };
     metrics.draws++;
     if (metrics.drawTimesMs.length >= 2048) metrics.drawTimesMs.shift();
     metrics.drawTimesMs.push(performance.now() - started);
@@ -224,7 +228,8 @@ export function createAnalysisOverlay(
       result = session.cachedBitstreamAnalysis(slot, current);
       draw();
     },
-    setDisplay(value: { fill: FillMode; boundaries: boolean; labels: boolean }) {
+    setDisplay(value: { fill: FillMode; boundaries: boolean; labels: boolean; filter?: BlockFilter | null }) {
+      filter = value.filter ?? null;
       fill = value.fill;
       boundaries = value.boundaries;
       labels = value.labels;

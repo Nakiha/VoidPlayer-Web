@@ -1,0 +1,273 @@
+--- a/builder/analysis/stream.c
++++ b/builder/analysis/stream.c
+@@ -11,6 +11,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include "voidplayer_block_sort.h"
++#include "libavcodec/vp_probe.h"
+ #include "libavcodec/avcodec.h"
+ #include "libavcodec/voidplayer_vachunk.h"
+ #include "libavcodec/voidplayer_analysis.h"
+@@ -33,7 +34,7 @@
+ #ifndef VP_ANALYSIS_H264_SKIP_LOOP_FILTER
+ #define VP_ANALYSIS_H264_SKIP_LOOP_FILTER 1
+ #endif
+-typedef struct { uintptr_t id; Block *blocks; uint32_t count,capacity,width,height; int sealed,invalid,depth; int64_t pts; uint32_t refs[128], ref_count; int refs_invalid, type, poc; } Picture;
++typedef struct { uintptr_t id; ProbeRow *probe; uint32_t used, reserved; Block *blocks; uint32_t count,capacity,width,height; int sealed,invalid,depth; int64_t pts; uint32_t refs[128], ref_count; int refs_invalid, type, poc; } Picture;
+ static Picture pictures[MAX_PICTURES];
+ static AVCodecContext *decoder;
+ static AVFrame *frame;
+@@ -81,7 +82,7 @@
+     if(create) for(int i=0;i<MAX_PICTURES;i++) if(!pictures[i].id) { LOCK_PICTURE(&pictures[i]); pictures[i].id=id; UNLOCK_PICTURE(&pictures[i]); return &pictures[i]; }
+     failure=AVERROR(ENOMEM); return NULL;
+ }
+-static void release(Picture *p) { if(!p)return; allocated-=p->capacity*sizeof(Block);free(p->blocks);memset(p,0,sizeof(*p)); }
++static void release(Picture *p) { if(!p)return; allocated-=p->capacity*sizeof(Block)+p->reserved*sizeof(ProbeRow);free(p->probe);free(p->blocks);memset(p,0,sizeof(*p)); }
+ static Picture *acquire_picture(uintptr_t id) {
+     if(!decoder||failure)return NULL;
+     if(!id){failure=AVERROR_INVALIDDATA;return NULL;}
+@@ -115,6 +116,33 @@
+ #endif
+     return 1;
+ }
++/* Shares the existing global byte budget and picture ownership. */
++void vp_probe_append(uintptr_t id, ProbeRow row)
++{
++    Picture *p = acquire_picture(id);
++    if (!p) return;
++    if (p->sealed) {
++        failure = AVERROR_INVALIDDATA;
++    } else if (p->used == p->reserved) {
++        uint32_t capacity = p->reserved ? p->reserved * 2 : 256;
++        size_t extra = (capacity - p->reserved) * sizeof(ProbeRow);
++        if (reserve_records(extra)) {
++            ProbeRow *rows = realloc(p->probe, capacity * sizeof(ProbeRow));
++            if (rows) {
++                p->probe = rows;
++                p->reserved = capacity;
++            } else {
++                allocated -= extra;
++            }
++        }
++        if (p->used == p->reserved) failure = AVERROR(ENOMEM);
++    }
++    if (!failure) p->probe[p->used++] = row;
++    UNLOCK_PICTURE(p);
++}
++int vp_probe_count(void) { return ready ? ready->used : 0; }
++intptr_t vp_probe_rows(void) { return ready ? (intptr_t)ready->probe : 0; }
++
+ static void append_locked(Picture *p,const VoidPlayerVachunkFrameInfo *info,uint16_t x,uint16_t y,uint16_t w,uint16_t h,uint8_t qp,uint8_t mode,uint8_t depth) {
+     if(!decoder||failure)return;
+     if(info->width>4096||info->height>2304){failure=AVERROR(ENOMEM);return;}
+--- a/ffmpeg/libavcodec/h264_cabac.c
++++ b/ffmpeg/libavcodec/h264_cabac.c
+@@ -2090,11 +2090,15 @@
+                             sl->intra4x4_pred_mode_cache[scan8[i]]);
+                 }
+             }
++            const int step = IS_8x8DCT(mb_type) ? 4 : 1;
++            for (int n = 0; n < 16; n += step)
++                vp_probe_avc_mode(h, sl, PROBE_AVC_Y, n, step == 4 ? 8 : 4, sl->intra4x4_pred_mode_cache[scan8[n]]);
+             write_back_intra_pred_mode(h, sl);
+             if (ff_h264_check_intra4x4_pred_mode(sl->intra4x4_pred_mode_cache, h->avctx,
+                                                  sl->top_samples_available, sl->left_samples_available) < 0 )
+                 return -1;
+         } else {
++            vp_probe_avc_mode(h, sl, PROBE_AVC_Y, 0, 16, sl->intra16x16_pred_mode);
+             sl->intra16x16_pred_mode = ff_h264_check_intra_pred_mode(h->avctx, sl->top_samples_available,
+                                                                      sl->left_samples_available, sl->intra16x16_pred_mode, 0);
+             if (sl->intra16x16_pred_mode < 0) return -1;
+@@ -2103,6 +2107,7 @@
+             h->chroma_pred_mode_table[mb_xy] =
+             pred_mode                        = decode_cabac_mb_chroma_pre_mode(h, sl);
+ 
++            vp_probe_avc_mode(h, sl, PROBE_AVC_C, 0, 16, pred_mode);
+             pred_mode= ff_h264_check_intra_pred_mode(h->avctx, sl->top_samples_available,
+                                                      sl->left_samples_available, pred_mode, 1 );
+             if( pred_mode < 0 ) return -1;
+--- a/ffmpeg/libavcodec/h264_cavlc.c
++++ b/ffmpeg/libavcodec/h264_cavlc.c
+@@ -789,19 +789,25 @@
+                 else
+                     sl->intra4x4_pred_mode_cache[scan8[i]] = mode;
+             }
++            const int step = IS_8x8DCT(mb_type) ? 4 : 1;
++            for (int n = 0; n < 16; n += step)
++                vp_probe_avc_mode(h, sl, PROBE_AVC_Y, n, step == 4 ? 8 : 4, sl->intra4x4_pred_mode_cache[scan8[n]]);
+             write_back_intra_pred_mode(h, sl);
+             if (ff_h264_check_intra4x4_pred_mode(sl->intra4x4_pred_mode_cache, h->avctx,
+                                                  sl->top_samples_available, sl->left_samples_available) < 0)
+                 return -1;
+         }else{
++            vp_probe_avc_mode(h, sl, PROBE_AVC_Y, 0, 16, sl->intra16x16_pred_mode);
+             sl->intra16x16_pred_mode = ff_h264_check_intra_pred_mode(h->avctx, sl->top_samples_available,
+                                                                      sl->left_samples_available, sl->intra16x16_pred_mode, 0);
+             if (sl->intra16x16_pred_mode < 0)
+                 return -1;
+         }
+         if(decode_chroma){
++            pred_mode = get_ue_golomb_31(&sl->gb);
++            vp_probe_avc_mode(h, sl, PROBE_AVC_C, 0, 16, pred_mode);
+             pred_mode= ff_h264_check_intra_pred_mode(h->avctx, sl->top_samples_available,
+-                                                     sl->left_samples_available, get_ue_golomb_31(&sl->gb), 1);
++                                                     sl->left_samples_available, pred_mode, 1);
+             if(pred_mode < 0)
+                 return -1;
+             sl->chroma_pred_mode = pred_mode;
+--- a/ffmpeg/libavcodec/h264_mvpred.h
++++ b/ffmpeg/libavcodec/h264_mvpred.h
+@@ -31,6 +31,19 @@
+ #include "h264dec.h"
+ #include "mpegutils.h"
+ #include "rectangle.h"
++#include "vp_probe.h"
++
++/* Progressive frame geometry only. Capture before boundary DC substitutions. */
++static inline void vp_probe_avc_mode(const H264Context *h, const H264SliceContext *sl,
++                                     int kind, int i, int size, int mode)
++{
++    if (FRAME_MBAFF(h) || h->picture_structure != PICT_FRAME || !h->cur_pic.f) return;
++    int offset = scan8[i] - scan8[0];
++    vp_probe_append((uintptr_t)h->cur_pic.f->opaque, (ProbeRow){
++        kind, sl->mb_x * 16 + 4 * (offset % 8), sl->mb_y * 16 + 4 * (offset / 8),
++        size, size, {mode}
++    });
++}
+ 
+ #include "libavutil/avassert.h"
+ #include "libavutil/mem_internal.h"
+--- a/ffmpeg/libavcodec/hevc/hevcdec.c
++++ b/ffmpeg/libavcodec/hevc/hevcdec.c
+@@ -55,6 +55,7 @@
+ #include "libavcodec/thread.h"
+ #include "libavcodec/threadprogress.h"
+ #if CONFIG_VOIDPLAYER_ANALYSIS
++#include "libavcodec/vp_probe.h"
+ #include "libavcodec/voidplayer_vachunk.h"
+ extern void ff_vpa_reference(uintptr_t id, uintptr_t ref, int list);
+ #endif
+@@ -2164,6 +2165,14 @@
+         hevc_await_progress(s, ref1, &current_mv.mv[1], y0, nPbH);
+     }
+ 
++    vp_probe_append((uintptr_t)s->cur_frame->f->opaque, (ProbeRow){
++        PROBE_HEVC_PU, x0, y0, nPbW, nPbH,
++        { skip_flag, (skip_flag || lc->pu.merge_flag) ? merge_idx : -1, current_mv.pred_flag,
++          ref0 ? current_mv.ref_idx[0] : -1, ref0 ? (int)(uintptr_t)ref0->f->opaque - 1 : -1,
++          current_mv.mv[0].x, current_mv.mv[0].y,
++          ref1 ? current_mv.ref_idx[1] : -1, ref1 ? (int)(uintptr_t)ref1->f->opaque - 1 : -1,
++          current_mv.mv[1].x, current_mv.mv[1].y }
++    });
+     if (vp_hevc_prune(s, 2)) {
+         return;
+     }
+@@ -2340,6 +2349,7 @@
+     int split   = lc->cu.part_mode == PART_NxN;
+     int pb_size = (1 << log2_cb_size) >> split;
+     int side    = split + 1;
++    const uintptr_t id = (uintptr_t)lc->parent->cur_frame->f->opaque;
+     int chroma_mode;
+     int i, j;
+ 
+@@ -2358,6 +2368,12 @@
+                 luma_intra_pred_mode(lc, l, sps,
+                                      x0 + pb_size * j, y0 + pb_size * i, pb_size,
+                                      prev_intra_luma_pred_flag[2 * i + j]);
++            const int n = 2 * i + j;
++            vp_probe_append(id, (ProbeRow){
++                PROBE_HEVC_Y, x0 + j * pb_size, y0 + i * pb_size, pb_size, pb_size,
++                { lc->pu.intra_pred_mode[n], prev_intra_luma_pred_flag[n],
++                  prev_intra_luma_pred_flag[n] ? lc->pu.mpm_idx : lc->pu.rem_intra_luma_pred_mode }
++            });
+         }
+     }
+ 
+@@ -2373,6 +2389,10 @@
+                 } else {
+                     lc->pu.intra_pred_mode_c[2 * i + j] = lc->pu.intra_pred_mode[2 * i + j];
+                 }
++                vp_probe_append(id, (ProbeRow){
++                    PROBE_HEVC_C, x0 + j * pb_size, y0 + i * pb_size, pb_size, pb_size,
++                    { lc->pu.intra_pred_mode_c[2 * i + j], chroma_mode }
++                });
+             }
+         }
+     } else if (sps->chroma_format_idc == 2) {
+@@ -2398,6 +2418,11 @@
+             lc->pu.intra_pred_mode_c[0] = lc->pu.intra_pred_mode[0];
+         }
+     }
++    if (sps->chroma_format_idc == 1 || sps->chroma_format_idc == 2)
++        vp_probe_append(id, (ProbeRow){
++            PROBE_HEVC_C, x0, y0, 1 << log2_cb_size, 1 << log2_cb_size,
++            { lc->pu.intra_pred_mode_c[0], chroma_mode }
++        });
+ }
+ 
+ static void intra_prediction_unit_default_value(HEVCLocalContext *lc,
+--- /dev/null
++++ b/ffmpeg/libavcodec/vp_probe.h
+@@ -0,0 +1,12 @@
++/* Local single-thread field probe for the two pinned source trees. */
++#ifndef AVCODEC_VP_PROBE_H
++#define AVCODEC_VP_PROBE_H
++#include <stdint.h>
++enum ProbeKind { PROBE_VVC_Y = 1, PROBE_VVC_C, PROBE_HEVC_PU, PROBE_AVC_Y, PROBE_AVC_C, PROBE_VVC_INTER, PROBE_HEVC_Y, PROBE_HEVC_C };
++typedef struct {
++    int32_t kind, x, y, w, h, values[11];
++} ProbeRow;
++void vp_probe_append(uintptr_t id, ProbeRow row);
++int vp_probe_count(void);
++intptr_t vp_probe_rows(void);
++#endif
+--- a/ffmpeg/libavcodec/vvc/ctu.c
++++ b/ffmpeg/libavcodec/vvc/ctu.c
+@@ -27,6 +27,7 @@
+ #include "libavutil/refstruct.h"
+ 
+ #if CONFIG_VOIDPLAYER_ANALYSIS
++#include "libavcodec/vp_probe.h"
+ #include "libavcodec/voidplayer_vachunk.h"
+ extern void ff_vpa_reference(uintptr_t id, uintptr_t ref, int list);
+ #endif
+@@ -1070,6 +1071,11 @@
+             cu->intra_pred_mode_y = luma_intra_pred_mode(lc, intra_subpartitions_mode_flag);
+         }
+     }
++    vp_probe_append((uintptr_t)fc->frame->opaque, (ProbeRow){
++        PROBE_VVC_Y, x0, y0, cb_width, cb_height,
++        { cu->tree_type, cu->intra_pred_mode_y, cu->intra_mip_flag, cu->isp_split_type,
++          cu->intra_luma_ref_idx, cu->bdpcm_flag[LUMA] }
++    });
+     set_cb_tab(lc, fc->tab.ipm, cu->intra_pred_mode_y);
+ }
+ 
+@@ -1107,6 +1113,13 @@
+ 
+     if (!cu->bdpcm_flag[CHROMA])
+         derive_chroma_intra_pred_mode(lc, cclm_mode_flag, cclm_mode_idx, intra_chroma_pred_mode);
++    const int has_selector = !cu->act_enabled_flag && !cu->bdpcm_flag[CHROMA] && !cclm_mode_flag;
++    vp_probe_append((uintptr_t)lc->fc->frame->opaque, (ProbeRow){
++        PROBE_VVC_C, cu->x0, cu->y0, cu->cb_width, cu->cb_height,
++        { cu->tree_type, cu->intra_pred_mode_c, has_selector ? intra_chroma_pred_mode : -1,
++          cclm_mode_flag ? cclm_mode_idx : -1, cu->act_enabled_flag, cu->bdpcm_flag[CHROMA],
++          cu->mip_chroma_direct_flag, hs, vs }
++    });
+ }
+ 
+ static PredMode pred_mode_decode(VVCLocalContext *lc,
+@@ -1894,6 +1907,13 @@
+ 
+     if (!pu->dmvr_flag)
+         fill_dmvr_info(lc);
++    vp_probe_append((uintptr_t)lc->fc->frame->opaque, (ProbeRow){
++        PROBE_VVC_INTER, cu->x0, cu->y0, cu->cb_width, cu->cb_height,
++        { cu->skip_flag, pu->general_merge_flag, pu->mmvd_merge_flag, cu->ciip_flag,
++          cu->ciip_flag ? cu->intra_pred_mode_y : -1,
++          pu->merge_gpm_flag ? pu->gpm_partition_idx : -1, pu->merge_subblock_flag,
++          mi->motion_model_idc, cu->pred_mode == MODE_IBC, pu->dmvr_flag, pu->bdof_flag }
++    });
+     return ret;
+ }
+ 

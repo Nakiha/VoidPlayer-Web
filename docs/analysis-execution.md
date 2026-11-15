@@ -2,7 +2,7 @@
 
 Execution ABI1 is additive to block/reference ABI1. Old cores execute fully;
 old clients also get full execution from new cores because mode defaults to zero.
-The `blocks-basic-v3` recipe separates Main10 QP results from older cached summaries.
+The `blocks-basic-v4` recipe preserves Main10 QP admission and separates block depth results from older cached products.
 The exact Core buildId/WASM digest also separates artifact caches. Full and fast
 execution must produce equivalent outputs.
 

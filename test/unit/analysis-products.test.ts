@@ -1,14 +1,17 @@
+import { validatePredictions, copyPredictions } from '../../shared/analysis/bitstream/predictions.ts';
+import { validateRange, validateStream } from '../../shared/analysis/bitstream/contract.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AnalysisResult } from '../../shared/analysis/bitstream/contract.ts';
 import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, validateRecords, PRODUCT_LIMIT } from '../../shared/analysis/bitstream/products.ts';
+import { blockColor, summarizeBlocks } from '../../src/ui/analysis/picture-overlay/block-display.ts';
 import { DiagramStore } from '../../shared/analysis/bitstream/diagrams.ts';
 const result = (): AnalysisResult => ({
   schema: 1,
   codec: "h264",
   analyzerVersion: "0.1.0",
   buildId: "test",
-  recipe: "blocks-basic-v3",
+  recipe: "blocks-basic-v4",
   picture: {
     sourceVersion: "local:uuid",
     stream: "video",
@@ -73,6 +76,40 @@ test('packed transport preserves null, checksums header and payload, owns buffer
   for (const offset of [10, bytes.length - 34]) { const corrupt = bytes.slice(); corrupt[offset] ^= 1; await assert.rejects(decodeProduct(corrupt)); }
   await assert.rejects(decodeProduct(new Uint8Array(PRODUCT_LIMIT.frame + 1)));
   const summary = summaryOf(original); assert.throws(() => validateProduct({...summary, blocks: []} as any));
+});
+
+test('frame inspection keeps coded area, rectangular dimensions, depth zero and unavailable QP distinct', () => {
+  const original = result(), base = original.blocks[0];
+  const frame: AnalysisResult = {...original, codec: 'vvc', blockDepth: 'vvc-qt', width: 12, height: 8,
+    blocks: [{...base, width: 8, height: 8, depth: 0, qp: 10}, {...base, x: 8, width: 4, height: 8, depth: 1, qp: 40, mode: 'skip'}],
+    qp: {...original.qp, mean: 20}};
+  const stats = summarizeBlocks(new OwnedBlocks(packLegacy(frame)).view());
+  assert.deepEqual(stats.qp, {min: 10, mean: 20, max: 40});
+  assert.equal(stats.codedPixels, 96);
+  assert.equal(new Set(['8×32', '16×16', '32×8', '64×4'].map(size => blockColor('sizes', size, 'vvc'))).size, 4);
+  assert.deepEqual(stats.distributions.sizes, [{key: '8×8', count: 1, pixels: 64}, {key: '4×8', count: 1, pixels: 32}]);
+  assert.deepEqual(stats.distributions.depth, [{key: '0', count: 1, pixels: 64}, {key: '1', count: 1, pixels: 32}]);
+  const unknown = summarizeBlocks({...original, qp: {...original.qp, mean: null}, blocks: [{...base, qp: null}]});
+  assert.deepEqual(unknown.qp, {min: null, mean: null, max: null});
+  assert.deepEqual(unknown.distributions.qp, []); assert.deepEqual(unknown.distributions.depth, []);
+});
+
+test('depth transport separates measured zero from missing, rejects old wire and mismatched semantics', async () => {
+  const hevc: AnalysisResult = {...result(), codec: 'hevc', blockDepth: 'hevc-cu'};
+  hevc.blocks = [{...hevc.blocks[0], depth: 0}];
+  const packed = packLegacy(hevc);
+  assert.equal(new Uint8Array(packed.payload)[11], 1);
+  assert.deepEqual(legacyOf(packed), hevc);
+  assert.equal(new OwnedBlocks(packed).view().blocks[0].depth, 0);
+  assert.throws(() => validateProduct({...packed, encoding: 'blocks-le12-v1'} as any));
+  const wire = new Uint8Array(packed.payload);
+  for (const bad of [0, 5, 255]) { wire[11] = bad; assert.throws(() => validateProduct(packed)); }
+  wire[11] = 3;
+  assert.equal(legacyOf(packed).blocks[0].depth, 2);
+  assert.throws(() => validateProduct({...packed, blockDepth: 'vvc-qt'}));
+  const unknown = packLegacy({...result(), codec: 'hevc'});
+  assert.equal(new Uint8Array(unknown.payload)[11], 0);
+  assert.equal(legacyOf(unknown).blocks[0].depth, undefined);
 });
 
 test('summary eviction clears readable coverage while coarse bins remain honest', () => {
@@ -329,4 +366,40 @@ test('cached GOP status bodies stay bounded even without a trustworthy content l
   let cancelled = false;
   const response = new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(maximum + 1)); }, cancel() { cancelled = true; } }));
   await assert.rejects(readSummaryStatus(response), /transport budget/); assert.equal(cancelled, true);
+});
+
+
+test('exact prediction products reject corrupt records, bad references and stream requests', async () => {
+  const r = result(), frame = {...summaryOf(r), product: 'prediction-intra' as const, encoding: 'intra-le16-v1' as const};
+  const y = Uint8Array.of(0, 0, 0, 0, 16, 16, 1, 0, 0, 2, 0, 255, 0, 0, 0, 0);
+  const c = y.slice(); c[6] = 6; c[10] = 1; c[11] = c[9];
+  const pair = Uint8Array.from([...y, ...c]);
+  const bytes = await encodeProduct({...frame, payload: pair.buffer});
+  const got = await decodeProduct(bytes);
+  assert.ok(got.product === 'prediction-intra');
+  assert.deepEqual(new Uint8Array(got.payload), pair);
+  bytes[bytes.length - 33] ^= 1;
+  await assert.rejects(decodeProduct(bytes));
+  const check = (data: Uint8Array<ArrayBuffer>) => validatePredictions('prediction-intra', data.buffer, r);
+  assert.throws(() => check(pair.slice(1)), /length/);
+  assert.throws(() => check(Uint8Array.from([...c, ...c])), /Overlapping/);
+  for (const [idx, value] of [[4, 0], [6, 2], [7, 1], [8, 3], [9, 17], [11, 1], [15, 1]]) {
+    const bad = y.slice(); bad[idx] = value;
+    assert.throws(() => check(bad));
+  }
+  assert.throws(() => validatePredictions('prediction-inter', new ArrayBuffer(0), r), /AVC/);
+  const hevc = {...r, codec: 'hevc' as const};
+  const inter = new Uint8Array(32), view = new DataView(inter.buffer);
+  inter[4] = 16; inter[5] = 16; inter[7] = 1; inter[27] = 1;
+  view.setInt32(12, -1, true); inter[25] = inter[26] = inter[28] = 255;
+  validatePredictions('prediction-inter', inter.buffer, hevc);
+  for (const idx of [8, 12, 20, 24, 25, 26, 28, 31]) {
+    const bad = inter.slice(); bad[idx] = 42;
+    assert.throws(() => validatePredictions('prediction-inter', bad.buffer, hevc));
+  }
+  validatePredictions('prediction-inter', new ArrayBuffer(0), hevc);
+  assert.throws(() => copyPredictions({_vpa_prediction_count: () => -48}, 'prediction-intra'), {code: 'resource-limit'});
+  assert.throws(() => copyPredictions({_vpa_prediction_count: () => -52}, 'prediction-intra'), {code: 'unsupported-picture-layout'});
+  const target = {mode: 'stream', product: 'prediction-intra', sourceVersion: 'A', firstPtsUs: 0, startUs: 0, endUs: 1};
+  for (const checkTarget of [validateRange, validateStream]) assert.throws(() => checkTarget(target as never), {code: 'invalid-request'});
 });

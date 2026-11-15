@@ -1,3 +1,5 @@
+import {isPredictionProduct, predictionStride} from '../shared/analysis/bitstream/predictions.ts';
+import {encodeBase64} from '../shared/media/indexing/ffmpeg-index-cache.ts';
 import { localOnly } from './services/build-profile.ts';
 import { frameIndexTools } from './services/frame-index.ts';
 import { ANNOTATION_COORD_LIMIT } from '../shared/review/annotation.ts';
@@ -37,7 +39,13 @@ export function reviewTools(session: ReviewSession, uri?: UriActions): Tool[] {
     ...(localOnly ? [] : frameIndexTools()),
     tool('request_bitstream_range','Explicitly analyze a bounded half-open session-time range (up to 1 second and 32 pictures) independently of playback. Completed chunks are cached incrementally.',{slot:{enum:SLOTS},startUs:{type:'integer'},endUs:{type:'integer'}},['slot','startUs','endUs'],false,p=>session.requestBitstreamRange(slotValue(p.slot),p.startUs as number,p.endUs as number)),
     tool('get_presented_frame','Read the successful presentation commit and optional playback picture metadata. No pixels or analysis IO.',{slot:{enum:SLOTS}},['slot'],true,p=>session.getPresentedFrame(slotValue(p.slot))),
-    tool('request_bitstream_analysis','Explicitly analyze the paused presented picture in an independent local worker or on its library server. No upload of local files.',{slot:{enum:SLOTS}},['slot'],false,p=>session.requestBitstreamAnalysis(slotValue(p.slot))),
+    tool('request_bitstream_analysis','Analyze the paused presented picture. Prediction products return bounded little-endian records in payloadBase64.',
+      {slot:{enum:SLOTS},product:{enum:['blocks','prediction-intra','prediction-inter']}},['slot'],false,async p=>{
+        const slot = slotValue(p.slot);
+        if (!isPredictionProduct(p.product)) return session.requestBitstreamAnalysis(slot);
+        const {payload, ...frame} = await session.requestBitstreamAnalysis(slot, undefined, p.product);
+        return {...frame, recordCount:payload.byteLength / predictionStride(p.product), payloadBase64:encodeBase64(new Uint8Array(payload))};
+      }),
     tool('cancel_bitstream_analysis','Cancel one track deep analysis, or all tracks when slot is omitted, without changing playback.',{slot:{enum:SLOTS}},[],false,p=>session.cancelBitstreamAnalysis(p.slot === undefined ? undefined : slotValue(p.slot))),
     tool('pause_bitstream_analysis','Pause one track analysis and retain its cached results without changing playback.',{slot:{enum:SLOTS}},['slot'],false,p=>session.pauseBitstreamAnalysis(slotValue(p.slot))),
     tool('resume_bitstream_analysis','Resume a paused track analysis in its previous window with retained coverage; decoding may replay the reference prefix.',{slot:{enum:SLOTS}},['slot'],false,p=>session.resumeBitstreamAnalysis(slotValue(p.slot))),

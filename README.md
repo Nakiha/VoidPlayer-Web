@@ -59,7 +59,9 @@ VoidPlayer Web 是一个视频评审工具，适合对比不同编码或处理�
 | ABI 压缩分享与片源版本标注同步 | — | 支持 |
 | 桌面安装与离线资源准备 | — | 支持，取决于浏览器 |
 
-在线版当前使用单线程 WASM，高分辨率、多轨软件解码的速度取决于设备和片源。部署自己的静态版本见 [Sites 使用与分发](deploy/sites.md)。
+在线版当前使用单线程 WASM，高分辨率、多轨软件解码的速度取决于设备和片源。
+从 [Releases](https://github.com/Nakiha/VoidPlayer-Web/releases/latest) 下载 `voidplayer-<版本>-sites.tar.gz` 可自行静态托管同一套本地文件版，
+无需 Node 服务；部署方式见 [Sites 使用与分发](deploy/sites.md)。
 
 需要媒体库或共享评审时，从 [Releases](https://github.com/Nakiha/VoidPlayer-Web/releases/latest) 下载对应平台的运行包，解压后启动：
 
