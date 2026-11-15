@@ -1981,6 +1981,10 @@ try {
     });
     await page.locator('#bitstream-retry-A').waitFor({state:'visible'});
     await page.locator('#analysis-retry-A').waitFor({state:'visible'});
+    assert.ok(await page.locator('#bitstream-retry-A').evaluate(button => {
+      const box = button.getBoundingClientRect(), text = button.lastElementChild.getBoundingClientRect();
+      return text.left >= box.left && text.right <= box.right && text.top >= box.top && text.bottom <= box.bottom;
+    }), 'the recovery caption fits its button without covering the track switches');
     assert.equal(await page.evaluate(()=>recovery.streams),0,'opening the overlay never starts a stream');
     assert.equal(await page.evaluate(()=>recovery.pictures),1,'failed current picture is automatically attempted once');
     await page.locator('#bitstream-close').click();await page.locator('#toggle-analysis-overlay').click();

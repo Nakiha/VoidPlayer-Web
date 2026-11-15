@@ -233,13 +233,13 @@ const { page, artifact, limitsDir, requests, rows, call, analyze, stable, librar
       await page.waitForFunction(() => { const s = window.voidPlayer.getState(); return !s.busy && s.positionUs > 0 && s.tracks[0].frame?.ptsUs > 0; });
       await call('seek_review', { ptsUs: playback.positionUs });
       await page.screenshot({ path: artifact(`whole-stream-${input}.png`) });
-      const cached = await call('request_bitstream_analysis', { slot: 'A' });
+      const cached = await context.phase(`blocks-after-summary-${input}`, () => call('request_bitstream_analysis', { slot: 'A' }));
       assert.ok(cached.blocks.length > 0);
       assert.equal((await call('get_bitstream_analysis_state')).cacheHit, false, 'summary-only charts do not claim exact blocks are cached');
-      await call('request_bitstream_analysis', { slot: 'A' });
+      await context.phase(`cached-blocks-${input}`, () => call('request_bitstream_analysis', { slot: 'A' }));
       assert.equal((await call('get_bitstream_analysis_state')).cacheHit, true, 'a second exact request reuses the independent block product');
       const cacheStart = requests.length;
-      await call('request_bitstream_stream', { slot: 'A', product:'summary' });
+      await context.phase(`summary-after-blocks-${input}`, () => call('request_bitstream_stream', { slot: 'A', product:'summary' }));
       const restored = await call('get_bitstream_analysis_state', { slot: 'A' });
       assert.equal(restored.state, 'ready'); assert.equal(restored.stream.pictures, 120);
       const { revision: beforeRevision, ...beforeChart } = configQuery;

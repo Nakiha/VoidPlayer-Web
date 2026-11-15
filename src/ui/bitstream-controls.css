@@ -36,7 +36,7 @@
 .bitstream-inspector .icon-button { padding:0; background:transparent; }
 .bitstream-inspector :is(.bitstream-frame-head label,.bitstream-distribution,.bitstream-metrics,.bitstream-export)[hidden] { display:none; }
 #bitstream-retries { display:flex; gap:4px; flex-wrap:wrap; }
-#bitstream-retries button:not([hidden]) { display:inline-flex; align-items:center; gap:5px; width:auto; margin-top:6px; }
+#bitstream-retries button:not([hidden]) { display:inline-flex; flex:0 0 auto; align-items:center; gap:5px; width:auto; margin-top:6px; white-space:nowrap; }
 #bitstream-retries button[hidden] { display:none; }
 #bitstream-display,#bitstream-frame-inspector { display:grid; min-width:0; gap:6px; padding:2px 5px 4px; }
 #analysis-overlay-panel :is(#bitstream-display,#bitstream-frame-inspector,#bitstream-size-style,.bitstream-legend)[hidden] { display:none; }

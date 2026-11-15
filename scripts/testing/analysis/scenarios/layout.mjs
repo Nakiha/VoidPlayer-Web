@@ -73,10 +73,15 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
                 grip.getBoundingClientRect().right <= rail.left && close.getBoundingClientRect().left >= rail.right,
               lower: [...host.querySelectorAll('button,select,input')].filter(el => el.getClientRects().length && !head.contains(el))
                 .every(el => body.contains(el) && el.getBoundingClientRect().top >= bottom - 1),
+              retryFits: [...host.querySelectorAll('#bitstream-retries button:not([hidden])')].every(button => {
+                const box = button.getBoundingClientRect(), text = button.lastElementChild.getBoundingClientRect();
+                return text.left >= box.left && text.right <= box.right && text.top >= box.top && text.bottom <= box.bottom;
+              }),
             };
           });
           assert.deepEqual(layout.badges, ['A','B']);
           assert.ok(layout.header && layout.railHeight <= 32 && layout.lower, 'the grip, stream switches and close action share the first row');
+          assert.ok(layout.retryFits, 'recovery captions fit their buttons without covering the track switches');
         }
         for (const slot of ['A','B']) {
           await openAnalysis(slot);
@@ -86,6 +91,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           await page.locator(`#bitstream-overlay-${slot}`).waitFor({state:'visible'});
           await page.waitForFunction(slot=>window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot}).state!=='pending',slot);
           await page.waitForFunction(slot=>document.querySelector(`#bitstream-tracks [data-slot="${slot}"]`).dataset.state!=='pending',slot);
+          await checkOverlaySections();
           assert.equal(await page.locator('#bitstream-run,#bitstream-current-state,#bitstream-block,#bitstream-time,#bitstream-visibility').count(),0,'toolbar contains controls only');
           const beforeView=await call('get_bitstream_analysis_state',{slot});
           await trackButton.click();assert.equal(await trackButton.getAttribute('aria-pressed'),'false');

@@ -74,7 +74,8 @@ VoidPlayer Web 是一个视频评审工具，适合对比不同编码或处理�
 
 ## 开发
 
-需要 **Node.js 24+**。播放 core 和分析 core 来自独立的 [VoidPlayer-FFmpeg-Build](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm-n9.0.2-unified) 仓库。两者使用同一 FFmpeg 提交，通过编译期开关分别构建。本仓库消费锁定的 WASM 产物。
+需要 **Node.js 24+**。播放 core 和分析 core 来自独立的 [VoidPlayer-FFmpeg-Build](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm-n9.0.2-unified) 仓库。
+两者通过编译期开关分别构建，并按各自发布锁固定经过验证的 FFmpeg 修订。本仓库消费锁定的 WASM 产物。
 
 先准备好 core 产物，再运行：
 
