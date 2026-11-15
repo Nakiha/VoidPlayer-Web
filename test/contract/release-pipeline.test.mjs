@@ -517,6 +517,20 @@ test('analysis preparation rejects provenance claiming references when actual ex
   } finally { await rm(root, {recursive:true,force:true}); }
 });
 
+test('analysis packaging rejects either variant built with different optimization flags', async () => {
+  const { verifyCoreCapabilities } = await import('../../scripts/core-capabilities.mjs');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-analysis-optimization-'));
+  const optimization = { compile: '3', link: '3', lto: true, simd: true };
+  try {
+    for (const name of ['manifest.json', 'threading.json']) {
+      await writeFile(path.join(root, name), JSON.stringify({ optimization: { ...optimization, lto: false } }));
+      await assert.rejects(verifyCoreCapabilities(root, { optimization }, 'analysis'),
+        error => error.code === 'ERR_ASSERTION' && error.message.includes(`Analysis optimization differs from release lock: ${name}`));
+      await writeFile(path.join(root, name), JSON.stringify({ optimization }));
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('core sync replaces both variants, drops stale unpinned metadata and preserves destination on failure', async () => {
   const { syncPlaybackCore, verifyCoreArtifact, playbackFiles } = await import('../../scripts/core-artifacts.mjs');
   const { verifyPlaybackOptimization } = await import('../../scripts/core-capabilities.mjs');

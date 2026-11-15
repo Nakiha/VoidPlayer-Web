@@ -1,0 +1,605 @@
+{
+  "date": "2026-11-15",
+  "platform": "Apple M5, macOS 27.3, Node 24.15.0, Emscripten 6.0.9",
+  "sources": {
+    "baseline": {
+      "builder": "282acc4e2896f98606206659f72ac8d401fb6f8a",
+      "playbackFFmpeg": "cfa90f8c0295ac24467acbc30a1dcfaedef0e279",
+      "analysisFFmpeg": "fcc666d4605f348a94f05ec87799b56d4ebd0ba2",
+      "artifacts": {
+        "voidplayer-analysis-mt.wasm": {
+          "sha256": "1d535f9af435a5c1018f19a2a93b41339cf8b227879905b0393bbad7c3341332",
+          "bytes": 3080079
+        },
+        "voidplayer-analysis.wasm": {
+          "sha256": "49a108e446f7989548e48e4698cfefed49c7ea44fe52b2d535b6c5b224e27e63",
+          "bytes": 3744413
+        },
+        "voidplayer-core-mt.wasm": {
+          "sha256": "b3d05049cd23dfd68ea72ce1830c74a0b9c7e11cf0e57890fa41538b7f92f065",
+          "bytes": 6712867
+        },
+        "voidplayer-core.wasm": {
+          "sha256": "f9043c30913729ec2f86bdce734621ba7aa4f097c0b9f0f151beeb3e42de3187",
+          "bytes": 6639364
+        }
+      }
+    },
+    "candidate": {
+      "builder": "c91740692c275a420238829fd50b2d28650e504e",
+      "playbackFFmpeg": "d5cb5eb3d55be8a19badf5acc397acbb422ebec6",
+      "analysisFFmpeg": "d5cb5eb3d55be8a19badf5acc397acbb422ebec6",
+      "artifacts": {
+        "voidplayer-analysis-mt.wasm": {
+          "sha256": "a6aa2ec000f4a153d1e0b90ad3e9afaaaa4aaf867eb9b3d7653b9dd73517f6aa",
+          "bytes": 3483073
+        },
+        "voidplayer-analysis.wasm": {
+          "sha256": "50886f806efdec045d9a8663c028ba1fe725023add54f9cdbad0b98d61dd8cae",
+          "bytes": 4144343
+        },
+        "voidplayer-core-mt.wasm": {
+          "sha256": "c159e1677044c898f471aa1800ddc019280838a8c460b2eb9611eb2eaef95c1e",
+          "bytes": 6712867
+        },
+        "voidplayer-core.wasm": {
+          "sha256": "11391bf38cd40ed246b421c171d16f3a6591655d305206c7425cf23481dccd48",
+          "bytes": 6639364
+        }
+      }
+    }
+  },
+  "analysis": {
+    "method": "Three paired rounds per case, serial fresh Node processes, baseline/candidate order AB, BA, AB. First 120 packets of each 3840x2160 MP4, stream copy, sealed index, memory-resident input, blocks output through EOF and drain. Wall-clock frames/s includes the shared JS analysis runner, validation, and hashing every emitted header and payload; module initialization and disk reads before the timed loop are excluded. Execution mode requested explicitly. MT2 requests two threads and two contexts; the HEVC decoder itself remains single threaded.",
+    "samples": {
+      "vvc": "540bd8ec9d81bffd7354b7e1d85b03b35c4617dc5570de8e0c99fcb7d2e615c1",
+      "hevc": "ae2aa55ec57c3fb681d2e0f8c582112bcc65ff66e413490b1ce30a0fb933a872",
+      "h264": "d47defdb7efce08dc76c5ecc56987465e40aa0640f44a73a634390a32573a9e1",
+      "vvc10": "80e84d07e2712465955a6885a477439c6c805c479a0d2bd17704fa4267f3fc83"
+    },
+    "results": [
+      {
+        "codec": "vvc",
+        "variant": "st",
+        "requestedMode": "auto",
+        "observedPath": "pruned",
+        "oldFps": [90.04, 93.75, 92.24],
+        "candidateFps": [98.66, 97.88, 96.17],
+        "medianChangePct": 6.12,
+        "frames": 120,
+        "blocks": 1066749,
+        "orderedOutputSha256": "f4e983b3199c649bed6594d33268b699b2d61a3acaab56f57f84c274a891e8e4"
+      },
+      {
+        "codec": "vvc",
+        "variant": "mt",
+        "requestedMode": "auto",
+        "observedPath": "pruned",
+        "oldFps": [125.4, 121.97, 124.9],
+        "candidateFps": [127.79, 128.1, 126.94],
+        "medianChangePct": 2.31,
+        "frames": 120,
+        "blocks": 1066749,
+        "orderedOutputSha256": "f4e983b3199c649bed6594d33268b699b2d61a3acaab56f57f84c274a891e8e4"
+      },
+      {
+        "codec": "vvc",
+        "variant": "st",
+        "requestedMode": "full",
+        "observedPath": "full",
+        "oldFps": [21.04, 21.06, 20.81],
+        "candidateFps": [22.15, 22.23, 22.21],
+        "medianChangePct": 5.58,
+        "frames": 120,
+        "blocks": 1066749,
+        "orderedOutputSha256": "f4e983b3199c649bed6594d33268b699b2d61a3acaab56f57f84c274a891e8e4"
+      },
+      {
+        "codec": "hevc",
+        "variant": "st",
+        "requestedMode": "auto",
+        "observedPath": "pruned",
+        "oldFps": [165.78, 166.48, 164.24],
+        "candidateFps": [169.11, 169.71, 171.43],
+        "medianChangePct": 2.37,
+        "frames": 120,
+        "blocks": 1133022,
+        "orderedOutputSha256": "be1cab80113be491eb677b4b9d984f00e734c2030069180b3568742fd7f98ba2"
+      },
+      {
+        "codec": "hevc",
+        "variant": "mt",
+        "requestedMode": "auto",
+        "observedPath": "pruned",
+        "oldFps": [165.63, 162.84, 163.98],
+        "candidateFps": [169.73, 169.17, 168.92],
+        "medianChangePct": 3.16,
+        "frames": 120,
+        "blocks": 1133022,
+        "orderedOutputSha256": "be1cab80113be491eb677b4b9d984f00e734c2030069180b3568742fd7f98ba2"
+      },
+      {
+        "codec": "hevc",
+        "variant": "st",
+        "requestedMode": "full",
+        "observedPath": "full",
+        "oldFps": [66.78, 65.84, 66.59],
+        "candidateFps": [66.79, 68.13, 67.74],
+        "medianChangePct": 1.71,
+        "frames": 120,
+        "blocks": 1133022,
+        "orderedOutputSha256": "be1cab80113be491eb677b4b9d984f00e734c2030069180b3568742fd7f98ba2"
+      },
+      {
+        "codec": "h264",
+        "variant": "st",
+        "requestedMode": "auto",
+        "observedPath": "full",
+        "oldFps": [148.65, 150.7, 147.25],
+        "candidateFps": [160.82, 160.71, 159.93],
+        "medianChangePct": 8.12,
+        "frames": 120,
+        "blocks": 3888000,
+        "orderedOutputSha256": "05e396c9beebe33175f2b788c438cfc936d561a60aa72fe9b9b3f74bfe43d5ca"
+      },
+      {
+        "codec": "h264",
+        "variant": "mt",
+        "requestedMode": "auto",
+        "observedPath": "full",
+        "oldFps": [260.29, 262.67, 259.98],
+        "candidateFps": [286.7, 285.63, 281.45],
+        "medianChangePct": 9.73,
+        "frames": 120,
+        "blocks": 3888000,
+        "orderedOutputSha256": "05e396c9beebe33175f2b788c438cfc936d561a60aa72fe9b9b3f74bfe43d5ca"
+      }
+    ],
+    "serverDefaultMethod": "Same 4K clips and paired rounds with the server default MT module, one thread/one frame context. The production runner chooses the execution path. Includes result validation and hashing; excludes HTTP, disk cache, job queue and SQLite persistence.",
+    "serverDefault": [
+      {
+        "codec": "vvc",
+        "product": "blocks",
+        "oldFps": [92.14, 89.17, 90.87],
+        "candidateFps": [95.03, 96.72, 96.23],
+        "medianChangePct": 5.89,
+        "executionAtOpen": [
+          {
+            "status": 0,
+            "path": 1,
+            "reason": 0
+          }
+        ],
+        "outputSha256": "f4e983b3199c649bed6594d33268b699b2d61a3acaab56f57f84c274a891e8e4"
+      },
+      {
+        "codec": "vvc",
+        "product": "summary",
+        "oldFps": [92.46, 92.01, 89.23],
+        "candidateFps": [94.32, 98.39, 96.77],
+        "medianChangePct": 5.17,
+        "executionAtOpen": [
+          {
+            "status": 0,
+            "path": 1,
+            "reason": 0
+          }
+        ],
+        "outputSha256": "bb39f1ba5e2f55eb6fcb2ec4f03977c75a6b4c3be2dc581640fd24a607aea9db"
+      },
+      {
+        "codec": "hevc",
+        "product": "blocks",
+        "oldFps": [165.84, 165.05, 165.06],
+        "candidateFps": [169.77, 167.39, 169.85],
+        "medianChangePct": 2.85,
+        "executionAtOpen": [
+          {
+            "status": 0,
+            "path": 1,
+            "reason": 0
+          }
+        ],
+        "outputSha256": "be1cab80113be491eb677b4b9d984f00e734c2030069180b3568742fd7f98ba2"
+      },
+      {
+        "codec": "hevc",
+        "product": "summary",
+        "oldFps": [66.0, 66.39, 65.46],
+        "candidateFps": [67.59, 67.42, 67.71],
+        "medianChangePct": 2.42,
+        "executionAtOpen": [
+          {
+            "status": 0,
+            "path": 0,
+            "reason": 0
+          }
+        ],
+        "outputSha256": "8fa36770210f07fd9e9af3324a6e2f6d393646db62a4e3df77241a9bb39d6667"
+      },
+      {
+        "codec": "h264",
+        "product": "blocks",
+        "oldFps": [142.61, 143.29, 141.63],
+        "candidateFps": [152.89, 154.36, 152.53],
+        "medianChangePct": 7.21,
+        "executionAtOpen": [
+          {
+            "status": 0,
+            "path": 0,
+            "reason": 0
+          }
+        ],
+        "outputSha256": "05e396c9beebe33175f2b788c438cfc936d561a60aa72fe9b9b3f74bfe43d5ca"
+      },
+      {
+        "codec": "h264",
+        "product": "summary",
+        "oldFps": [141.49, 147.8, 144.51],
+        "candidateFps": [159.56, 163.13, 159.48],
+        "medianChangePct": 10.41,
+        "executionAtOpen": [
+          {
+            "status": 0,
+            "path": 0,
+            "reason": 0
+          }
+        ],
+        "outputSha256": "ab5bae65fe241dc31b1897104d20e9445a489380bfa9136b49cbba2b408341b0"
+      }
+    ],
+    "ltoExperiment": [
+      {
+        "codec": "vvc",
+        "variant": "st",
+        "mode": "auto",
+        "baselineFps": 94.95,
+        "mergedWithoutLtoFps": 99.31,
+        "mergedWithLtoFps": 98.99
+      },
+      {
+        "codec": "vvc",
+        "variant": "mt",
+        "mode": "auto",
+        "baselineFps": 122.32,
+        "mergedWithoutLtoFps": 126.31,
+        "mergedWithLtoFps": 126.88
+      },
+      {
+        "codec": "vvc",
+        "variant": "st",
+        "mode": "full",
+        "baselineFps": 21.08,
+        "mergedWithoutLtoFps": 22.32,
+        "mergedWithLtoFps": 22.67
+      },
+      {
+        "codec": "hevc",
+        "variant": "st",
+        "mode": "auto",
+        "baselineFps": 167.34,
+        "mergedWithoutLtoFps": 167.37,
+        "mergedWithLtoFps": 170.7
+      },
+      {
+        "codec": "hevc",
+        "variant": "mt",
+        "mode": "auto",
+        "baselineFps": 163.93,
+        "mergedWithoutLtoFps": 164.66,
+        "mergedWithLtoFps": 169.45
+      },
+      {
+        "codec": "hevc",
+        "variant": "st",
+        "mode": "full",
+        "baselineFps": 66.55,
+        "mergedWithoutLtoFps": 67.24,
+        "mergedWithLtoFps": 67.76
+      },
+      {
+        "codec": "h264",
+        "variant": "st",
+        "mode": "auto",
+        "baselineFps": 148.46,
+        "mergedWithoutLtoFps": 155.68,
+        "mergedWithLtoFps": 161.04
+      },
+      {
+        "codec": "h264",
+        "variant": "mt",
+        "mode": "auto",
+        "baselineFps": 261.61,
+        "mergedWithoutLtoFps": 269.08,
+        "mergedWithLtoFps": 285.67
+      }
+    ]
+  },
+  "playback": {
+    "method": "Visible WebKit with four bench-playback.mjs scenarios, three repetitions. Default playback measures 8 seconds or clip end. Additional software-only stress sets BENCH_FORCE_WASM=1, BENCH_COLOR_MODE=reference and measures 4 seconds or clip end. The released and candidate Web bundles use identical application logic and separate, verified vendor artifacts.",
+    "results": [
+      {
+        "benchmark": "default-old",
+        "scenario": "hevc-4k-solo",
+        "passed": 3,
+        "speed": [0.995, 0.9951, 0.9949],
+        "medianP95GapMsByTrack": {
+          "A": 18.82
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "default-old",
+        "scenario": "vvc-wasm-solo",
+        "passed": 3,
+        "speed": [0.9998, 0.9998, 0.9999],
+        "medianP95GapMsByTrack": {
+          "A": 18.74
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "default-old",
+        "scenario": "vvc+hevc-4k",
+        "passed": 3,
+        "speed": [0.9998, 0.9997, 0.9999],
+        "medianP95GapMsByTrack": {
+          "A": 18.72,
+          "B": 31.32
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "default-old",
+        "scenario": "mpeg2ts+h264",
+        "passed": 3,
+        "speed": [0.9999, 0.9997, 0.9998],
+        "medianP95GapMsByTrack": {
+          "A": 18.74,
+          "B": 18.76
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "default-new",
+        "scenario": "hevc-4k-solo",
+        "passed": 3,
+        "speed": [0.9948, 0.996, 0.9985],
+        "medianP95GapMsByTrack": {
+          "A": 18.72
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "default-new",
+        "scenario": "vvc-wasm-solo",
+        "passed": 3,
+        "speed": [0.9999, 0.9998, 0.9999],
+        "medianP95GapMsByTrack": {
+          "A": 18.7
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "default-new",
+        "scenario": "vvc+hevc-4k",
+        "passed": 3,
+        "speed": [0.9999, 0.9999, 0.9999],
+        "medianP95GapMsByTrack": {
+          "A": 18.72,
+          "B": 18.74
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "default-new",
+        "scenario": "mpeg2ts+h264",
+        "passed": 3,
+        "speed": [0.9999, 0.9997, 0.9999],
+        "medianP95GapMsByTrack": {
+          "A": 18.66,
+          "B": 18.66
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "forced-new",
+        "scenario": "hevc-4k-solo",
+        "passed": 3,
+        "speed": [0.9951, 0.9966, 0.9962],
+        "medianP95GapMsByTrack": {
+          "A": 18.94
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "forced-new",
+        "scenario": "vvc-wasm-solo",
+        "passed": 3,
+        "speed": [0.9996, 0.9998, 0.9999],
+        "medianP95GapMsByTrack": {
+          "A": 18.9
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "forced-new",
+        "scenario": "vvc+hevc-4k",
+        "passed": 0,
+        "speed": [0.6508, 0.6488, 0.6306],
+        "medianP95GapMsByTrack": {
+          "A": 49.74,
+          "B": 49.6
+        },
+        "failures": [
+          [
+            "below-realtime"
+          ],
+          [
+            "below-realtime"
+          ],
+          [
+            "below-realtime"
+          ]
+        ]
+      },
+      {
+        "benchmark": "forced-new",
+        "scenario": "mpeg2ts+h264",
+        "passed": 3,
+        "speed": [0.9998, 0.9998, 0.9998],
+        "medianP95GapMsByTrack": {
+          "A": 18.76,
+          "B": 18.7
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "forced-old",
+        "scenario": "hevc-4k-solo",
+        "passed": 3,
+        "speed": [0.9991, 0.9997, 0.997],
+        "medianP95GapMsByTrack": {
+          "A": 33.04
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "forced-old",
+        "scenario": "vvc-wasm-solo",
+        "passed": 3,
+        "speed": [0.9998, 0.9999, 0.9999],
+        "medianP95GapMsByTrack": {
+          "A": 18.76
+        },
+        "failures": []
+      },
+      {
+        "benchmark": "forced-old",
+        "scenario": "vvc+hevc-4k",
+        "passed": 0,
+        "speed": [0.6297, 0.6359, 0.6261],
+        "medianP95GapMsByTrack": {
+          "A": 49.94,
+          "B": 49.68
+        },
+        "failures": [
+          [
+            "below-realtime"
+          ],
+          [
+            "below-realtime"
+          ],
+          [
+            "below-realtime"
+          ]
+        ]
+      },
+      {
+        "benchmark": "forced-old",
+        "scenario": "mpeg2ts+h264",
+        "passed": 3,
+        "speed": [0.9998, 0.9998, 0.9993],
+        "medianP95GapMsByTrack": {
+          "A": 18.82,
+          "B": 18.8
+        },
+        "failures": []
+      }
+    ],
+    "pixelsAndSeek": [
+      {
+        "sample": "vvc10.mp4",
+        "variant": "st",
+        "sequentialFrames": 36,
+        "seeks": 4,
+        "ptsAndPixelsSha256": "d258a6fd2cbfdc6e5b645322779685fad84feb0cb4a52ae0e9e0058982537458"
+      },
+      {
+        "sample": "vvc10.mp4",
+        "variant": "mt",
+        "sequentialFrames": 36,
+        "seeks": 4,
+        "ptsAndPixelsSha256": "d258a6fd2cbfdc6e5b645322779685fad84feb0cb4a52ae0e9e0058982537458"
+      },
+      {
+        "sample": "vvc.mp4",
+        "variant": "st",
+        "sequentialFrames": 80,
+        "seeks": 4,
+        "ptsAndPixelsSha256": "e57fd272b09c22560f7061bba41a8a80bd8a5a83fca7cd88bef61852d924b542"
+      },
+      {
+        "sample": "vvc.mp4",
+        "variant": "mt",
+        "sequentialFrames": 80,
+        "seeks": 4,
+        "ptsAndPixelsSha256": "e57fd272b09c22560f7061bba41a8a80bd8a5a83fca7cd88bef61852d924b542"
+      },
+      {
+        "sample": "hevc.mp4",
+        "variant": "st",
+        "sequentialFrames": 80,
+        "seeks": 4,
+        "ptsAndPixelsSha256": "31bd1c1748fba06911eff77ee6cea46f425be32d19231e1ec27c8bedfe74b0ea"
+      },
+      {
+        "sample": "hevc.mp4",
+        "variant": "mt",
+        "sequentialFrames": 80,
+        "seeks": 4,
+        "ptsAndPixelsSha256": "31bd1c1748fba06911eff77ee6cea46f425be32d19231e1ec27c8bedfe74b0ea"
+      },
+      {
+        "sample": "h264.mp4",
+        "variant": "st",
+        "sequentialFrames": 80,
+        "seeks": 4,
+        "ptsAndPixelsSha256": "ba1746b8299398129d738a9f4d0440c014a2aab1214323f086e693b006bc9ee0"
+      },
+      {
+        "sample": "h264.mp4",
+        "variant": "mt",
+        "sequentialFrames": 80,
+        "seeks": 4,
+        "ptsAndPixelsSha256": "ba1746b8299398129d738a9f4d0440c014a2aab1214323f086e693b006bc9ee0"
+      }
+    ]
+  },
+  "validation": {
+    "analysisByteOracle": {
+      "1": 47,
+      "2": 47,
+      "4": 47
+    },
+    "analysisInputs": [
+      "h264.mp4",
+      "h264-cavlc.mp4",
+      "h264-mbaff.mp4",
+      "h264-10.mp4",
+      "hevc.mp4",
+      "hevc10.mp4",
+      "h264-slices.mp4",
+      "hevc-slices.mp4"
+    ],
+    "analysisExecutionAndRetry": {
+      "1": 17,
+      "2": 17,
+      "4": 17
+    },
+    "vvc10": {
+      "pictures": 40,
+      "oldNewStMtFullAndPrunedSha256": "6bfc3f885d332c48b3836695ae95de76d647a06b9c5cd74e15b8161b4dd12715",
+      "extraExecutionCases": [
+        "normal",
+        "identical-parameter",
+        "parameter",
+        "hash",
+        "grain",
+        "malformed-parameter"
+      ]
+    },
+    "playbackOracle": "Each playback variant verified 1,216 native-byte-equal packet-identity outputs and 74 protocol checks, cropped frames and SAR, PQ/HLG 10-bit planes and random seek, and residual-container registration.",
+    "quality": "Single-thread scoring lifecycle, VMAF/CAMBI and XPSNR passed including 20 official clips and four 4,096-frame runs. Threaded collector slot reuse, shared-picture contention, memory limits and shutdown passed."
+  }
+}

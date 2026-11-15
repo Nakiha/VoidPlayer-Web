@@ -74,7 +74,7 @@ Open `http://127.0.0.1:5180/`. The package requires no Node.js, Bun or FFmpeg in
 
 ## Development
 
-Requires **Node.js 24+**. Playback and analysis cores come from the separate [VoidPlayer-FFmpeg-Build](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm) repository. This repository consumes pinned artifacts rather than building WASM itself.
+Requires **Node.js 24+**. Playback and analysis cores come from the separate [VoidPlayer-FFmpeg-Build](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm-n9.0.2-unified) repository. The builder compiles two independent modules from the same FFmpeg commit, enabling analysis hooks only for the analysis module. The Web release pins both artifacts.
 
 Prepare the core artifacts, then run:
 

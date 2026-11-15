@@ -26,7 +26,8 @@ jobs:
         run: |
           node --input-type=module -e '
           import {readFileSync,appendFileSync} from "node:fs";
-          const lock=JSON.parse(readFileSync("scripts/release-analysis.json","utf8"));
+          const {optimization,...source}=JSON.parse(readFileSync("scripts/release-analysis.json","utf8"));
+          const lock={...source,optLevel:optimization.compile,lto:Number(optimization.lto)};
           for(const [key,value]of Object.entries(lock))appendFileSync(process.env.GITHUB_OUTPUT,`${key}=${value}\n`);
           '
       - uses: actions/cache@v6
@@ -46,11 +47,14 @@ jobs:
           version: ${{ steps.analysis-lock.outputs.emscripten }}
           actions-cache-folder: .run/emsdk-analysis-cache
       - name: Build independent analysis core
+        env:
+          ANALYSIS_OPT_LEVEL: ${{ steps.analysis-lock.outputs.optLevel }}
+          ANALYSIS_LTO: ${{ steps.analysis-lock.outputs.lto }}
         if: steps.analysis-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p .run/analysis-source/.build
           printf '{"type":"commonjs"}\n' > .run/analysis-source/.build/package.json
-          python -m pip install meson==1.9.1 ninja==1.13.0
+          python -m pip install meson==1.11.2 ninja==1.13.0
           bash .run/analysis-source/scripts/build-analysis.sh
           bash .run/analysis-source/scripts/build-analysis.sh --mt
           node scripts/prepare-analysis-core.mjs .run/analysis-source/dist/voidplayer-analysis

@@ -4,17 +4,21 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
-export async function verifyPlaybackOptimization(directory, lock, suffix) {
- if (!lock.optimization) return;
- const name = `voidplayer-ffmpeg-manifest${suffix}.json`;
- const manifest = JSON.parse(await readFile(path.join(directory, name), 'utf8'));
- assert.deepEqual(manifest.optimization, lock.optimization, `Playback optimization differs from release lock: ${name}`);
+async function verifyOptimization(directory, lock, name, product) {
+  if (!lock.optimization) return;
+  const manifest = JSON.parse(await readFile(path.join(directory, name), 'utf8'));
+  assert.deepEqual(manifest.optimization, lock.optimization, `${product} optimization differs from release lock: ${name}`);
+}
+
+export function verifyPlaybackOptimization(directory, lock, suffix) {
+  return verifyOptimization(directory, lock, `voidplayer-ffmpeg-manifest${suffix}.json`, 'Playback');
 }
 
 /** Bind generated capability evidence to the exact packaged WASM bytes. At
  * preparation time a live module independently verifies the recorded registry. */
 export async function verifyCoreCapabilities(directory,lock,product,suffix='',core){
  if (product === 'playback') await verifyPlaybackOptimization(directory, lock, suffix);
+ else for (const name of ['manifest.json', 'threading.json']) await verifyOptimization(directory, lock, name, 'Analysis');
  const stem=product==='analysis'?'voidplayer-analysis':`voidplayer-core${suffix}`;
  const capability=JSON.parse(await readFile(path.join(directory,`capabilities${suffix}.json`),'utf8'));
  const binary=await readFile(path.join(directory,stem+'.wasm'));
