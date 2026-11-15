@@ -10,7 +10,7 @@ import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { validFfmpegRecovery } from '../../../shared/media/indexing/index-integrity.ts';
 import type { FfmpegIndexRecovery } from '../../../shared/media/indexing/index-integrity.ts';
 import { randomUUID } from '../../../shared/utils/uuid.ts';
-import { decoderConcurrency, loadCore } from './core-loader.ts';
+import { decoderConcurrency, loadCore, observeCoreStartup } from './core-loader.ts';
 import { createVvcTuner } from './vvc-tuning.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import type { MediaIndexTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from '../../../shared/media/indexing/media-index-types.ts';
@@ -29,6 +29,7 @@ type Port = {
   postMessage(message: WorkerMessage<FfmpegCommands>, transfer?: Transferable[]): void;
 };
 const port = globalThis as unknown as Port;
+observeCoreStartup(data => port.postMessage({ type: 'core-ready', data }));
 const reply = workerReply<FfmpegCommands>();
 
 let core: any = null;

@@ -75,6 +75,10 @@ export async function serveFile(req: IncomingMessage, res: ServerResponse, absPa
     });
     if (req.method === 'HEAD') { res.end(); return; }
     if (size === 0) { res.end(); return; }
-    await pipeline(handle.createReadStream({ start, end, autoClose: false }), res);
+    try { await pipeline(handle.createReadStream({ start, end, autoClose: false }), res); }
+    catch (error) {
+      // A client can close a Range or static-file response as soon as it has enough bytes.
+      if (!res.destroyed || (error as NodeJS.ErrnoException).code !== 'ERR_STREAM_PREMATURE_CLOSE') throw error;
+    }
   } finally { await handle.close(); }
 }

@@ -90,7 +90,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
       for (const [key, value] of Object.entries(ISOLATION_HEADERS)) res.setHeader(key, value);
     }
     const resource = requestContext(req,library);
-    let logged = false;
+    let logged = false, servingStaticFile = false;
     traffic.activeRequests++;
     const ctx: RouteContext = {
       options, library, requestId, reports, currentFrontend: releases && (() => releases.currentBuildId()),
@@ -102,7 +102,15 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
       traffic.activeRequests--; traffic.completedRequests++; if (!res.writableFinished) traffic.abortedRequests++;
       const pathname = (req.url ?? '/').split('?')[0];
       if (pathname === '/api/health' || pathname === '/api/ready') return;
-      const entry = { t: new Date().toISOString(), requestId, clientIp: ip, actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, ...resource, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
+      // Completed file responses have an exact encoded length. An interrupted stream has no confirmed total.
+      let transfer;
+      if (servingStaticFile) {
+        const bodyless = req.method === 'HEAD' || res.statusCode === 304;
+        const length = res.getHeader('content-length');
+        transfer = { responseBodyBytes: bodyless ? 0 : res.writableFinished && length !== undefined ? Number(length) : null,
+          contentEncoding: res.getHeader('content-encoding') ?? 'identity' };
+      }
+      const entry = { ...transfer, t: new Date().toISOString(), requestId, clientIp: ip, actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, ...resource, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
       logLine(entry);
       if (!pathname.startsWith('/api/admin/') || req.method !== 'GET') { recentRequests.push(entry); if (recentRequests.length > 200) recentRequests.shift(); }
     };
@@ -130,6 +138,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
         const candidate = root ? path.join(root, rel) : '';
         const real = await fs.realpath(candidate).catch(() => null);
         if (view && root && real && (real === root || real.startsWith(root + path.sep)) && (await fs.stat(real)).isFile()) {
+          servingStaticFile = true;
           await view.assets.serve(req, res, url, real);
           return;
         }

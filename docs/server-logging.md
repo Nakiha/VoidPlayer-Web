@@ -41,7 +41,9 @@
 
 ## 记录内容与迁移
 
-访问日志使用 `http-request` 事件，保留 requestId、actorId、实际 TCP peer、方法、无查询字符串的路径、状态、完成状态与耗时。异常记录统一携带有限长度的错误名、消息、堆栈和 cause；HTTP 入口额外带 requestId 关联请求。后台服务停止记录原始异常。请求正文、Cookie 和 Authorization 不进入访问记录。错误消息可能包含服务端路径，仅应向受信任的内网用户开放管理页。
+访问日志使用 `http-request` 事件，保留 requestId、actorId、实际 TCP peer、方法、无查询字符串的路径、状态、完成状态与耗时。静态文件请求另记 `contentEncoding` 和 `responseBodyBytes`（压缩后的响应体字节，不含传输协议开销）。HEAD、304 为零，中断或长度未知为 null。浏览器本地诊断在解码核心就绪时记录 Worker ID、core 变体、预建线程池大小和初始化耗时（包含胶水加载、WASM 获取、编译和实例化）。
+
+异常记录统一携带有限长度的错误名、消息、堆栈和 cause；HTTP 入口额外带 requestId 关联请求。后台服务停止记录原始异常。请求正文、Cookie 和 Authorization 不进入访问记录。错误消息可能包含服务端路径，仅应向受信任的内网用户开放管理页。
 
 普通前台运行继续镜像 JSON 到终端。若外部脚本另行重定向到文件，该外部文件仍由脚本拥有，应避免再次无界留档。
 

@@ -2,7 +2,7 @@ import { emptyUriState } from '../../shared/review/uri-state.ts';
 import { annotationTarget } from '../../shared/review/annotation-target.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
@@ -101,6 +101,15 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     assert.equal(encoded.status, 200); assert.equal(encoded.headers.get('set-cookie'), null);
     const shared = await encoded.json();
     assert.deepEqual((await (await fetch(base + '/api/uri/decode?s=' + shared.token)).json()).state, uriState);
+    const apiDoc = await readFile(new URL('../../docs/http-api.md', import.meta.url), 'utf8');
+    const table = apiDoc.match(/### 用户、URI 分享与片源版本标注\n([\s\S]*?)(?=\n### )/)?.[1] ?? '';
+    const entries = Array.from(table.matchAll(/^\| ([A-Z/]+) \| `([^`]+)`/gm), row => [row[1], row[2]]);
+    assert.deepEqual(Object.fromEntries(entries.map(([methods, route]) => [route, methods])), {
+      '/api/users': 'GET', '/api/identity': 'POST', '/api/uri/encode': 'POST', '/api/uri/decode': 'GET',
+      '/api/annotations/media': 'GET', '/api/annotations/media/TARGET': 'GET/POST', '/api/annotations/media/TARGET/ANNOTATION': 'GET',
+      '/api/annotations/media/TARGET/ANNOTATION/preview': 'GET/PUT', '/api/annotations/media/TARGET/previews': 'DELETE',
+      '/api/annotations/events/TARGET': 'GET',
+    });
     assert.equal((await fetch(base + '/api/workspaces')).status, 404);
     assert.equal((await fetch(base + '/api/annotations/spaces')).status, 404);
     assert.equal((await submit({ ...operation, document: { ...operation.document, media: operation.document!.media.map(media => ({ ...media, source: { ...media.source!, url: media.source!.url.replace(entry.version, '0'.repeat(24)) } })) } })).status, 409);

@@ -37,6 +37,10 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     this.worker = worker;
     const onMessage = (data: WorkerMessage<C>) => {
       if ('type' in data) {
+        if (data.type === 'core-ready') {
+          if (!this.failure) contextLog().info('media', 'WASM 解码核心初始化完成', { workerId: this.workerId, ...data.data });
+          return;
+        }
         if (data.type === 'cached-bytes') { this.byteRequests.get(data.id)?.(data); return; }
         if (data.type === 'cached-audio') { if (!this.failure) this.onCachedAudio?.(data.generation, data.data); return; }
         if (data.type === 'ready') {

@@ -74,7 +74,16 @@ test('HTTP/2 through the production gateway supports identity writes, Range/HEAD
     const plain = await httpFetch(`http://127.0.0.1:${port}/api/library/browse`, { headers });
     const secure = await httpFetch(base + '/api/library/browse', { ca, headers });
     const multiplexed = await get('/api/library/browse', headers);
+    const asset = await get('/index.html'), assetHead = await get('/index.html', { ':method': 'HEAD' });
+    const partial = await get('/index.html', { range: 'bytes=1-4' });
+    const cached = await get('/index.html', { 'if-none-match': String(asset.headers.etag) });
+    assert.equal(cached.status, 304);
     const records = (await get('/api/admin/requests')).json().recentRequests;
+    for (const response of [asset, assetHead, partial, cached]) {
+      const record = records.find((entry: Record<string,unknown>) => entry.requestId === response.headers['x-request-id']);
+      assert.equal(record.responseBodyBytes, response.bytes.length);
+      assert.equal(record.contentEncoding, 'identity');
+    }
     for (const id of [plain.headers.get('x-request-id'), secure.headers.get('x-request-id'), multiplexed.headers['x-request-id']]) {
       const record = records.find((entry: Record<string,unknown>) => entry.requestId === id);
       assert.ok(record, 'each HTTP/1, HTTPS/1 and HTTP/2 request is recorded');
@@ -172,7 +181,9 @@ test('cancelled Range and NDJSON streams release IO while another stream on the 
     try {
       if (req.url === '/file') await serveFile(req, res, file);
       else await sendMediaIndexStream(res, data, 1, 'test', -1);
-    } catch (error) { if (!res.destroyed) failures.push(error); }
+    } catch (error) {
+      if (!res.destroyed || req.url === '/file' && (error as NodeJS.ErrnoException).code === 'ERR_STREAM_PREMATURE_CLOSE') failures.push(error);
+    }
     finally { released.get(req.url!)?.(); }
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));

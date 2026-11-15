@@ -61,8 +61,9 @@ through the application's own source-bound library protocol.
 - Library indexes bind media ID/version/size, selected stream, parser build and
   integrity. The server validates source version before and after scanning and
   owns the persistent seal. Self-asserted complete JS uploads are rejected.
-- Library consumers verify the application's origin and current ready source
-  metadata; a matching pathname or serialized reference alone grants no trust.
+- Library consumers bind the content URL to the application's origin and source version.
+  The index endpoint resolves the ready file, and the consumer validates the returned
+  document against the expected version and byte size before using packet offsets.
   Index redirects are rejected. Corrupt or incompatible documents rebuild with
   JS. A missing required library index does not trigger a client full-track scan
   or a whole-container WASM fallback.

@@ -10,6 +10,7 @@ export interface ServerResponse extends NodeJS.WritableStream {
   readonly writableEnded: boolean;
   readonly writableFinished: boolean;
   destroy(error?: Error): void;
+  getHeader(name: string): number | string | string[] | undefined;
   setHeader(name: string, value: number | string | readonly string[]): void;
   writeHead(statusCode: number, headers?: OutgoingHttpHeaders): void;
 }

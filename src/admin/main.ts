@@ -344,7 +344,8 @@ function renderRequests() {
     const media = request.media as {rootId?:string;path?:string;version?:string} | undefined;
     const query = request.query as Record<string,string> | undefined;
     const target = [media?.rootId,media?.path].filter(Boolean).join('/');
-    const details = [target,media?.version?`v=${media.version}`:'',request.range,query?new URLSearchParams(query).toString():''].filter(Boolean).join(' · ');
+    const transfer = typeof request.responseBodyBytes === 'number' ? `${request.responseBodyBytes} B` : '';
+    const details = [transfer, request.contentEncoding, target,media?.version?`v=${media.version}`:'',request.range,query?new URLSearchParams(query).toString():''].filter(Boolean).join(' · ');
     row.title = details;
     const cells = () => [`${formatDate(String(request.t))} · ${userNames.get(String(request.actorId)) ?? (request.actorId === 'local' ? t(msg("admin.localUser", "本机用户")) : request.actorId ?? t(msg("admin.anonymous", "匿名")))} · ${request.clientIp ?? '—'}`, `${request.method} ${request.url}${details?` · ${details}`:''}`, String(request.status), `${request.ms} ms`];
     for (let i=0; i<4; i++) { const span = document.createElement('span'); localizedText(span, () => cells()[i]); row.append(span); }

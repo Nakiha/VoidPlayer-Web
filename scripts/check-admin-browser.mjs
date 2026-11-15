@@ -1006,6 +1006,9 @@ try {
   service.server.off('request', recordResponses);
   console.log('REQUEST_OBSERVATION_EVIDENCE', JSON.stringify({ browserName, statuses: requestReads, hiddenReads: requestReads.length - readsAfterHide, overviewReads: overviewReads.length }));
   if(errors.length)console.error(JSON.stringify({browserName,clockPhase,errors,clockTrace}));
+  const browseQueries = clockTrace.filter(entry => entry.event === 'library-request').map(entry => new URL(entry.url).searchParams);
+  assert.ok(browseQueries.some(query => Number(query.get('offset')) > 0 && query.has('revision')), 'continuations pin the page revision');
+  assert.ok(!browseQueries.some(query => !Number(query.get('offset')) && query.has('revision')), 'first-page refreshes accept the newest revision');
   assert.deepEqual(errors, []);
   await context.close();
   console.log(`PASS admin ${browserName}: new-tab entry, real status, offline roots, persistent root editing, cross-tab theme, JSON/download/delete, four bounded measurements and cancellation, aligned directory fields, status recovery, and 390/720/1200/1280/1512 px layout`);

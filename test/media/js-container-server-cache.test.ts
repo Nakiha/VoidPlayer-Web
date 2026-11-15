@@ -46,12 +46,14 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
  const previousLocation=Object.getOwnPropertyDescriptor(globalThis,'location');t.after(()=>{if(previousLocation)Object.defineProperty(globalThis,'location',previousLocation);else Reflect.deleteProperty(globalThis,'location');});
  const temp=await mkdtemp(join(tmpdir(),'vp-js-container-store-')),root=join(temp,'media'),database=join(temp,'library.sqlite');const {mkdir,copyFile,readdir}=await import('node:fs/promises');await mkdir(root);for(const name of await readdir('fixtures/js-container'))if(name.endsWith('.ts')||name.endsWith('.mkv')||name.endsWith('.webm'))await copyFile(join('fixtures/js-container',name),join(root,name));execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=32x32:rate=5:duration=1','-c:v','huffyuv','-pix_fmt','yuv422p',join(root,'uncompiled-huffyuv.mkv')]);
  const originalCore=process.env.VOIDPLAYER_WASM_CORE_DIR;let library:MediaLibraryIndex|undefined,server:ReturnType<typeof createMediaServer>|undefined;
- let builds=0;
+ let builds=0, inventoryReads=0;
  const start=async()=>{
   process.env.VOIDPLAYER_WASM_CORE_DIR=join(temp,'no-core');
   try{library=new MediaLibraryIndex([root],{database,watch:false});}finally{if(originalCore===undefined)delete process.env.VOIDPLAYER_WASM_CORE_DIR;else process.env.VOIDPLAYER_WASM_CORE_DIR=originalCore;}
   await library.refresh();const build=library.indexJobs.startBuild.bind(library.indexJobs);library.indexJobs.startBuild=(...args)=>{builds++;return build(...args);};
-  server=createMediaServer({roots:[root],library,onLog(){}});await new Promise<void>((ok,bad)=>{server!.once('error',bad);server!.listen(0,'127.0.0.1',ok);});
+  server=createMediaServer({roots:[root],library,onLog(entry){
+   if (/^\/api\/media\/[0-9a-f]{24}$/.test(String(entry.url))) inventoryReads++;
+  }});await new Promise<void>((ok,bad)=>{server!.once('error',bad);server!.listen(0,'127.0.0.1',ok);});
   const base=`http://127.0.0.1:${(server.address() as {port:number}).port}`;Object.defineProperty(globalThis,'location',{configurable:true,value:{origin:base,href:base+'/'}});return base;
  };
  const stop=async()=>{server?.closeAllConnections();if(server?.listening)await new Promise<void>((ok,bad)=>server!.close(e=>e?bad(e):ok()));server=undefined;await library?.close();library=undefined;};
@@ -70,6 +72,7 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
    const input={url:`${base}/api/media/${e.id}/content?v=${e.version}`,size:e.size,library:ownLibraryIndexReference(e.id,e.version!)},prepared=await rpc.call('prepare-js',{input,sourceVersion:version,format:'matroska',persistent:true});
    if(!prepared.admitted)assert.fail(prepared.reason);
    const opened=await rpc.call('init',{input,container:'matroska',sourceVersion:version,preparedTsSession:prepared.session,forceWasm:true,wasmBinary:new Uint8Array(await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm')),glueURL:pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href});
+   assert.equal(inventoryReads,0,'opening a library index must not fetch the cached stream inventory');
    assert.equal(opened.jsIndexReused,true);assert.equal(opened.jsIndexPacketsScanned,0,'fresh consumer Worker does not re-enumerate 600 access units');assert.equal(opened.times.length,600);assert.equal(builds,0);
    const frame=await rpc.call('extract',{position:560});assert.equal(frame?.packetPicture?.au,[...prepared.index.packets].sort((a,b)=>a.ptsUs-b.ptsUs)[560].au);frame?.frame?.close();
   }finally{rpc.terminate();}

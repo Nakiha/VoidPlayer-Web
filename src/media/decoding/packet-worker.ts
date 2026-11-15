@@ -2,6 +2,7 @@ import { serializeFlvIndex } from '../../../shared/media/indexing/flv-index-cach
 import { workerReply } from '../workers/worker-protocol.ts';
 import type { PacketCommands, WorkerRequest, WorkerMessage } from '../workers/worker-protocol.ts';
 
+import { observeCoreStartup } from './core-loader.ts';
 import {JsContainerEngine} from './js-container-engine.ts';
 import { TsEngine } from './ts-engine.ts';
 import { TsCombinationNotMigrated } from '../../../shared/media/containers/ts-packet-source.ts';
@@ -15,6 +16,7 @@ async function start() {
   const reply = workerReply<PacketCommands>();
   const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) =>
     (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
+  observeCoreStartup(data => send({ type: 'core-ready', data }));
   let engine: FlvEngine | Mp4Engine | JsContainerEngine | undefined;
   let tsSession: string | undefined;
   let chain = Promise.resolve();

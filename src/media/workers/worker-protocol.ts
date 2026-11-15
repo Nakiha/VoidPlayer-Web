@@ -108,6 +108,7 @@ export type IndexError = { ctx?: number; error: string; stage?: OpenStage };
 export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; bytesRead?:number; durationUs?: number };
 export type IndexEvent = { type: 'index-batch'; data: IndexBatch } | { type: 'index-complete'; data: FfmpegInitResult } | { type: 'index-error'; data: IndexError };
 export type WorkerEvent = ({ id: number } & IndexEvent)
+  | { type: 'core-ready'; data: import('../decoding/core-loader.ts').CoreStartup }
   | { id: number; type: 'cached-audio'; generation: number; data: CachedAudioBatch }
   | { id: number; type: 'cached-bytes'; data?: Uint8Array; windows?: CachedWindow[] }
   | { id: number; type: 'ready'; data: FfmpegInitResult }

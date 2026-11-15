@@ -1,6 +1,6 @@
 # HTTP API
 
-当前 HTTP 接口按媒体库、媒体资产、工作区、标注与运维划分。API 不要求播放器页面在线。完整服务提供这些能力；Sites 仅为静态分发，不调用媒体 API。
+当前 HTTP 接口按媒体库、媒体资产、URI 分享、标注与运维划分。API 不要求播放器页面在线。完整服务提供这些能力；Sites 仅为静态分发，不调用媒体 API。
 
 ## 媒体身份与版本
 
@@ -62,23 +62,23 @@ Content-Type: application/json
 
 `GET/HEAD /api/media/query-schema` 描述缓存查询字段。`GET/DELETE /api/bitstream-analysis/requests/REQUEST` 观察分析请求或释放请求租约；DELETE 使用 `bitstream-analysis` Action。
 
-### 用户、工作区与标注
+### 用户、URI 分享与片源版本标注
 
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | GET | `/api/users` | 命名用户列表 |
 | POST | `/api/identity` | 显式创建、选择、改名用户或选择访客；Action 为 `identity` |
-| GET/POST | `/api/workspaces` | 分页查询或创建工作区 |
-| GET/PUT/DELETE | `/api/workspaces/WORKSPACE` | 读取、更新、删除；修改使用 If-Match |
-| POST | `/api/workspaces/share` | 创建/更新可协作工作区，正文 `{id?,name,document}` |
-| GET/POST | `/api/annotations/spaces` | 列出/创建标注空间 |
-| GET/POST | `/api/annotations/spaces/SPACE` | 查询状态/提交持久标注命令 |
-| GET | `/api/annotations/spaces/SPACE/ANNOTATION` | 读取单条标注 |
-| GET/PUT | `/api/annotations/spaces/SPACE/ANNOTATION/preview` | 读取/上传标注预览 |
-| DELETE | `/api/annotations/spaces/SPACE/previews` | 清理空间预览 |
-| GET | `/api/annotations/events/SPACE` | 分页操作事件，过期游标要求快照重同步 |
+| POST | `/api/uri/encode` | 接收 `{state}`，生成自包含分享链接；Action 为 `uri` |
+| GET | `/api/uri/decode` | 用 `s=TOKEN` 还原观看状态 |
+| GET | `/api/annotations/media` | 列出标注目标 |
+| GET/POST | `/api/annotations/media/TARGET` | GET 查询最新状态、增量或列表；POST 提交持久标注操作 |
+| GET | `/api/annotations/media/TARGET/ANNOTATION` | 读取单条标注 |
+| GET/PUT | `/api/annotations/media/TARGET/ANNOTATION/preview` | 按 revision 读取或上传 JPEG 预览；上传带 epoch |
+| DELETE | `/api/annotations/media/TARGET/previews` | 清理目标的预览 |
+| GET | `/api/annotations/events/TARGET` | 分页查询操作历史，过期游标要求快照重同步 |
 
-工作区写入 Action 为 `workspace`，标注写入为 `annotation`。这两类写入要求显式选择身份；`X-VoidPlayer-Actor` 可绑定调用者观察的 actor，防止切换身份后误提交。持久命令的幂等和事件事务规则见[Agent HTTP](agent-http.md)。
+`TARGET` 是片源版本目标键，计算方式见[URI 状态契约](uri-state.md)。分享编解码无需身份。标注写入需要显式选择身份和 `annotation` Action；
+`X-VoidPlayer-Actor` 可绑定调用者观察到的 actor。幂等和事件事务规则见[Agent HTTP](agent-http.md)。
 
 ### 运维、连接与发现
 
@@ -108,4 +108,4 @@ Content-Type: application/json
 
 服务当前面向可信内网。用户是归属声明，不是认证主体；Origin/Action 保护同源写入，不提供按用户或按库授权。媒体读取依赖部署可达性与服务配置的根目录边界，资产 ID 不是凭据。需要用户隔离的部署必须另外设计认证与授权，不把 rootId 是否出现在 URL 当权限检查。
 
-不提供旧 `/api/library` 列表、GET refresh 开关、`/metadata`、`/info`、`/playback-container`、`/api/admin/scan`、`/api/admin/frame-indexes`、`/api/shares` 或 `/api/reviews` 入口。旧路径没有重定向或别名；工作区与播放器调用一并使用当前协议。数据库升级保留已有媒体行和工作区，不以接口改版为由清空本地数据。
+不提供旧 `/api/library` 列表、GET refresh 开关、`/metadata`、`/info`、`/playback-container`、`/api/admin/scan`、`/api/admin/frame-indexes`、`/api/shares`、`/api/reviews`、`/api/workspaces` 或 `/api/annotations/spaces` 入口。旧路径没有重定向或别名。数据库升级保留已有媒体行和工作区，不以接口改版为由清空本地数据。

@@ -210,10 +210,13 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
     const abort = AbortSignal.any([signal, request.signal, AbortSignal.timeout(10000)]);
     try {
       const query = { root: root || undefined, directory, search: root ? search : '', recursive: !!root && !!search, limit: 60 };
-      let value = await fetchLibraryPage({ ...query, offset: append ? previous?.nextOffset ?? 0 : 0, revision: resetView || restarted ? undefined : previous?.revision }, abort,
+      const offset = append && !resetView ? previous?.nextOffset ?? 0 : 0;
+      append = offset > 0;
+      let value = await fetchLibraryPage({ ...query, offset, revision: append ? previous?.revision : undefined }, abort,
         !append && !resetView && !restarted ? previous ?? undefined : undefined);
       if (!root) value = { ...value, entries: [], directories: [], nextOffset: null, total: 0 };
-      if (append && previous) value = { ...value, entries: [...previous.entries, ...value.entries], directories: [...previous.directories, ...value.directories] };
+      // A refresh revalidates offset zero. Keep that page's validator when appending later pages.
+      if (append && previous) value = { ...value, etag: previous.etag, entries: [...previous.entries, ...value.entries], directories: [...previous.directories, ...value.directories] };
       else if (!resetView && previous?.revision === value.revision && previous.thumbnailEpoch === value.thumbnailEpoch && previous.thumbnailRevision === value.thumbnailRevision) {
         const fresh = new Map(value.entries.map(entry => [entry.id, entry]));
         value = { ...value, entries: previous.entries.map(entry => fresh.get(entry.id) ?? entry),
