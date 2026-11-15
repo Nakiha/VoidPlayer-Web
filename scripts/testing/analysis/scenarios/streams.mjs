@@ -4,11 +4,18 @@ import { selectDiagrams } from '../controls.mjs';
 
 
 export async function run(context) {
-const { page, artifact, limitsDir, requests, rows, call, analyze, stable, library, gate } = context;
+const { page, artifact, limitsDir, requests, rows, call: invoke, analyze, stable, library, gate } = context;
+let currentInput;
+const call = (name, input = {}) => {
+  const phase = `streams-${currentInput}-${name}`;
+  console.log('analysis-operation', phase);
+  return context.phase(phase, () => invoke(name, input));
+};
 
     // Choosing a deep diagram starts visible-GOP execution automatically,
     // uses one local worker or one remote task, and never enables an overlay.
     for (const input of ['local-file', 'library']) {
+      currentInput = input;
       await call('remove_review_track', { slot: 'A' });
       await call('set_review_color_mode', { mode: 'browser' });
       if (input === 'local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir, 'stream.mp4'));
@@ -253,8 +260,10 @@ const { page, artifact, limitsDir, requests, rows, call, analyze, stable, librar
       const gate = new Promise(r => { release = r; });
       // Cached local streams still read the manifest to verify build identity.
       const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/{manifest,threading}.json*' : '**/bitstream-analysis/capabilities*';
-      await page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); });
+      console.log('analysis-operation', `streams-${input}-install-cancel-gate`);
+      await context.phase(`install-summary-gate-${input}`, () => page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); }));
       const requested = page.waitForRequest(pattern, { timeout: 30000 });
+      void requested.catch(() => {});
       try {
         await context.phase(`cancel-cached-summary-${input}`, async () => {
           context.checkpoint('cancel-summary-dispatch', {input});
