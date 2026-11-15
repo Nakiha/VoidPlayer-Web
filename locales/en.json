@@ -1311,6 +1311,102 @@
     "source": "输入轨道 {slot} 的{axis}帧号后按回车跳转",
     "translation": "Type the {axis} frame number of track {slot}, then press Enter to seek"
   },
+  "analysis.features.chroma": {
+    "source": "色度采样",
+    "translation": "Chroma sampling"
+  },
+  "analysis.features.close": {
+    "source": "关闭面板",
+    "translation": "Close panel"
+  },
+  "analysis.features.ctu": {
+    "source": "编码树单元（CTU）",
+    "translation": "Coding tree unit (CTU)"
+  },
+  "analysis.features.depth": {
+    "source": "亮度位深",
+    "translation": "Luma bit depth"
+  },
+  "analysis.features.empty": {
+    "source": "载入视频后可查看编码特性。",
+    "translation": "Load a video to inspect its coding features."
+  },
+  "analysis.features.entropy": {
+    "source": "熵编码",
+    "translation": "Entropy coding"
+  },
+  "analysis.features.entryPoints": {
+    "source": "子码流入口偏移",
+    "translation": "Substream entry point offsets"
+  },
+  "analysis.features.export": {
+    "source": "导出 JSON",
+    "translation": "Export JSON"
+  },
+  "analysis.features.firstPacket": {
+    "source": "首个压缩包的 VCL NAL 数",
+    "translation": "VCL NAL units in the first packet"
+  },
+  "analysis.features.frameOnly": {
+    "source": "仅帧编码",
+    "translation": "Frame-only coding"
+  },
+  "analysis.features.level": {
+    "source": "编码级别（level_idc）",
+    "translation": "Level (level_idc)"
+  },
+  "analysis.features.off": {
+    "source": "关闭",
+    "translation": "Off"
+  },
+  "analysis.features.on": {
+    "source": "开启",
+    "translation": "On"
+  },
+  "analysis.features.partial": {
+    "source": "部分参数集未能读取。",
+    "translation": "Some parameter sets could not be read."
+  },
+  "analysis.features.profile": {
+    "source": "编码档次（profile_idc）",
+    "translation": "Profile (profile_idc)"
+  },
+  "analysis.features.profileSpace": {
+    "source": "档次空间（profile_space）",
+    "translation": "Profile space"
+  },
+  "analysis.features.refs": {
+    "source": "参考帧上限",
+    "translation": "Maximum reference frames"
+  },
+  "analysis.features.reorder": {
+    "source": "重排帧上限",
+    "translation": "Maximum reorder frames"
+  },
+  "analysis.features.scope": {
+    "source": "取自初始解码配置。WPP 和 Tile 可为解码器提供帧内并行机会；实际速度取决于设备、解码器和画面内容。",
+    "translation": "From the initial decoder configuration. WPP and tiles can enable parallel decoding within a frame. Actual speed depends on the device, decoder and picture content."
+  },
+  "analysis.features.tier": {
+    "source": "层级（Tier）",
+    "translation": "Tier"
+  },
+  "analysis.features.tiles": {
+    "source": "Tile 网格（列 × 行）",
+    "translation": "Tile grid (columns × rows)"
+  },
+  "analysis.features.title": {
+    "source": "编码特性",
+    "translation": "Coding features"
+  },
+  "analysis.features.unknown": {
+    "source": "当前片源没有可读取的 H.264、H.265 或 H.266 参数集。",
+    "translation": "No readable H.264, H.265 or H.266 parameter sets for this source."
+  },
+  "analysis.features.wpp": {
+    "source": "波前并行（WPP）",
+    "translation": "Wavefront parallel processing (WPP)"
+  },
   "analysis.follow": {
     "source": "跟随",
     "translation": "Follow"

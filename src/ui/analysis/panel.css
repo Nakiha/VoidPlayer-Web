@@ -558,3 +558,25 @@
 .analysis-range-time .analysis-range-time-input { position:absolute; box-sizing:border-box; display:block; min-height:0; margin:0; padding:0; border:0; background:transparent; color:inherit; font:inherit; font-variant-numeric:inherit; line-height:inherit; text-align:center; caret-color:currentColor; }
 .analysis-range-time .analysis-range-time-input::selection { background:color-mix(in srgb, var(--accent) 26%, transparent); }
 :root[data-keyboard-navigation] .analysis-range-time-input:focus-visible { background:transparent !important; color:inherit !important; }
+
+.coding-features {
+  width: min(34rem, 90vw);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 1.25rem;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-panel);
+  color: var(--text);
+}
+.coding-features[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.coding-features-tracks { overflow: auto; overscroll-behavior: contain; }
+.coding-features h2, .coding-features h3, .coding-features h4, .coding-features p { margin: 0 0 .4rem; }
+.coding-features h2 { font-size: 1.2rem; }
+.coding-features h3 { font-size: 1rem; overflow-wrap: anywhere; }
+.coding-features section { margin: 1rem 0; }
+.coding-features h4 { font-size: .8rem; margin-top: .65rem; }
+.coding-features dl { display: grid; grid-template-columns: 1fr auto; gap: .25rem 1rem; margin: 0; font-size: .9rem; }
+.coding-features dt, .coding-features p, .coding-features small { color: var(--text-secondary); }
+.coding-features dd { margin: 0; font-variant-numeric: tabular-nums; }
+.coding-features footer { padding-top: .6rem; display: flex; gap: .5rem; justify-content: flex-end; }

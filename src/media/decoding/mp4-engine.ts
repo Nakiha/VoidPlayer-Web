@@ -1,3 +1,4 @@
+import { readCodingFeatures } from '../../../shared/media/codecs/coding-features.ts';
 import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { inspectMp4Playback } from '../../../shared/media/containers/mp4-playback.ts';
 import { loadLibraryMp4Playback } from '../indexing/mp4-playback-client.ts';
@@ -63,7 +64,8 @@ export class Mp4Engine {
       const firstPtsUs=this.primed.pts;
       const activeDecoder=this.timeline.decoder;
       const color=activeDecoder.kind==='webcodecs'?playback.color:null;
-      return {codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.displayed(this.primed).width,height:this.displayed(this.primed).height,...activeDecoder.metadata?.(),
+      return { codecFeatures: readCodingFeatures(index.codec, index.configurations?.[0] ?? index.description, this.timeline.firstPacket),
+       codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.displayed(this.primed).width,height:this.displayed(this.primed).height,...activeDecoder.metadata?.(),
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
         ...(recovered?{timelineSource:'hevc-poc' as const}:{}),
         indexIntegrity: playback.indexIntegrity, indexTruncatedAt: playback.indexTruncatedAt, indexWarning: playback.indexWarning,

@@ -21,6 +21,7 @@
     "src/ui/analysis/card.ts",
     "src/ui/analysis/chart-navigation.ts",
     "src/ui/analysis/chart-overlay.ts",
+    "src/ui/analysis/coding-features.ts",
     "src/ui/analysis/concurrency.ts",
     "src/ui/analysis/diagram-icons.ts",
     "src/ui/analysis/filter-gestures.ts",

@@ -1447,6 +1447,102 @@
       "slot": "string | number"
     }
   },
+  "analysis.features.chroma": {
+    "source": "色度采样",
+    "params": {}
+  },
+  "analysis.features.close": {
+    "source": "关闭面板",
+    "params": {}
+  },
+  "analysis.features.ctu": {
+    "source": "编码树单元（CTU）",
+    "params": {}
+  },
+  "analysis.features.depth": {
+    "source": "亮度位深",
+    "params": {}
+  },
+  "analysis.features.empty": {
+    "source": "载入视频后可查看编码特性。",
+    "params": {}
+  },
+  "analysis.features.entropy": {
+    "source": "熵编码",
+    "params": {}
+  },
+  "analysis.features.entryPoints": {
+    "source": "子码流入口偏移",
+    "params": {}
+  },
+  "analysis.features.export": {
+    "source": "导出 JSON",
+    "params": {}
+  },
+  "analysis.features.firstPacket": {
+    "source": "首个压缩包的 VCL NAL 数",
+    "params": {}
+  },
+  "analysis.features.frameOnly": {
+    "source": "仅帧编码",
+    "params": {}
+  },
+  "analysis.features.level": {
+    "source": "编码级别（level_idc）",
+    "params": {}
+  },
+  "analysis.features.off": {
+    "source": "关闭",
+    "params": {}
+  },
+  "analysis.features.on": {
+    "source": "开启",
+    "params": {}
+  },
+  "analysis.features.partial": {
+    "source": "部分参数集未能读取。",
+    "params": {}
+  },
+  "analysis.features.profile": {
+    "source": "编码档次（profile_idc）",
+    "params": {}
+  },
+  "analysis.features.profileSpace": {
+    "source": "档次空间（profile_space）",
+    "params": {}
+  },
+  "analysis.features.refs": {
+    "source": "参考帧上限",
+    "params": {}
+  },
+  "analysis.features.reorder": {
+    "source": "重排帧上限",
+    "params": {}
+  },
+  "analysis.features.scope": {
+    "source": "取自初始解码配置。WPP 和 Tile 可为解码器提供帧内并行机会；实际速度取决于设备、解码器和画面内容。",
+    "params": {}
+  },
+  "analysis.features.tier": {
+    "source": "层级（Tier）",
+    "params": {}
+  },
+  "analysis.features.tiles": {
+    "source": "Tile 网格（列 × 行）",
+    "params": {}
+  },
+  "analysis.features.title": {
+    "source": "编码特性",
+    "params": {}
+  },
+  "analysis.features.unknown": {
+    "source": "当前片源没有可读取的 H.264、H.265 或 H.266 参数集。",
+    "params": {}
+  },
+  "analysis.features.wpp": {
+    "source": "波前并行（WPP）",
+    "params": {}
+  },
   "analysis.follow": {
     "source": "跟随",
     "params": {}

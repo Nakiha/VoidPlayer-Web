@@ -1,3 +1,4 @@
+import { readCodingFeatures } from '../../shared/media/codecs/coding-features.ts';
 import { libraryIndexReferenceFromUrl, loadLibraryPlaybackContainer } from './indexing/library-index-reference.ts';
 import type { FrameDescription } from '../../shared/media/frame-description.ts';
 import type { DecodedFrame, MediaSource, MediaMeta } from './contract.ts';
@@ -160,9 +161,9 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     const { track, codec, format } = await inspectVideoTrack(input);
     if (!await track.canDecode()) throw new MediaOpenError('decode', `已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);
     const rawConfig = await track.getDecoderConfig();
-    if(rawConfig?.codec.startsWith('avc')&&rawConfig.description){
-      const raw=rawConfig.description;
-      const bytes=ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength):new Uint8Array(raw);
+    const raw = rawConfig?.description;
+    const bytes = raw && (ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength) : new Uint8Array(raw));
+    if(rawConfig?.codec.startsWith('avc') && bytes){
       if(!nativeAvcCompatible(avcGeometry(bytes)))throw new MediaOpenError('decode','此 AVC 配置需要保守软件重排/隔行解码，浏览器能力探测不足以保证完整输出。');
     }
     let indexWarning: string | undefined;
@@ -200,6 +201,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     const color = await track.getColorSpace().catch(() => null);
     const info: MediaInfo = {
       id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
+      codecFeatures: bytes ? readCodingFeatures(codec, bytes) : undefined,
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
       hardwareAcceleration: config.hardwareAcceleration,
       indexKind: 'container', seekStrategy: 'browser',

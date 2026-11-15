@@ -4,6 +4,7 @@ import type { PresentationInfo } from '../presentation/presentation-info.ts';
 
 export type FrameInfo = { ptsUs: number; sourcePtsUs: number; durationUs: number };
 export type MediaInfo = {
+  codecFeatures?: import('./codecs/coding-features.ts').CodingFeatures;
   trackMetadata?: import('./containers/cached-track-metadata.ts').CachedTrackMetadata;
   opportunisticAudio?: 'flv-aac' | 'cached-container';
   jsIndexReused?:boolean;

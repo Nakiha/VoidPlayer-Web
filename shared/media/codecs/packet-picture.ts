@@ -10,6 +10,7 @@ export function inspectPacketPicture(
   codec: string,
   description: Uint8Array,
   bytes: Uint8Array,
+  observeVcl?: (nalUnits: number) => void,
 ): { singlePicture: boolean; closedRandomAccess: boolean; reason?: string } {
   const fail = (reason: string) => ({
     singlePicture: false,
@@ -72,6 +73,7 @@ export function inspectPacketPicture(
       }
     }
   }
+  if (vcl) observeVcl?.(vcl);
   if (codec === "vvc") pictures = vcl; // MVP explicitly admits single-slice VVC only.
   if (codec === 'h264' && isAnnexB(description) && vcl !== 1) return fail('unsupported-ts-multiple-slices');
   return pictures === 1 && vcl > 0

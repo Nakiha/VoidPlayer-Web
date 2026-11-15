@@ -1,3 +1,4 @@
+import { readCodingFeatures } from '../../../shared/media/codecs/coding-features.ts';
 import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { RangeReader, type RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
 import { TsPacketSource } from '../../../shared/media/containers/ts-packet-source.ts';
@@ -283,7 +284,8 @@ export class JsContainerEngine {
       this.outputSize = { width: this.primed.width, height: this.primed.height };
       this.firstPtsUs = this.primed.pts;
       if (this.startup) { this.timeline.replaceIndex(this.index); this.timeline.setGrowth(this.waitForGrowth); }
-      return { ...this.decoderInfo(),...this.timing(),indexState:this.startup?'building' as const:'complete' as const,
+      return { codecFeatures: readCodingFeatures(this.index.codec, this.index.configurations?.[0] ?? this.index.description, this.timeline.firstPacket),
+        ...this.decoderInfo(),...this.timing(),indexState:this.startup?'building' as const:'complete' as const,
         jsIndexReused:this.source!.indexReused };
     } catch (error) { this.close(); throw error; }
   }

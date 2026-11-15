@@ -12,17 +12,17 @@ class Bits {
   se(){const n=this.ue();return n&1?(n+1)/2:-n/2;}
 }
 const ratios=[[1,1],[1,1],[12,11],[10,11],[16,11],[40,33],[24,11],[20,11],[32,11],[80,33],[18,11],[15,11],[64,33],[160,99],[4,3],[3,2],[2,1]];
-export function parseAvcSps(nal:Uint8Array,aspectWitness=false):AvcGeometry {
+export function parseAvcSpsDetails(nal:Uint8Array,aspectWitness=false) {
   if((nal[0]&31)!==7)throw new Error('not AVC SPS');
   const rbsp=[];for(let i=1;i<nal.length;i++){if(nal[i]===3&&i>=3&&nal[i-1]===0&&nal[i-2]===0)continue;rbsp.push(nal[i]);}
-  const b=new Bits(Uint8Array.from(rbsp));const profile=b.read(8);b.skip(16);b.ue(31);
-  let chroma=1,separate=0;
+  const b=new Bits(Uint8Array.from(rbsp));const profile=b.read(8);b.skip(8);const levelIdc=b.read(8),id=b.ue(31);
+  let chroma=1,separate=0,lumaBitDepth=8;
   if([100,110,122,244,44,83,86,118,128,138,139,134,135].includes(profile)){
-    chroma=b.ue(3);if(chroma===3)separate=b.read(1);b.ue(6);b.ue(6);b.skip(1);
+    chroma=b.ue(3);if(chroma===3)separate=b.read(1);lumaBitDepth+=b.ue(6);b.ue(6);b.skip(1);
     if(b.read(1))for(let i=0;i<(chroma===3?12:8);i++)if(b.read(1)){let last=8,next=8;for(let j=0;j<(i<6?16:64);j++){if(next)next=(last+b.se()+256)%256;last=next||last;}}
   }
   b.ue(12);const poc=b.ue(2);if(poc===0)b.ue(12);else if(poc===1){b.skip(1);b.se();b.se();for(let i=b.ue(255);i>0;i--)b.se();}
-  b.ue(16);b.skip(1);const codedWidth=(b.ue(2047)+1)*16,mbHeight=b.ue(2047)+1;
+  const maxReferenceFrames=b.ue(16);b.skip(1);const codedWidth=(b.ue(2047)+1)*16,mbHeight=b.ue(2047)+1;
   const frameOnly=b.read(1);if(!frameOnly)b.skip(1);b.skip(1);
   const codedHeight=mbHeight*16*(2-frameOnly),array=separate?0:chroma;
   const subX=array===1||array===2?2:1,subY=(array===1?2:1)*(2-frameOnly);
@@ -39,7 +39,11 @@ export function parseAvcSps(nal:Uint8Array,aspectWitness=false):AvcGeometry {
     if(b.read(1)){b.skip(1);b.ue();b.ue();b.ue();b.ue();maxReorderFrames=b.ue(16);b.ue(16);}
   }
   if(!sarNum||!sarDen)throw new Error('invalid AVC SAR');
-  return {codedWidth,codedHeight,x,y,width,height,sarNum,sarDen,interlaced:!frameOnly,maxReorderFrames,...(aspectWitness?{sarSpecified}:{})};
+  const geometry: AvcGeometry = {codedWidth,codedHeight,x,y,width,height,sarNum,sarDen,interlaced:!frameOnly,maxReorderFrames,...(aspectWitness?{sarSpecified}:{})};
+  return { geometry, id, profileIdc: profile, levelIdc, maxReferenceFrames, lumaBitDepth, chromaFormatIdc: chroma };
+}
+export function parseAvcSps(nal:Uint8Array,aspectWitness=false):AvcGeometry {
+  return parseAvcSpsDetails(nal,aspectWitness).geometry;
 }
 export function avcGeometry(description:Uint8Array,aspectWitness=false):AvcGeometry|null {
   try{

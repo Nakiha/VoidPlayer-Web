@@ -1,3 +1,4 @@
+import { readCodingFeatures } from '../../../shared/media/codecs/coding-features.ts';
 import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { FlvCachedAudio } from '../audio/flv-cached-audio.ts';
 import { PacketTimeline } from './packet-timeline.ts';
@@ -152,7 +153,8 @@ export class FlvEngine {
         this.primed = await this.extract(0);
       }
       this.retainStartup();
-      return { codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
+      return { codecFeatures: readCodingFeatures(this.index.codec, this.index.configurations?.[0] ?? this.index.description, this.timeline?.firstPacket),
+        codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
         hardwareAcceleration: this.decoder.hardwareAcceleration,
         ...this.decoder.metadata?.(), decodedPixelFormat: this.primed!.frame?.format ?? null,
         indexWarning: flvIndexWarning(this.index),

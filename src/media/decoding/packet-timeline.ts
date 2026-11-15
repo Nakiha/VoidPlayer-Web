@@ -1,3 +1,4 @@
+import type { CodingFeatures } from '../../../shared/media/codecs/coding-features.ts';
 import type { PacketDecoder, PacketFrame } from './flv-decoder.ts';
 import type { PacketDecodeIndex, PacketDecodePacket } from '../../../shared/media/indexing/packet-decode-index.ts';
 import { inspectPacketPicture } from '../../../shared/media/codecs/packet-picture.ts';
@@ -6,6 +7,7 @@ import { packetDecodeError } from './flv-decoder.ts';
 /** Packet metadata chooses a decode anchor, never the identity of an output
  * frame. Only receive() establishes display PTS; playback drains real outputs. */
 export class PacketTimeline {
+  firstPacket: CodingFeatures['firstPacket'];
   private cursor=0;
   private pictures = new Map<number, import('../../../shared/media/codecs/packet-picture.ts').PacketPicture>();
   private configuration=-1;
@@ -119,7 +121,10 @@ export class PacketTimeline {
       }
       let inputPicture: {au:number;configuration:number;singlePicture:boolean}|undefined;
       if (this.identifyPictures && this.pictures.size < 512) {
-        const evidence=inspectPacketPicture(this.index.codec,this.index.configurations?.[this.configuration]??this.index.description,bytes);
+        const observeVcl = this.cursor === 0 && !this.firstPacket ? (vclNalUnits: number) => {
+          this.firstPacket = { sourcePtsUs: packet.pts, configuration: this.configuration, vclNalUnits };
+        } : undefined;
+        const evidence=inspectPacketPicture(this.index.codec,this.index.configurations?.[this.configuration]??this.index.description,bytes,observeVcl);
         let lo=0,hi=this.index.order.length;
         while(lo<hi){const m=(lo+hi)>>>1;if(this.index.packets[this.index.order[m]].pts<packet.pts)lo=m+1;else hi=m;}const position=lo;
         const unique=position>=0 && (position===0||this.index.packets[this.index.order[position-1]].pts!==packet.pts) && (position+1===this.index.order.length||this.index.packets[this.index.order[position+1]].pts!==packet.pts);

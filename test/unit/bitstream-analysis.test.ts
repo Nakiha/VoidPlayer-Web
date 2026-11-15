@@ -1114,3 +1114,41 @@ test('cold automatic summaries retain visible admission queues behind another tr
     release(); await Promise.all([a, b, c]);
   } finally { release?.(); coordinator.dispose(); }
 });
+
+test('coding features retain per-set evidence and keep missing values distinct from disabled tools', async () => {
+  const { readCodingFeatures } = await import('../../shared/media/codecs/coding-features.ts');
+  const annex = (...units: string[]) => Buffer.from(units.map(unit => '000001' + unit).join(''), 'hex');
+  // SPS/PPS from x264 and x265 with settings cross-checked using FFmpeg trace_headers.
+  const avc = readCodingFeatures('h264', annex('674d4033e4280780087d808800000300080000030193350007a12000f427251803c60c6580', '68ee3c80', '685380'));
+  assert.deepEqual(avc?.parameterSets.map(p => [p.kind, p.id, p.entropyCoding]), [['SPS', 0, undefined], ['PPS', 0, 'CABAC'], ['PPS', 1, 'CAVLC']]);
+  assert.equal(avc?.parameterSets[0].maxReferenceFrames, 4);
+  assert.equal(readCodingFeatures('h264', annex('68e0'))?.unreadableParameterSets, 1, 'RBSP stop bit cannot stand in for the entropy flag');
+  const hevc = readCodingFeatures('hevc', annex('42010102200000030090000003000003003fa00e080484d96565924caf016808000003000800000300c040', '4401c172b46240'));
+  assert.equal(hevc?.parameterSets[0].lumaBitDepth, 10);
+  assert.equal(hevc?.parameterSets[0].profileIdc, 2);
+  assert.equal(hevc?.parameterSets[1].wavefront, true);
+  const partial = readCodingFeatures('hevc', annex('4201', '4401c172b42240'));
+  assert.equal(partial?.unreadableParameterSets, 1);
+  assert.equal(partial?.parameterSets[0].wavefront, false);
+  assert.equal(readCodingFeatures('vp9', Buffer.alloc(0)), undefined);
+  assert.equal(readCodingFeatures('hevc', Buffer.of(1)), undefined);
+});
+
+test('VVC SPS wavefront is independent of the PPS tile grid, including implicit repeated tiles', async () => {
+  const { readCodingFeatures } = await import('../../shared/media/codecs/coding-features.ts');
+  // VVenC SPS prefixes through entry-point flags, terminated with RBSP trailing bits, and complete PPS records.
+  for (const [sps, pps, wavefront, tiles] of [
+    ['007900ab022380000080140806047a0080', '008100000a04030222418200', true, 1],
+    ['007900ab025380000080140806046a0080', '008100000a040302072bd241802000', false, 2],
+  ] as const) {
+    const array = (type: number, hex: string) => Buffer.concat([Buffer.from([type, 0, 1, 0, hex.length / 2]), Buffer.from(hex, 'hex')]);
+    const config = Buffer.concat([Buffer.of(0xfe, 2), array(15, sps), array(16, pps)]);
+    const report = readCodingFeatures('vvc', config)!;
+    assert.equal(report.unreadableParameterSets, 0);
+    assert.deepEqual(report.parameterSets.map(set => [set.lumaBitDepth, set.wavefront, set.tileColumns, set.tileRows]),
+      [[10, wavefront, undefined, undefined], [undefined, undefined, tiles, tiles]]);
+  }
+  let count = 0;
+  inspectPacketPicture('h264', new Uint8Array(), Buffer.from('026580026540', 'hex'), n => { count = n; });
+  assert.equal(count, 2, 'two slices in the observed AVC access unit');
+});
