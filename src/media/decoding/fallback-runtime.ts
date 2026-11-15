@@ -1,5 +1,5 @@
 import { coreAssetUrl } from './core-url.ts';
-import { VVC_EXPERIMENTAL_CAPACITY, vvcFrameContextCount, vvcThreadCount, wasmThreadMode,
+import { lightPlaybackThreads, VVC_EXPERIMENTAL_CAPACITY, vvcFrameContextCount, vvcThreadCount, wasmThreadMode,
   type DecodeThreads, type WasmThreadMode } from '../policy/wasm-threads.ts';
 import type {MediaOpenProgress} from '../progress.ts';
 // Greatest index whose time is at most ptsUs (0 when none), and the first
@@ -76,14 +76,22 @@ export function reserveFallbackThreads(mode = wasmThreadMode()) {
   const contexts = manualContexts || Math.min(6, vvc);
   let threads = mode === 'single-thread' ? { general: 1, vvc: 1, vvcFrameContexts: 1 }
     : { general: Math.min(4, share), vvc, vvcFrameContexts: contexts };
+  let generalLimit = 4, vvcLimit = 6;
   let reserved = Math.max(threads.general, threads.vvc);
   reservedFallbackThreads += reserved;
   let released = false;
-  return { get threads() { return threads; }, grow() {
+  return { get threads() { return threads; }, limitToLightSource() {
+    if (released || (mode !== 'auto' && mode !== 'auto-grow')) return;
+    generalLimit = vvcLimit = 2;
+    threads = lightPlaybackThreads(threads);
+    const previous = reserved;
+    reserved = Math.max(threads.general, threads.vvc);
+    reservedFallbackThreads += reserved - previous;
+  }, grow() {
     if (released || mode === 'single-thread') return;
     const headroom = Math.max(1, Math.min(Math.floor(available / liveFallbacks), available - reservedFallbackThreads + reserved));
-    const general = Math.max(threads.general, Math.min(4, headroom));
-    const vvc = Math.max(threads.vvc, manualVvc || Math.min(6, headroom));
+    const general = Math.max(threads.general, Math.min(generalLimit, headroom));
+    const vvc = Math.max(threads.vvc, manualVvc || Math.min(vvcLimit, headroom));
     const contexts = Math.max(threads.vvcFrameContexts, manualContexts || Math.min(6, vvc));
     if (general === threads.general && vvc === threads.vvc && contexts === threads.vvcFrameContexts) return;
     const previous = threads, previousReserved = reserved;

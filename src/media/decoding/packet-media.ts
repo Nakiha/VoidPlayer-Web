@@ -1,6 +1,6 @@
 import { sharePixelFrame } from './pixel-frame.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
-import { decodeThreadsForCodec, wasmThreadMode } from '../policy/wasm-threads.ts';
+import { decodeThreadsForCodec, lightPlaybackThreads, wasmThreadMode } from '../policy/wasm-threads.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
 import { WorkerRpc } from '../workers/worker-rpc.ts';
@@ -35,19 +35,29 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
   if((container==='ts'||container==='matroska') && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
   const mode = wasmThreadMode();
   let reservation = reserveFallbackThreads(mode);
-  let reservationHeld = true;
-  const holdReservation = () => { if (!reservationHeld) { reservation = reserveFallbackThreads(mode); reservationHeld = true; } };
+  let reservationHeld = true, lightweight = false, pendingLightLimit = false;
+  const holdReservation = () => {
+    if (reservationHeld) return;
+    reservation = reserveFallbackThreads(mode);
+    if (lightweight) reservation.limitToLightSource();
+    reservationHeld = true;
+  };
   const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
     const libraryPlayback = 'url' in input && !!input.library;
     const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? document.baseURI, mode);
     const single = candidates.at(-1)!;
-    const threadsFor = (url: string) => fallbackDecodeThreads(reservation.threads, url, mode, !!deps.glueURL);
+    const threadsFor = (url: string) => fallbackDecodeThreads(pendingLightLimit ? lightPlaybackThreads(reservation.threads) : reservation.threads, url, lightweight ? 'auto' : mode, !!deps.glueURL);
+    const startupThreads = (url: string) => {
+      const threads = threadsFor(url);
+      return typeof threads === 'object' && (mode === 'auto' || mode === 'auto-grow') ? { ...threads, selectForSource: true } : threads;
+    };
     if(deps.preparedTs)rpc=deps.preparedTs.rpc;
     type Init = PacketInitResult;
     let init: Init | null | undefined, selected = single, failure: unknown;
     let prepared: PreparedFlv | undefined;
+    let tryPreferredSoftware = false;
     const createRpc = async () => {
       const worker = deps.workerFactory ? deps.workerFactory() : new Worker(new URL('./packet-worker.ts', import.meta.url), { type: 'module' });
       return new WorkerRpc<PacketCommands>(worker, undefined, deps.onProgress);
@@ -61,7 +71,12 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       try {
         deps.onProgress?.('inspect');
         prepared = await rpc.call('prepare', { input }, [], libraryPlayback ? 120000 : 60000, true);
-        if (!deps.forceWasm) init = await rpc.call('native', {}, [], 60000);
+        if (!deps.forceWasm) {
+          init = await rpc.call('native', { threads: startupThreads(candidates[0]) }, [], 60000);
+          // Native-only FLV opens have not tried a WASM candidate yet.
+          tryPreferredSoftware = !!init && (init.lightweight || init.pendingLightLayout ||
+            (mode === 'manual' && init.codec === 'vvc'));
+        }
       } finally { detachAbort(); }
     }
     for (const glueURL of candidates) {
@@ -74,7 +89,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       try {
         if (container !== 'flv') deps.onProgress?.('inspect');
         init = await rpc.call('init', { input, glueURL, wasmBinary: deps.wasmBinary,
-          forceWasm: container === 'flv' || !!deps.forceWasm, threads: threadsFor(glueURL),
+          forceWasm: container === 'flv' || !!deps.forceWasm, threads: startupThreads(glueURL),
           ...((container==='ts'||container==='matroska')?{container,persistent:true,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
           container === 'flv' && fallbackCoreVariant(glueURL) === 'multi-thread' ? 10000 : libraryPlayback ? 120000 : 60000, libraryPlayback || container==='ts' || container==='matroska');
         selected = glueURL;
@@ -93,8 +108,10 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     const startup = prepared;
     prepared = undefined;
     const activeRpc = rpc;
+    lightweight = init.lightweight === true;
+    if (lightweight) reservation.limitToLightSource();
     if (init.decoder === 'webcodecs' && !deps.rawNative) releaseReservation();
-    let { times, durations, trackMetadata, ...details } = init;
+    let { times, durations, trackMetadata, lightweight: _lightweight, pendingLightLayout: _pendingLightLayout, ...details } = init;
     const info: MediaInfo = { id: (container==='ts'||container==='matroska')?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
       ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: fallbackCoreVariant(selected) } : {}) };
@@ -134,6 +151,12 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
           durationBeforeUs: info.durationUs, durationUs: result.durationUs, indexSource: result.indexSource,
           indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt });
         times = result.times; durations = result.durations;
+        if (result.lightweight && !lightweight) {
+          lightweight = true;
+          // A native-to-software switch may already be opening at the old budget.
+          // Keep those threads reserved until its actual decoder can be reconciled.
+          pendingLightLimit = reservationHeld;
+        }
         updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning,indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt,...('seekAnchorCount' in result?{seekAnchorCount:result.seekAnchorCount,jsIndexPacketsScanned:result.jsIndexPacketsScanned}:{})},'index');
         wakeIndex();
       }, error => {
@@ -207,12 +230,18 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     let failedGrowth: string | undefined;
     const restoreThreadBudget = async (pts: number) => {
       if (!reservationHeld || info.decoder !== 'ffmpeg-wasm' || info.coreVariant !== 'multi-thread'
-        || mode === 'auto-grow' && info.codec === 'vvc') return;
-      const growth = reservation.grow();
-      if (!growth) return;
+        || mode === 'auto-grow' && !lightweight && info.codec === 'vvc') return;
+      const limiting = pendingLightLimit;
+      const growth = limiting ? undefined : reservation.grow();
+      if (!limiting && !growth) return;
       const budget = threadsFor(selected), threads = decodeThreadsForCodec(budget, info.codec);
       const signature = JSON.stringify(budget);
-      if (signature === failedGrowth || threads <= (info.decoderThreads ?? 1)) { growth.rollback(); return; }
+      if (signature === failedGrowth || (!limiting && threads <= (info.decoderThreads ?? 1))) { growth?.rollback(); return; }
+      if (limiting && threads === info.decoderThreads && !(mode === 'auto-grow' && info.codec === 'vvc')) {
+        reservation.limitToLightSource();
+        pendingLightLimit = false;
+        return;
+      }
       const previousThreads = info.decoderThreads;
       try {
         // Serialized with frame extraction. The Worker primes a candidate over
@@ -221,20 +250,39 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
         const result = await activeRpc.call('switch-software', { glueURL: selected, wasmBinary: deps.wasmBinary,
           threads: budget, replace: true, pts: pts + info.firstPtsUs }, [], 60000);
         if (disposed) return;
+        if (limiting) {
+          reservation.limitToLightSource();
+          pendingLightLimit = false;
+        }
         updateMediaInfo(source, { decoderThreads: result.decoderThreads, decoderFrameContexts: result.decoderFrameContexts }, 'decoder');
-        contextLog().info('media', '软件解码线程预算已恢复', { name: meta.name, previousThreads, threads: info.decoderThreads });
+        contextLog().info('media', '软件解码线程预算已更新', { name: meta.name, previousThreads, threads: info.decoderThreads });
       } catch (error) {
-        growth.rollback();
+        growth?.rollback();
         if (disposed || error instanceof MediaOpenError && error.stage === 'input') throw error;
         failedGrowth = signature;
-        contextLog().warn('media', '软件解码线程升级失败，保留原解码器', { name: meta.name, previousThreads,
+        contextLog().warn('media', '软件解码线程调整失败，保留原解码器', { name: meta.name, previousThreads,
           error: error instanceof Error ? error.message : String(error) });
       }
     };
+    const switchToSoftware = async () => {
+      holdReservation();
+      const open = (glueURL: string) => activeRpc.call('switch-software', { glueURL, wasmBinary: deps.wasmBinary, threads: threadsFor(glueURL) }, [], 60000);
+      if (tryPreferredSoftware && candidates[0] !== selected) {
+        try {
+          const result = await open(candidates[0]);
+          selected = candidates[0];
+          tryPreferredSoftware = false;
+          return result;
+        } catch (error) {
+          if (!(error instanceof MediaOpenError) || error.stage !== 'decode') throw error;
+          tryPreferredSoftware = false;
+        }
+      }
+      return open(selected);
+    };
     const setDecoder = async (kind: 'software' | 'native') => {
-      if (kind === 'software') holdReservation();
       const result = kind === 'software'
-        ? await activeRpc.call('switch-software', { glueURL: selected, wasmBinary: deps.wasmBinary, threads: threadsFor(selected) }, [], 60000)
+        ? await switchToSoftware()
         : await activeRpc.call('switch-native', {}, [], 60000);
       Object.assign(info, { decoderThreads: undefined, decoderFrameContexts: undefined }, result,
         { ...(kind === 'software' ? { coreVariant: fallbackCoreVariant(selected) } : {}) });
@@ -313,9 +361,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     const source: MediaSource = {
       wasmThreadMode: mode,
       get inputWaitMs() { return inputWaitMs; },
-      ...(mode === 'auto-grow' && info.codec === 'vvc' ? {
+      ...(mode === 'auto-grow' && !lightweight && info.codec === 'vvc' ? {
         async tuneVvc(axis?: VvcTuningAxis) {
-          if (disposed || info.decoder !== 'ffmpeg-wasm') return null;
+          if (disposed || lightweight || info.decoder !== 'ffmpeg-wasm') return null;
           const result = await activeRpc.call('tune-vvc', { axis }, [], 60000);
           if (result && !disposed && info.decoder === 'ffmpeg-wasm') {
             updateMediaInfo(source, { decoderThreads: result.threads, decoderFrameContexts: result.contexts }, 'decoder');

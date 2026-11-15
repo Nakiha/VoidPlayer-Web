@@ -1,0 +1,4549 @@
+{
+  "webRevision": "152c5dd730068307adc8c30b4f1da5a636caab9e",
+  "builderRevision": "5ccd3566bdb791e44479439c81b4852fa3340183",
+  "ffmpegRevision": "fc5b9f1c45775b46cba7c1d9000977df27724080",
+  "system": "Apple M5, 10 logical CPUs; WebKit reports 8; Node 24.15.0; macOS 27.3",
+  "sources": {
+    "vvc-4k": {
+      "codec": "vvc",
+      "width": 3840,
+      "height": 2160,
+      "fps": 25,
+      "pictures": 120,
+      "sha256": "540bd8ec9d81bffd7354b7e1d85b03b35c4617dc5570de8e0c99fcb7d2e615c1",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "vvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 1,
+            "highTier": false,
+            "levelIdc": 80,
+            "chromaFormatIdc": 1,
+            "ctuSize": 64,
+            "lumaBitDepth": 8,
+            "wavefront": false,
+            "entryPointOffsets": true
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        4,
+        4
+      ],
+      "playbackPlan": 6
+    },
+    "vvc-4k10": {
+      "codec": "vvc",
+      "width": 3840,
+      "height": 2160,
+      "fps": 25,
+      "pictures": 40,
+      "sha256": "80e84d07e2712465955a6885a477439c6c805c479a0d2bd17704fa4267f3fc83",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "vvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 1,
+            "highTier": false,
+            "levelIdc": 80,
+            "chromaFormatIdc": 1,
+            "ctuSize": 64,
+            "lumaBitDepth": 10,
+            "wavefront": false,
+            "entryPointOffsets": true
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        4,
+        4
+      ],
+      "playbackPlan": 6
+    },
+    "hevc-4k": {
+      "codec": "hevc",
+      "width": 3840,
+      "height": 2160,
+      "fps": 25,
+      "pictures": 120,
+      "sha256": "ae2aa55ec57c3fb681d2e0f8c582112bcc65ff66e413490b1ce30a0fb933a872",
+      "layout": {
+        "wpp": true,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "hvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileSpace": 0,
+            "highTier": false,
+            "profileIdc": 1,
+            "levelIdc": 150,
+            "chromaFormatIdc": 1,
+            "lumaBitDepth": 8,
+            "maxReorderFrames": 2,
+            "ctuSize": 32
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "wavefront": true,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        2,
+        1
+      ],
+      "playbackPlan": 4
+    },
+    "avc-4k": {
+      "codec": "h264",
+      "width": 3840,
+      "height": 2160,
+      "fps": 25,
+      "pictures": 120,
+      "sha256": "d47defdb7efce08dc76c5ecc56987465e40aa0640f44a73a634390a32573a9e1",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "avcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 77,
+            "levelIdc": 51,
+            "maxReferenceFrames": 4,
+            "lumaBitDepth": 8,
+            "chromaFormatIdc": 1,
+            "frameMbsOnly": true,
+            "maxReorderFrames": 2
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "entropyCoding": "CABAC"
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        4,
+        4
+      ],
+      "playbackPlan": 4
+    },
+    "hevc-slices": {
+      "codec": "hevc",
+      "width": 384,
+      "height": 256,
+      "fps": 24,
+      "pictures": 36,
+      "sha256": "2183d84ba871c34ace7888ca8dd14ea9ffb385f74c60d25fa6a7d8c9e87198b6",
+      "layout": {
+        "wpp": true,
+        "tiles": 1,
+        "slices": 2
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "hvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileSpace": 0,
+            "highTier": false,
+            "profileIdc": 1,
+            "levelIdc": 60,
+            "chromaFormatIdc": 1,
+            "lumaBitDepth": 8,
+            "maxReorderFrames": 2,
+            "ctuSize": 64
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "wavefront": true,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 2
+        }
+      },
+      "streamAnalysisPlan": [
+        2,
+        1
+      ],
+      "playbackPlan": 4
+    },
+    "ld-plain": {
+      "codec": "vvc",
+      "width": 960,
+      "height": 576,
+      "fps": 30,
+      "pictures": 64,
+      "sha256": "6e8398e3ea912c339500d3ac81936422f38c09d614a7c98b15f3da84e78b3643",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "vvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 1,
+            "highTier": false,
+            "levelIdc": 48,
+            "chromaFormatIdc": 1,
+            "ctuSize": 64,
+            "lumaBitDepth": 10,
+            "wavefront": false,
+            "entryPointOffsets": true
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        2,
+        2
+      ],
+      "playbackPlan": 2
+    },
+    "ld-wpp": {
+      "codec": "vvc",
+      "width": 960,
+      "height": 576,
+      "fps": 30,
+      "pictures": 64,
+      "sha256": "6fd3fd8d868920f35235c208e7d881c4c493a4ae0d6c638f64bd998e99276795",
+      "layout": {
+        "wpp": true,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "vvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 1,
+            "highTier": false,
+            "levelIdc": 48,
+            "chromaFormatIdc": 1,
+            "ctuSize": 64,
+            "lumaBitDepth": 10,
+            "wavefront": true,
+            "entryPointOffsets": true
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        2,
+        2
+      ],
+      "playbackPlan": 6
+    },
+    "ld-tiles": {
+      "codec": "vvc",
+      "width": 960,
+      "height": 576,
+      "fps": 30,
+      "pictures": 64,
+      "sha256": "94fbc4c022bbe9ebdf94571de78d31bb04dda34b1aa6e8c38f092ced43685185",
+      "layout": {
+        "wpp": false,
+        "tiles": 4,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "vvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 1,
+            "highTier": false,
+            "levelIdc": 48,
+            "chromaFormatIdc": 1,
+            "ctuSize": 64,
+            "lumaBitDepth": 10,
+            "wavefront": false,
+            "entryPointOffsets": true
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "tileColumns": 2,
+            "tileRows": 2
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        2,
+        2
+      ],
+      "playbackPlan": 6
+    },
+    "hevc-wpp": {
+      "codec": "hevc",
+      "width": 960,
+      "height": 540,
+      "fps": 30,
+      "pictures": 96,
+      "sha256": "83d9fce99187351bb3eac7111ea024c52410323342963becaf2c4ff1b0c0a8e7",
+      "layout": {
+        "wpp": true,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "hvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileSpace": 0,
+            "highTier": false,
+            "profileIdc": 1,
+            "levelIdc": 90,
+            "chromaFormatIdc": 1,
+            "lumaBitDepth": 8,
+            "maxReorderFrames": 2,
+            "ctuSize": 64
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "wavefront": true,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        2,
+        1
+      ],
+      "playbackPlan": 4
+    },
+    "hevc-serial": {
+      "codec": "hevc",
+      "width": 960,
+      "height": 540,
+      "fps": 30,
+      "pictures": 96,
+      "sha256": "1699b64ad90a4213ab1831244db62f7bb5e8ef8aecfba550fcee894802a20d08",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "hvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileSpace": 0,
+            "highTier": false,
+            "profileIdc": 1,
+            "levelIdc": 90,
+            "chromaFormatIdc": 1,
+            "lumaBitDepth": 8,
+            "maxReorderFrames": 2,
+            "ctuSize": 64
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "wavefront": false,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        1,
+        1
+      ],
+      "playbackPlan": 2
+    },
+    "avc-1slice": {
+      "codec": "h264",
+      "width": 960,
+      "height": 540,
+      "fps": 30,
+      "pictures": 96,
+      "sha256": "0cb79a10395655106c50def770985563cbbc11dfff62a891a6e99f34afc788fc",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "avcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 100,
+            "levelIdc": 31,
+            "maxReferenceFrames": 4,
+            "lumaBitDepth": 8,
+            "chromaFormatIdc": 1,
+            "frameMbsOnly": true,
+            "maxReorderFrames": 2
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "entropyCoding": "CABAC"
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        4,
+        4
+      ],
+      "playbackPlan": 2
+    },
+    "avc-4slice": {
+      "codec": "h264",
+      "width": 960,
+      "height": 540,
+      "fps": 30,
+      "pictures": 96,
+      "sha256": "516a255a94606eab8c2c25a44cbbe6f5f215be1ce974d30774cd57e55c074b31",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 4
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "avcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 100,
+            "levelIdc": 31,
+            "maxReferenceFrames": 4,
+            "lumaBitDepth": 8,
+            "chromaFormatIdc": 1,
+            "frameMbsOnly": true,
+            "maxReorderFrames": 2
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "entropyCoding": "CABAC"
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 4
+        }
+      },
+      "streamAnalysisPlan": [
+        4,
+        4
+      ],
+      "playbackPlan": 4
+    },
+    "hd-wpp": {
+      "codec": "hevc",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "pictures": 96,
+      "sha256": "ea4696e76e5acc1def294899602b24c5698ae8738ea9d09fbe4cc8ce644a4042",
+      "layout": {
+        "wpp": true,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "hvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileSpace": 0,
+            "highTier": false,
+            "profileIdc": 1,
+            "levelIdc": 120,
+            "chromaFormatIdc": 1,
+            "lumaBitDepth": 8,
+            "maxReorderFrames": 2,
+            "ctuSize": 32
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "wavefront": true,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        2,
+        1
+      ],
+      "playbackPlan": 4
+    },
+    "hd-serial": {
+      "codec": "hevc",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "pictures": 96,
+      "sha256": "04932c0a7373259a87b2a89e44e8f82e93096158f088b2e6c0ed4adc6aff06ab",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "hvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileSpace": 0,
+            "highTier": false,
+            "profileIdc": 1,
+            "levelIdc": 120,
+            "chromaFormatIdc": 1,
+            "lumaBitDepth": 8,
+            "maxReorderFrames": 2,
+            "ctuSize": 32
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "wavefront": false,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        1,
+        1
+      ],
+      "playbackPlan": 4
+    },
+    "vvc-1080": {
+      "codec": "vvc",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "pictures": 600,
+      "sha256": "088a1b66b61bd23ceebe863720e80c6bac62ad379ae633c510326678de7954fd",
+      "layout": {
+        "wpp": false,
+        "tiles": 1,
+        "slices": 1
+      },
+      "features": {
+        "scope": "initial-configuration",
+        "format": "vvcC",
+        "parameterSets": [
+          {
+            "kind": "SPS",
+            "layer": 0,
+            "id": 0,
+            "profileIdc": 1,
+            "highTier": false,
+            "levelIdc": 0,
+            "chromaFormatIdc": 1,
+            "ctuSize": 128,
+            "lumaBitDepth": 8,
+            "wavefront": false,
+            "entryPointOffsets": true
+          },
+          {
+            "kind": "PPS",
+            "layer": 0,
+            "id": 0,
+            "spsId": 0,
+            "tileColumns": 1,
+            "tileRows": 1
+          }
+        ],
+        "unreadableParameterSets": 0,
+        "firstPacket": {
+          "configuration": 0,
+          "sourcePtsUs": 0,
+          "vclNalUnits": 1
+        }
+      },
+      "streamAnalysisPlan": [
+        4,
+        4
+      ],
+      "playbackPlan": 6
+    }
+  },
+  "wasmSha256": {
+    "voidplayer-analysis-mt.wasm": "64ea36c171b52fb7879a884d5cb892564838dd40dc3996675ea0a5e291a2eabc",
+    "voidplayer-analysis.wasm": "c943938979b526dcaa1cb72509c652ab4075b53cfcafbbc9c9d292889b387e32",
+    "voidplayer-core-mt.wasm": "ed613ea311ab3ab6cc4d396f2da9db5035ccc5bfb53225196137e13fdec53f85",
+    "voidplayer-core.wasm": "6ff4568b1899ae118fa145f635a35bf4915a35f3ef74af82b577204591cb7de7"
+  },
+  "nodeAnalysis": [
+    {
+      "source": "vvc-4k",
+      "mode": "stream",
+      "pictures": 120,
+      "blocks": 1066749,
+      "payloadBytes": 12800988,
+      "outputSha256": "f4e983b3199c649bed6594d33268b699b2d61a3acaab56f57f84c274a891e8e4",
+      "runs": {
+        "1/1": {
+          "fps": [
+            99.6,
+            99.07,
+            95.65
+          ],
+          "corePlusRunnerMs": [
+            1209.48,
+            1215.77,
+            1259.35
+          ],
+          "coreInitMs": [
+            4.63,
+            4.5,
+            4.77
+          ],
+          "runnerMs": [
+            1204.85,
+            1211.28,
+            1254.58
+          ]
+        },
+        "2/2": {
+          "fps": [
+            142.24,
+            139.11,
+            138.87
+          ],
+          "corePlusRunnerMs": [
+            860.38,
+            880.5,
+            881.15
+          ],
+          "coreInitMs": [
+            16.72,
+            17.88,
+            17.05
+          ],
+          "runnerMs": [
+            843.66,
+            862.62,
+            864.11
+          ]
+        },
+        "4/2": {
+          "fps": [
+            140.5,
+            140.27,
+            140.72
+          ],
+          "corePlusRunnerMs": [
+            873.72,
+            873.93,
+            872.42
+          ],
+          "coreInitMs": [
+            19.62,
+            18.44,
+            19.65
+          ],
+          "runnerMs": [
+            854.1,
+            855.48,
+            852.77
+          ]
+        },
+        "4/4": {
+          "fps": [
+            170.87,
+            167.34,
+            167.64
+          ],
+          "corePlusRunnerMs": [
+            721.26,
+            735.29,
+            734.1
+          ],
+          "coreInitMs": [
+            18.99,
+            18.18,
+            18.28
+          ],
+          "runnerMs": [
+            702.28,
+            717.11,
+            715.82
+          ]
+        }
+      }
+    },
+    {
+      "source": "vvc-4k",
+      "mode": "exact",
+      "pictures": 1,
+      "blocks": 3324,
+      "payloadBytes": 39888,
+      "outputSha256": "4f6e2714a5c232fdf0107599419874e5f6466d3879dd6b1a9c5e71a4517cd552",
+      "runs": {
+        "1/1": {
+          "fps": [
+            5.2,
+            5.23,
+            5.0
+          ],
+          "corePlusRunnerMs": [
+            196.4,
+            195.86,
+            204.42
+          ],
+          "coreInitMs": [
+            4.11,
+            4.74,
+            4.39
+          ],
+          "runnerMs": [
+            192.29,
+            191.13,
+            200.04
+          ]
+        },
+        "2/2": {
+          "fps": [
+            6.74,
+            6.51,
+            6.46
+          ],
+          "corePlusRunnerMs": [
+            165.84,
+            170.11,
+            172.07
+          ],
+          "coreInitMs": [
+            17.52,
+            16.39,
+            17.25
+          ],
+          "runnerMs": [
+            148.33,
+            153.72,
+            154.82
+          ]
+        },
+        "4/4": {
+          "fps": [
+            6.96,
+            6.87,
+            6.89
+          ],
+          "corePlusRunnerMs": [
+            161.06,
+            163.53,
+            165.63
+          ],
+          "coreInitMs": [
+            17.4,
+            17.9,
+            20.57
+          ],
+          "runnerMs": [
+            143.66,
+            145.63,
+            145.06
+          ]
+        }
+      }
+    },
+    {
+      "source": "vvc-4k10",
+      "mode": "stream",
+      "pictures": 40,
+      "blocks": 390921,
+      "payloadBytes": 4691052,
+      "outputSha256": "6bfc3f885d332c48b3836695ae95de76d647a06b9c5cd74e15b8161b4dd12715",
+      "runs": {
+        "1/1": {
+          "fps": [
+            80.97,
+            78.31,
+            80.35
+          ],
+          "corePlusRunnerMs": [
+            498.13,
+            515.2,
+            502.16
+          ],
+          "coreInitMs": [
+            4.13,
+            4.44,
+            4.35
+          ],
+          "runnerMs": [
+            494.0,
+            510.77,
+            497.81
+          ]
+        },
+        "2/2": {
+          "fps": [
+            109.73,
+            106.39,
+            109.24
+          ],
+          "corePlusRunnerMs": [
+            381.4,
+            393.45,
+            383.3
+          ],
+          "coreInitMs": [
+            16.88,
+            17.48,
+            17.13
+          ],
+          "runnerMs": [
+            364.52,
+            375.97,
+            366.17
+          ]
+        },
+        "4/2": {
+          "fps": [
+            108.98,
+            106.99,
+            101.75
+          ],
+          "corePlusRunnerMs": [
+            386.21,
+            392.74,
+            412.24
+          ],
+          "coreInitMs": [
+            19.18,
+            18.89,
+            19.11
+          ],
+          "runnerMs": [
+            367.03,
+            373.85,
+            393.12
+          ]
+        },
+        "4/4": {
+          "fps": [
+            124.95,
+            122.4,
+            126.92
+          ],
+          "corePlusRunnerMs": [
+            338.78,
+            346.69,
+            334.63
+          ],
+          "coreInitMs": [
+            18.65,
+            19.91,
+            19.47
+          ],
+          "runnerMs": [
+            320.13,
+            326.79,
+            315.16
+          ]
+        }
+      }
+    },
+    {
+      "source": "hevc-4k",
+      "mode": "stream",
+      "pictures": 120,
+      "blocks": 1133022,
+      "payloadBytes": 13596264,
+      "outputSha256": "be1cab80113be491eb677b4b9d984f00e734c2030069180b3568742fd7f98ba2",
+      "runs": {
+        "1/1": {
+          "fps": [
+            183.01,
+            184.88,
+            184.12
+          ],
+          "corePlusRunnerMs": [
+            660.22,
+            653.17,
+            656.12
+          ],
+          "coreInitMs": [
+            4.5,
+            4.1,
+            4.36
+          ],
+          "runnerMs": [
+            655.72,
+            649.06,
+            651.76
+          ]
+        },
+        "2/1": {
+          "fps": [
+            252.74,
+            253.02,
+            253.16
+          ],
+          "corePlusRunnerMs": [
+            491.67,
+            491.41,
+            491.1
+          ],
+          "coreInitMs": [
+            16.87,
+            17.14,
+            17.1
+          ],
+          "runnerMs": [
+            474.8,
+            474.27,
+            474.0
+          ]
+        },
+        "4/1": {
+          "fps": [
+            239.31,
+            244.46,
+            241.36
+          ],
+          "corePlusRunnerMs": [
+            520.53,
+            509.18,
+            515.47
+          ],
+          "coreInitMs": [
+            19.08,
+            18.31,
+            18.3
+          ],
+          "runnerMs": [
+            501.44,
+            490.87,
+            497.18
+          ]
+        }
+      }
+    },
+    {
+      "source": "hevc-4k",
+      "mode": "exact",
+      "pictures": 1,
+      "blocks": 9252,
+      "payloadBytes": 111024,
+      "outputSha256": "e5612566132df7c565ea7172193cad7967249fdf3e3408fe8d62d7187c3e02f9",
+      "runs": {
+        "1/1": {
+          "fps": [
+            1.06,
+            1.05,
+            1.07
+          ],
+          "corePlusRunnerMs": [
+            949.78,
+            954.68,
+            939.24
+          ],
+          "coreInitMs": [
+            4.1,
+            4.22,
+            4.44
+          ],
+          "runnerMs": [
+            945.68,
+            950.46,
+            934.81
+          ]
+        },
+        "2/1": {
+          "fps": [
+            1.81,
+            1.8,
+            1.75
+          ],
+          "corePlusRunnerMs": [
+            568.22,
+            572.47,
+            590.42
+          ],
+          "coreInitMs": [
+            16.13,
+            17.02,
+            17.55
+          ],
+          "runnerMs": [
+            552.08,
+            555.45,
+            572.88
+          ]
+        },
+        "4/1": {
+          "fps": [
+            2.44,
+            2.5,
+            2.53
+          ],
+          "corePlusRunnerMs": [
+            427.63,
+            419.03,
+            414.5
+          ],
+          "coreInitMs": [
+            18.1,
+            18.93,
+            18.74
+          ],
+          "runnerMs": [
+            409.53,
+            400.09,
+            395.76
+          ]
+        }
+      }
+    },
+    {
+      "source": "avc-4k",
+      "mode": "stream",
+      "pictures": 120,
+      "blocks": 3888000,
+      "payloadBytes": 46656000,
+      "outputSha256": "05e396c9beebe33175f2b788c438cfc936d561a60aa72fe9b9b3f74bfe43d5ca",
+      "runs": {
+        "1/1": {
+          "fps": [
+            168.98,
+            166.0,
+            164.55
+          ],
+          "corePlusRunnerMs": [
+            714.29,
+            727.3,
+            734.13
+          ],
+          "coreInitMs": [
+            4.17,
+            4.43,
+            4.89
+          ],
+          "runnerMs": [
+            710.13,
+            722.87,
+            729.24
+          ]
+        },
+        "2/2": {
+          "fps": [
+            301.84,
+            301.53,
+            297.78
+          ],
+          "corePlusRunnerMs": [
+            414.93,
+            414.87,
+            419.89
+          ],
+          "coreInitMs": [
+            17.37,
+            16.9,
+            16.91
+          ],
+          "runnerMs": [
+            397.56,
+            397.97,
+            402.98
+          ]
+        },
+        "4/4": {
+          "fps": [
+            491.5,
+            424.95,
+            474.09
+          ],
+          "corePlusRunnerMs": [
+            262.09,
+            304.36,
+            271.74
+          ],
+          "coreInitMs": [
+            17.94,
+            21.98,
+            18.62
+          ],
+          "runnerMs": [
+            244.15,
+            282.38,
+            253.11
+          ]
+        }
+      }
+    },
+    {
+      "source": "avc-4k",
+      "mode": "exact",
+      "pictures": 1,
+      "blocks": 32400,
+      "payloadBytes": 388800,
+      "outputSha256": "1828e14d0c7441653920a6bf5439d7e601846c7f54e8d84586a0292ddb4f0f61",
+      "runs": {
+        "1/1": {
+          "fps": [
+            9.9,
+            10.58,
+            10.41
+          ],
+          "corePlusRunnerMs": [
+            105.32,
+            98.93,
+            100.66
+          ],
+          "coreInitMs": [
+            4.31,
+            4.43,
+            4.63
+          ],
+          "runnerMs": [
+            101.01,
+            94.5,
+            96.03
+          ]
+        },
+        "2/2": {
+          "fps": [
+            14.9,
+            14.56,
+            13.78
+          ],
+          "corePlusRunnerMs": [
+            84.24,
+            85.41,
+            89.04
+          ],
+          "coreInitMs": [
+            17.14,
+            16.73,
+            16.49
+          ],
+          "runnerMs": [
+            67.09,
+            68.68,
+            72.56
+          ]
+        },
+        "4/4": {
+          "fps": [
+            18.52,
+            18.26,
+            18.42
+          ],
+          "corePlusRunnerMs": [
+            74.44,
+            73.27,
+            72.66
+          ],
+          "coreInitMs": [
+            20.45,
+            18.5,
+            18.37
+          ],
+          "runnerMs": [
+            53.99,
+            54.77,
+            54.29
+          ]
+        }
+      }
+    },
+    {
+      "source": "hevc-slices",
+      "mode": "stream",
+      "pictures": 36,
+      "blocks": 11190,
+      "payloadBytes": 134280,
+      "outputSha256": "13227f33f72584cedd72f93d93093702d17044d5e315346afed06eae1d79f23a",
+      "runs": {
+        "1/1": {
+          "fps": [
+            1572.07,
+            1606.33,
+            1505.93
+          ],
+          "corePlusRunnerMs": [
+            27.35,
+            26.83,
+            28.34
+          ],
+          "coreInitMs": [
+            4.45,
+            4.42,
+            4.44
+          ],
+          "runnerMs": [
+            22.9,
+            22.41,
+            23.91
+          ]
+        },
+        "2/1": {
+          "fps": [
+            1491.1,
+            1533.82,
+            1493.68
+          ],
+          "corePlusRunnerMs": [
+            40.61,
+            40.58,
+            41.94
+          ],
+          "coreInitMs": [
+            16.47,
+            17.11,
+            17.84
+          ],
+          "runnerMs": [
+            24.14,
+            23.47,
+            24.1
+          ]
+        },
+        "4/1": {
+          "fps": [
+            1468.31,
+            1442.86,
+            1443.66
+          ],
+          "corePlusRunnerMs": [
+            42.75,
+            44.82,
+            46.5
+          ],
+          "coreInitMs": [
+            18.23,
+            19.87,
+            21.56
+          ],
+          "runnerMs": [
+            24.52,
+            24.95,
+            24.94
+          ]
+        }
+      }
+    },
+    {
+      "source": "ld-plain",
+      "mode": "stream",
+      "pictures": 64,
+      "blocks": 52104,
+      "payloadBytes": 625248,
+      "outputSha256": "2fd0920db51e1b93b940a38d675245825f92accce42cb662b654b5df4faa97ce",
+      "runs": {
+        "1/1": {
+          "fps": [
+            945.11,
+            983.04,
+            958.87
+          ],
+          "corePlusRunnerMs": [
+            72.16,
+            69.61,
+            71.28
+          ],
+          "coreInitMs": [
+            4.45,
+            4.51,
+            4.54
+          ],
+          "runnerMs": [
+            67.72,
+            65.1,
+            66.75
+          ]
+        },
+        "2/2": {
+          "fps": [
+            1143.8,
+            1207.64,
+            1123.5
+          ],
+          "corePlusRunnerMs": [
+            74.03,
+            70.65,
+            73.11
+          ],
+          "coreInitMs": [
+            18.07,
+            17.66,
+            16.14
+          ],
+          "runnerMs": [
+            55.95,
+            53.0,
+            56.96
+          ]
+        },
+        "4/4": {
+          "fps": [
+            1292.82,
+            1345.2,
+            1362.88
+          ],
+          "corePlusRunnerMs": [
+            67.51,
+            67.34,
+            66.23
+          ],
+          "coreInitMs": [
+            18.01,
+            19.77,
+            19.27
+          ],
+          "runnerMs": [
+            49.5,
+            47.58,
+            46.96
+          ]
+        }
+      }
+    },
+    {
+      "source": "ld-wpp",
+      "mode": "stream",
+      "pictures": 64,
+      "blocks": 53487,
+      "payloadBytes": 641844,
+      "outputSha256": "e4defb032c6600c89eb012c5901f821696d06acdc2c9d0fc02c912f4a2f977a6",
+      "runs": {
+        "1/1": {
+          "fps": [
+            900.91,
+            900.04,
+            894.62
+          ],
+          "corePlusRunnerMs": [
+            75.8,
+            75.64,
+            75.63
+          ],
+          "coreInitMs": [
+            4.76,
+            4.53,
+            4.09
+          ],
+          "runnerMs": [
+            71.04,
+            71.11,
+            71.54
+          ]
+        },
+        "2/2": {
+          "fps": [
+            1134.19,
+            1254.14,
+            1147.31
+          ],
+          "corePlusRunnerMs": [
+            75.09,
+            69.0,
+            73.65
+          ],
+          "coreInitMs": [
+            18.67,
+            17.97,
+            17.86
+          ],
+          "runnerMs": [
+            56.43,
+            51.03,
+            55.78
+          ]
+        },
+        "4/4": {
+          "fps": [
+            1206.02,
+            1255.01,
+            1255.34
+          ],
+          "corePlusRunnerMs": [
+            71.93,
+            69.93,
+            71.37
+          ],
+          "coreInitMs": [
+            18.86,
+            18.93,
+            20.38
+          ],
+          "runnerMs": [
+            53.07,
+            51.0,
+            50.98
+          ]
+        }
+      }
+    },
+    {
+      "source": "ld-tiles",
+      "mode": "stream",
+      "pictures": 64,
+      "blocks": 52041,
+      "payloadBytes": 624492,
+      "outputSha256": "e74b4644115b6080bdac9d1e46b55dec1e50f160b44011bf8cc5c1d7f8a8b3d7",
+      "runs": {
+        "1/1": {
+          "fps": [
+            972.51,
+            950.09,
+            863.63
+          ],
+          "corePlusRunnerMs": [
+            70.57,
+            72.02,
+            78.16
+          ],
+          "coreInitMs": [
+            4.76,
+            4.66,
+            4.06
+          ],
+          "runnerMs": [
+            65.81,
+            67.36,
+            74.11
+          ]
+        },
+        "2/2": {
+          "fps": [
+            1261.34,
+            1146.39,
+            1178.29
+          ],
+          "corePlusRunnerMs": [
+            68.5,
+            72.98,
+            72.7
+          ],
+          "coreInitMs": [
+            17.76,
+            17.15,
+            18.38
+          ],
+          "runnerMs": [
+            50.74,
+            55.83,
+            54.32
+          ]
+        },
+        "4/4": {
+          "fps": [
+            1304.08,
+            1369.98,
+            1312.63
+          ],
+          "corePlusRunnerMs": [
+            67.5,
+            65.21,
+            70.52
+          ],
+          "coreInitMs": [
+            18.42,
+            18.5,
+            21.76
+          ],
+          "runnerMs": [
+            49.08,
+            46.72,
+            48.76
+          ]
+        }
+      }
+    },
+    {
+      "source": "hevc-wpp",
+      "mode": "stream",
+      "pictures": 96,
+      "blocks": 111906,
+      "payloadBytes": 1342872,
+      "outputSha256": "c2aad3c0fd246d35035aac47e6a9a4448e8e7a29ed2582ba3c6f46cd7fc27895",
+      "runs": {
+        "1/1": {
+          "fps": [
+            1173.47,
+            1113.73,
+            1153.84
+          ],
+          "corePlusRunnerMs": [
+            85.97,
+            90.46,
+            87.22
+          ],
+          "coreInitMs": [
+            4.16,
+            4.26,
+            4.02
+          ],
+          "runnerMs": [
+            81.81,
+            86.2,
+            83.2
+          ]
+        },
+        "2/1": {
+          "fps": [
+            1146.41,
+            1157.63,
+            1181.29
+          ],
+          "corePlusRunnerMs": [
+            101.27,
+            99.96,
+            99.2
+          ],
+          "coreInitMs": [
+            17.53,
+            17.03,
+            17.93
+          ],
+          "runnerMs": [
+            83.74,
+            82.93,
+            81.27
+          ]
+        },
+        "4/1": {
+          "fps": [
+            1139.36,
+            1120.68,
+            1115.88
+          ],
+          "corePlusRunnerMs": [
+            103.43,
+            105.63,
+            105.38
+          ],
+          "coreInitMs": [
+            19.17,
+            19.97,
+            19.35
+          ],
+          "runnerMs": [
+            84.26,
+            85.66,
+            86.03
+          ]
+        }
+      }
+    },
+    {
+      "source": "hevc-serial",
+      "mode": "stream",
+      "pictures": 96,
+      "blocks": 100209,
+      "payloadBytes": 1202508,
+      "outputSha256": "f3c524caac44256a18177ff92c25cf880aafd6eb5f4c54695f4c822585d5b332",
+      "runs": {
+        "1/1": {
+          "fps": [
+            1208.31,
+            1098.06,
+            1220.18
+          ],
+          "corePlusRunnerMs": [
+            84.02,
+            91.91,
+            82.67
+          ],
+          "coreInitMs": [
+            4.57,
+            4.49,
+            4.0
+          ],
+          "runnerMs": [
+            79.45,
+            87.43,
+            78.68
+          ]
+        },
+        "2/1": {
+          "fps": [
+            1173.0,
+            1104.16,
+            1202.15
+          ],
+          "corePlusRunnerMs": [
+            99.16,
+            106.37,
+            95.88
+          ],
+          "coreInitMs": [
+            17.32,
+            19.42,
+            16.02
+          ],
+          "runnerMs": [
+            81.84,
+            86.94,
+            79.86
+          ]
+        },
+        "4/1": {
+          "fps": [
+            1150.78,
+            1116.53,
+            1149.57
+          ],
+          "corePlusRunnerMs": [
+            101.51,
+            105.48,
+            103.4
+          ],
+          "coreInitMs": [
+            18.09,
+            19.5,
+            19.89
+          ],
+          "runnerMs": [
+            83.42,
+            85.98,
+            83.51
+          ]
+        }
+      }
+    },
+    {
+      "source": "avc-1slice",
+      "mode": "stream",
+      "pictures": 96,
+      "blocks": 195840,
+      "payloadBytes": 2350080,
+      "outputSha256": "9e8679e868728427b14d34caeac81bff9cdc93d4c1c87ee6957be015b3de8251",
+      "runs": {
+        "1/1": {
+          "fps": [
+            1130.78,
+            1121.78,
+            1109.32
+          ],
+          "corePlusRunnerMs": [
+            89.26,
+            90.16,
+            90.97
+          ],
+          "coreInitMs": [
+            4.36,
+            4.58,
+            4.43
+          ],
+          "runnerMs": [
+            84.9,
+            85.58,
+            86.54
+          ]
+        },
+        "2/2": {
+          "fps": [
+            1659.6,
+            1720.73,
+            1711.99
+          ],
+          "corePlusRunnerMs": [
+            75.22,
+            73.05,
+            73.64
+          ],
+          "coreInitMs": [
+            17.37,
+            17.26,
+            17.56
+          ],
+          "runnerMs": [
+            57.85,
+            55.79,
+            56.08
+          ]
+        },
+        "4/4": {
+          "fps": [
+            2068.7,
+            2061.39,
+            2010.92
+          ],
+          "corePlusRunnerMs": [
+            65.77,
+            66.04,
+            67.69
+          ],
+          "coreInitMs": [
+            19.36,
+            19.47,
+            19.95
+          ],
+          "runnerMs": [
+            46.41,
+            46.57,
+            47.74
+          ]
+        }
+      }
+    },
+    {
+      "source": "avc-4slice",
+      "mode": "stream",
+      "pictures": 96,
+      "blocks": 195840,
+      "payloadBytes": 2350080,
+      "outputSha256": "e617b521f1da0ca74b62f2bd88a1677414b56a5573a72960803dae3d35ed2501",
+      "runs": {
+        "1/1": {
+          "fps": [
+            1098.96,
+            1070.5,
+            1137.65
+          ],
+          "corePlusRunnerMs": [
+            92.18,
+            94.11,
+            88.8
+          ],
+          "coreInitMs": [
+            4.82,
+            4.43,
+            4.42
+          ],
+          "runnerMs": [
+            87.36,
+            89.68,
+            84.38
+          ]
+        },
+        "2/2": {
+          "fps": [
+            1616.15,
+            1639.04,
+            1706.02
+          ],
+          "corePlusRunnerMs": [
+            76.93,
+            75.58,
+            74.3
+          ],
+          "coreInitMs": [
+            17.53,
+            17.01,
+            18.03
+          ],
+          "runnerMs": [
+            59.4,
+            58.57,
+            56.27
+          ]
+        },
+        "4/4": {
+          "fps": [
+            2095.16,
+            1996.26,
+            2077.49
+          ],
+          "corePlusRunnerMs": [
+            65.07,
+            66.55,
+            64.6
+          ],
+          "coreInitMs": [
+            19.25,
+            18.46,
+            18.39
+          ],
+          "runnerMs": [
+            45.82,
+            48.09,
+            46.21
+          ]
+        }
+      }
+    },
+    {
+      "source": "hd-wpp",
+      "mode": "stream",
+      "pictures": 96,
+      "blocks": 233274,
+      "payloadBytes": 2799288,
+      "outputSha256": "afbad8aa474d41faf8e13f5eae813c83077df749192da1f104a94028bf04a860",
+      "runs": {
+        "1/1": {
+          "fps": [
+            516.66,
+            518.6,
+            508.82
+          ],
+          "corePlusRunnerMs": [
+            190.03,
+            189.48,
+            193.19
+          ],
+          "coreInitMs": [
+            4.22,
+            4.36,
+            4.52
+          ],
+          "runnerMs": [
+            185.81,
+            185.11,
+            188.67
+          ]
+        },
+        "2/1": {
+          "fps": [
+            662.18,
+            672.56,
+            639.03
+          ],
+          "corePlusRunnerMs": [
+            162.35,
+            159.36,
+            168.67
+          ],
+          "coreInitMs": [
+            17.38,
+            16.62,
+            18.44
+          ],
+          "runnerMs": [
+            144.98,
+            142.74,
+            150.23
+          ]
+        },
+        "4/1": {
+          "fps": [
+            650.41,
+            642.45,
+            657.83
+          ],
+          "corePlusRunnerMs": [
+            165.31,
+            170.32,
+            165.54
+          ],
+          "coreInitMs": [
+            17.71,
+            20.89,
+            19.6
+          ],
+          "runnerMs": [
+            147.6,
+            149.43,
+            145.93
+          ]
+        }
+      }
+    },
+    {
+      "source": "hd-serial",
+      "mode": "stream",
+      "pictures": 96,
+      "blocks": 233598,
+      "payloadBytes": 2803176,
+      "outputSha256": "41c5f2e0089f1affd94009e37ca500476713a0d19efc032625590296312cdce2",
+      "runs": {
+        "1/1": {
+          "fps": [
+            509.08,
+            507.34,
+            510.74
+          ],
+          "corePlusRunnerMs": [
+            193.15,
+            193.68,
+            192.53
+          ],
+          "coreInitMs": [
+            4.57,
+            4.46,
+            4.57
+          ],
+          "runnerMs": [
+            188.57,
+            189.22,
+            187.96
+          ]
+        },
+        "2/1": {
+          "fps": [
+            516.91,
+            519.96,
+            483.94
+          ],
+          "corePlusRunnerMs": [
+            202.55,
+            201.95,
+            215.13
+          ],
+          "coreInitMs": [
+            16.83,
+            17.32,
+            16.76
+          ],
+          "runnerMs": [
+            185.72,
+            184.63,
+            198.37
+          ]
+        },
+        "4/1": {
+          "fps": [
+            519.28,
+            503.57,
+            514.28
+          ],
+          "corePlusRunnerMs": [
+            203.87,
+            209.64,
+            205.04
+          ],
+          "coreInitMs": [
+            19.0,
+            19.0,
+            18.37
+          ],
+          "runnerMs": [
+            184.87,
+            190.64,
+            186.67
+          ]
+        }
+      }
+    },
+    {
+      "source": "vvc-1080",
+      "mode": "stream",
+      "pictures": 600,
+      "blocks": 1343562,
+      "payloadBytes": 16122744,
+      "outputSha256": "d07fb329d855445425857aabaa904049ddb58f8bc7f882486d1c3f735cae60ca",
+      "runs": {
+        "1/1": {
+          "fps": [
+            374.56,
+            370.29,
+            366.39
+          ],
+          "corePlusRunnerMs": [
+            1606.09,
+            1625.04,
+            1642.03
+          ],
+          "coreInitMs": [
+            4.21,
+            4.69,
+            4.43
+          ],
+          "runnerMs": [
+            1601.88,
+            1620.34,
+            1637.59
+          ]
+        },
+        "2/2": {
+          "fps": [
+            566.12,
+            554.16,
+            521.65
+          ],
+          "corePlusRunnerMs": [
+            1077.25,
+            1100.21,
+            1167.27
+          ],
+          "coreInitMs": [
+            17.41,
+            17.49,
+            17.06
+          ],
+          "runnerMs": [
+            1059.84,
+            1082.73,
+            1150.2
+          ]
+        },
+        "4/2": {
+          "fps": [
+            558.32,
+            546.51,
+            557.89
+          ],
+          "corePlusRunnerMs": [
+            1093.92,
+            1120.02,
+            1093.71
+          ],
+          "coreInitMs": [
+            19.26,
+            22.14,
+            18.23
+          ],
+          "runnerMs": [
+            1074.65,
+            1097.88,
+            1075.48
+          ]
+        },
+        "4/4": {
+          "fps": [
+            751.84,
+            736.67,
+            733.22
+          ],
+          "corePlusRunnerMs": [
+            817.03,
+            833.65,
+            837.1
+          ],
+          "coreInitMs": [
+            18.98,
+            19.17,
+            18.8
+          ],
+          "runnerMs": [
+            798.05,
+            814.48,
+            818.31
+          ]
+        }
+      }
+    },
+    {
+      "source": "vvc-1080",
+      "mode": "exact",
+      "pictures": 1,
+      "blocks": 1735,
+      "payloadBytes": 20820,
+      "outputSha256": "3acbf5a28229c287d938920a26fe92435df412891c35489553e2b78569c90e8e",
+      "runs": {
+        "1/1": {
+          "fps": [
+            10.79,
+            10.48,
+            10.58
+          ],
+          "corePlusRunnerMs": [
+            97.33,
+            99.53,
+            98.95
+          ],
+          "coreInitMs": [
+            4.62,
+            4.13,
+            4.46
+          ],
+          "runnerMs": [
+            92.71,
+            95.39,
+            94.48
+          ]
+        },
+        "2/2": {
+          "fps": [
+            13.58,
+            12.98,
+            13.84
+          ],
+          "corePlusRunnerMs": [
+            91.25,
+            95.4,
+            89.98
+          ],
+          "coreInitMs": [
+            17.6,
+            18.36,
+            17.73
+          ],
+          "runnerMs": [
+            73.65,
+            77.04,
+            72.25
+          ]
+        },
+        "4/4": {
+          "fps": [
+            14.95,
+            14.86,
+            15.24
+          ],
+          "corePlusRunnerMs": [
+            87.53,
+            85.88,
+            85.27
+          ],
+          "coreInitMs": [
+            20.63,
+            18.6,
+            19.64
+          ],
+          "runnerMs": [
+            66.9,
+            67.28,
+            65.62
+          ]
+        }
+      }
+    }
+  ],
+  "nodePlayback": [
+    {
+      "source": "vvc-4k",
+      "pictures": 120,
+      "pixelsPtsAndSeeksSha256": "22e90543a1ea317ba58064fd5bf4a181a18e53117e4403c8f7dffb3d262d0cd0",
+      "runs": {
+        "1": {
+          "fps": [
+            24.91,
+            24.42,
+            24.34
+          ],
+          "firstFrameMs": [
+            442.54,
+            451.56,
+            450.64
+          ]
+        },
+        "2": {
+          "fps": [
+            40.33,
+            40.4,
+            39.5
+          ],
+          "firstFrameMs": [
+            286.33,
+            296.34,
+            304.21
+          ]
+        },
+        "4": {
+          "fps": [
+            71.79,
+            63.29,
+            62.03
+          ],
+          "firstFrameMs": [
+            205.44,
+            249.41,
+            234.09
+          ]
+        },
+        "6": {
+          "fps": [
+            75.68,
+            75.6,
+            74.75
+          ],
+          "firstFrameMs": [
+            228.34,
+            231.1,
+            233.51
+          ]
+        },
+        "8": {
+          "fps": [
+            85.95,
+            80.09,
+            80.83
+          ],
+          "firstFrameMs": [
+            251.87,
+            264.89,
+            267.22
+          ]
+        }
+      }
+    },
+    {
+      "source": "hevc-4k",
+      "pictures": 120,
+      "pixelsPtsAndSeeksSha256": "3b380416d85834036853fbc427cd1f92723de0f930f625c4cb18dbec22c0e651",
+      "runs": {
+        "1": {
+          "fps": [
+            81.8,
+            82.4,
+            81.8
+          ],
+          "firstFrameMs": [
+            90.99,
+            99.21,
+            95.29
+          ]
+        },
+        "2": {
+          "fps": [
+            164.96,
+            155.78,
+            151.42
+          ],
+          "firstFrameMs": [
+            78.52,
+            81.75,
+            86.38
+          ]
+        },
+        "4": {
+          "fps": [
+            281.65,
+            266.9,
+            261.41
+          ],
+          "firstFrameMs": [
+            74.07,
+            76.78,
+            76.19
+          ]
+        },
+        "6": {
+          "fps": [
+            344.95,
+            346.03,
+            339.04
+          ],
+          "firstFrameMs": [
+            85.68,
+            83.29,
+            90.16
+          ]
+        },
+        "8": {
+          "fps": [
+            414.37,
+            402.41,
+            391.65
+          ],
+          "firstFrameMs": [
+            86.1,
+            92.45,
+            96.09
+          ]
+        }
+      }
+    },
+    {
+      "source": "avc-4k",
+      "pictures": 120,
+      "pixelsPtsAndSeeksSha256": "8734b9b0fff372ad574d737ee0b7d4e5ef0dfcd07ca9d8502133c054fca373dc",
+      "runs": {
+        "1": {
+          "fps": [
+            102.77,
+            102.43,
+            100.64
+          ],
+          "firstFrameMs": [
+            77.04,
+            82.98,
+            85.76
+          ]
+        },
+        "2": {
+          "fps": [
+            193.43,
+            178.93,
+            178.83
+          ],
+          "firstFrameMs": [
+            68.96,
+            71.64,
+            74.04
+          ]
+        },
+        "4": {
+          "fps": [
+            341.59,
+            332.61,
+            320.4
+          ],
+          "firstFrameMs": [
+            65.76,
+            69.93,
+            72.31
+          ]
+        },
+        "6": {
+          "fps": [
+            437.55,
+            419.09,
+            419.37
+          ],
+          "firstFrameMs": [
+            75.7,
+            80.9,
+            77.53
+          ]
+        },
+        "8": {
+          "fps": [
+            476.36,
+            422.17,
+            486.96
+          ],
+          "firstFrameMs": [
+            83.47,
+            94.37,
+            84.84
+          ]
+        }
+      }
+    },
+    {
+      "source": "vvc-4k10",
+      "pictures": 40,
+      "pixelsPtsAndSeeksSha256": "75188240eece6debc8f08eb760ac4e690dc5a9de71b74208bd51ba35f2ccc074",
+      "runs": {
+        "1": {
+          "fps": [
+            24.76,
+            24.28,
+            23.71
+          ],
+          "firstFrameMs": [
+            446.82,
+            458.88,
+            463.65
+          ]
+        },
+        "2": {
+          "fps": [
+            39.77,
+            39.4,
+            38.52
+          ],
+          "firstFrameMs": [
+            293.82,
+            310.82,
+            311.67
+          ]
+        },
+        "4": {
+          "fps": [
+            68.09,
+            65.01,
+            65.71
+          ],
+          "firstFrameMs": [
+            231.24,
+            235.22,
+            233.39
+          ]
+        },
+        "6": {
+          "fps": [
+            80.45,
+            77.95,
+            77.47
+          ],
+          "firstFrameMs": [
+            237.24,
+            243.58,
+            245.4
+          ]
+        },
+        "8": {
+          "fps": [
+            92.03,
+            89.07,
+            90.82
+          ],
+          "firstFrameMs": [
+            264.58,
+            280.25,
+            276.19
+          ]
+        }
+      }
+    },
+    {
+      "source": "ld-plain",
+      "pictures": 64,
+      "pixelsPtsAndSeeksSha256": "b5c92f2f80d8e1a0785091260cff67977374aee3bbe047fb92f664b594a456af",
+      "runs": {
+        "1": {
+          "fps": [
+            305.98,
+            315.92,
+            317.33
+          ],
+          "firstFrameMs": [
+            50.9,
+            51.22,
+            50.47
+          ]
+        },
+        "2": {
+          "fps": [
+            553.7,
+            527.01,
+            523.53
+          ],
+          "firstFrameMs": [
+            50.35,
+            49.17,
+            47.08
+          ]
+        },
+        "4": {
+          "fps": [
+            835.03,
+            806.2,
+            777.56
+          ],
+          "firstFrameMs": [
+            51.03,
+            50.36,
+            59.8
+          ]
+        },
+        "6": {
+          "fps": [
+            897.04,
+            825.44,
+            829.48
+          ],
+          "firstFrameMs": [
+            55.4,
+            56.61,
+            53.75
+          ]
+        },
+        "8": {
+          "fps": [
+            868.22,
+            885.85,
+            919.49
+          ],
+          "firstFrameMs": [
+            61.29,
+            59.43,
+            61.89
+          ]
+        }
+      }
+    },
+    {
+      "source": "ld-wpp",
+      "pictures": 64,
+      "pixelsPtsAndSeeksSha256": "23c1ab8b048e22d3c4e0f44dfad157398b2fe73164712aec25c7850416fc03aa",
+      "runs": {
+        "1": {
+          "fps": [
+            304.51,
+            308.41,
+            302.51
+          ],
+          "firstFrameMs": [
+            54.16,
+            49.46,
+            50.79
+          ]
+        },
+        "2": {
+          "fps": [
+            527.65,
+            518.84,
+            513.09
+          ],
+          "firstFrameMs": [
+            49.95,
+            54.09,
+            50.51
+          ]
+        },
+        "4": {
+          "fps": [
+            783.65,
+            806.41,
+            756.05
+          ],
+          "firstFrameMs": [
+            53.0,
+            54.35,
+            54.73
+          ]
+        },
+        "6": {
+          "fps": [
+            865.5,
+            871.93,
+            878.42
+          ],
+          "firstFrameMs": [
+            57.84,
+            56.94,
+            65.48
+          ]
+        },
+        "8": {
+          "fps": [
+            924.41,
+            860.48,
+            819.84
+          ],
+          "firstFrameMs": [
+            63.67,
+            60.5,
+            61.3
+          ]
+        }
+      }
+    },
+    {
+      "source": "ld-tiles",
+      "pictures": 64,
+      "pixelsPtsAndSeeksSha256": "bc7e99df751a84892a2a9e75ddf511ca2a6e0bbc38efb53546ec5f55fbc7d5dd",
+      "runs": {
+        "1": {
+          "fps": [
+            300.36,
+            317.19,
+            309.52
+          ],
+          "firstFrameMs": [
+            50.57,
+            52.26,
+            50.67
+          ]
+        },
+        "2": {
+          "fps": [
+            501.98,
+            538.74,
+            514.88
+          ],
+          "firstFrameMs": [
+            50.51,
+            53.84,
+            49.71
+          ]
+        },
+        "4": {
+          "fps": [
+            795.5,
+            798.63,
+            762.18
+          ],
+          "firstFrameMs": [
+            51.01,
+            54.79,
+            53.58
+          ]
+        },
+        "6": {
+          "fps": [
+            838.43,
+            868.33,
+            849.43
+          ],
+          "firstFrameMs": [
+            60.71,
+            62.45,
+            60.37
+          ]
+        },
+        "8": {
+          "fps": [
+            909.01,
+            881.33,
+            920.73
+          ],
+          "firstFrameMs": [
+            62.67,
+            68.38,
+            67.12
+          ]
+        }
+      }
+    },
+    {
+      "source": "hevc-wpp",
+      "pictures": 96,
+      "pixelsPtsAndSeeksSha256": "904a3d2de44ee61985f08bba4f34f60af48ad43509db5206529f6d8713effe6c",
+      "runs": {
+        "1": {
+          "fps": [
+            840.92,
+            836.92,
+            798.25
+          ],
+          "firstFrameMs": [
+            47.65,
+            46.22,
+            47.11
+          ]
+        },
+        "2": {
+          "fps": [
+            1233.42,
+            1277.85,
+            1299.55
+          ],
+          "firstFrameMs": [
+            43.6,
+            46.61,
+            48.05
+          ]
+        },
+        "4": {
+          "fps": [
+            1757.62,
+            1750.13,
+            1584.59
+          ],
+          "firstFrameMs": [
+            50.01,
+            46.48,
+            46.75
+          ]
+        },
+        "6": {
+          "fps": [
+            2159.78,
+            2326.81,
+            2151.43
+          ],
+          "firstFrameMs": [
+            54.69,
+            55.27,
+            53.43
+          ]
+        },
+        "8": {
+          "fps": [
+            2382.09,
+            2294.49,
+            2345.41
+          ],
+          "firstFrameMs": [
+            55.82,
+            58.57,
+            59.63
+          ]
+        }
+      }
+    },
+    {
+      "source": "hevc-serial",
+      "pictures": 96,
+      "pixelsPtsAndSeeksSha256": "8799c4d19fa6a613d85ba9299f580729a6b075cd89985baecd712050dfe7fd32",
+      "runs": {
+        "1": {
+          "fps": [
+            840.8,
+            798.83,
+            855.0
+          ],
+          "firstFrameMs": [
+            46.3,
+            46.88,
+            49.36
+          ]
+        },
+        "2": {
+          "fps": [
+            1274.85,
+            1313.95,
+            1353.78
+          ],
+          "firstFrameMs": [
+            46.08,
+            44.43,
+            44.62
+          ]
+        },
+        "4": {
+          "fps": [
+            1769.9,
+            1687.91,
+            1832.46
+          ],
+          "firstFrameMs": [
+            50.59,
+            44.15,
+            51.84
+          ]
+        },
+        "6": {
+          "fps": [
+            2323.39,
+            2230.43,
+            2209.22
+          ],
+          "firstFrameMs": [
+            55.58,
+            53.31,
+            52.44
+          ]
+        },
+        "8": {
+          "fps": [
+            2212.36,
+            2312.01,
+            2201.75
+          ],
+          "firstFrameMs": [
+            58.92,
+            65.73,
+            59.46
+          ]
+        }
+      }
+    },
+    {
+      "source": "avc-1slice",
+      "pictures": 96,
+      "pixelsPtsAndSeeksSha256": "998ac469d5a15ba3d93f5a5fe2c57b4353ac57cdf9b45b0ce80aafcbc1821fc8",
+      "runs": {
+        "1": {
+          "fps": [
+            818.66,
+            797.94,
+            810.41
+          ],
+          "firstFrameMs": [
+            45.46,
+            43.56,
+            46.18
+          ]
+        },
+        "2": {
+          "fps": [
+            1409.75,
+            1378.71,
+            1472.31
+          ],
+          "firstFrameMs": [
+            44.09,
+            42.7,
+            46.1
+          ]
+        },
+        "4": {
+          "fps": [
+            1901.44,
+            2189.11,
+            2200.39
+          ],
+          "firstFrameMs": [
+            46.54,
+            45.58,
+            45.6
+          ]
+        },
+        "6": {
+          "fps": [
+            2554.03,
+            2373.63,
+            2541.36
+          ],
+          "firstFrameMs": [
+            51.62,
+            50.78,
+            52.01
+          ]
+        },
+        "8": {
+          "fps": [
+            2642.02,
+            2694.48,
+            2752.86
+          ],
+          "firstFrameMs": [
+            57.29,
+            56.02,
+            54.21
+          ]
+        }
+      }
+    },
+    {
+      "source": "avc-4slice",
+      "pictures": 96,
+      "pixelsPtsAndSeeksSha256": "20b5ec768d894e9b3e59c3c6ca2fa12f713c35f3142fa8377398e9aff40bd3d4",
+      "runs": {
+        "1": {
+          "fps": [
+            864.78,
+            799.72,
+            831.51
+          ],
+          "firstFrameMs": [
+            48.81,
+            46.12,
+            46.84
+          ]
+        },
+        "2": {
+          "fps": [
+            1472.82,
+            1443.95,
+            1410.44
+          ],
+          "firstFrameMs": [
+            45.22,
+            45.53,
+            43.14
+          ]
+        },
+        "4": {
+          "fps": [
+            2146.28,
+            2125.7,
+            2213.28
+          ],
+          "firstFrameMs": [
+            45.21,
+            47.33,
+            48.48
+          ]
+        },
+        "6": {
+          "fps": [
+            2356.3,
+            2482.68,
+            2456.9
+          ],
+          "firstFrameMs": [
+            49.93,
+            50.91,
+            51.25
+          ]
+        },
+        "8": {
+          "fps": [
+            2639.06,
+            2666.99,
+            2351.05
+          ],
+          "firstFrameMs": [
+            55.67,
+            57.62,
+            54.18
+          ]
+        }
+      }
+    }
+  ],
+  "webKitLocalAnalysis": [
+    {
+      "source": "vvc-4k",
+      "scenario": "stream",
+      "pictures": 120,
+      "outputSha256": "f4e983b3199c649bed6594d33268b699b2d61a3acaab56f57f84c274a891e8e4",
+      "runsMs": {
+        "2": [
+          841.78,
+          833.16,
+          822.1
+        ],
+        "4": [
+          671.36,
+          679.14,
+          685.64
+        ]
+      }
+    },
+    {
+      "source": "hevc-4k",
+      "scenario": "stream",
+      "pictures": 120,
+      "outputSha256": "be1cab80113be491eb677b4b9d984f00e734c2030069180b3568742fd7f98ba2",
+      "runsMs": {
+        "2": [
+          577.16,
+          569.52,
+          582.96
+        ],
+        "4": [
+          828.6,
+          831.32,
+          826.96
+        ]
+      }
+    },
+    {
+      "source": "hevc-4k",
+      "scenario": "12",
+      "pictures": 1,
+      "outputSha256": "02e5d6f16d5153e73148cb3f7dea04b64aa85d06ba6e588bd7e70c674ee90747",
+      "runsMs": {
+        "2": [
+          113.68,
+          110.24,
+          112.8
+        ],
+        "4": [
+          141.38,
+          144.62,
+          140.46
+        ]
+      }
+    },
+    {
+      "source": "hevc-4k",
+      "scenario": "63",
+      "pictures": 1,
+      "outputSha256": "e5612566132df7c565ea7172193cad7967249fdf3e3408fe8d62d7187c3e02f9",
+      "runsMs": {
+        "2": [
+          535.06,
+          531.16,
+          534.58
+        ],
+        "4": [
+          492.7,
+          491.26,
+          498.58
+        ]
+      }
+    },
+    {
+      "source": "hevc-4k",
+      "scenario": "102",
+      "pictures": 1,
+      "outputSha256": "39faed1a081e1c9d5fb47c141d21a737a6900d11feb2856b8d411c479b96662d",
+      "runsMs": {
+        "2": [
+          827.02,
+          834.88,
+          826.42
+        ],
+        "4": [
+          730.84,
+          737.04,
+          740.62
+        ]
+      }
+    },
+    {
+      "source": "avc-4k",
+      "scenario": "stream",
+      "pictures": 120,
+      "outputSha256": "05e396c9beebe33175f2b788c438cfc936d561a60aa72fe9b9b3f74bfe43d5ca",
+      "runsMs": {
+        "2": [
+          485.24,
+          499.3,
+          506.14
+        ],
+        "4": [
+          519.52,
+          533.86,
+          538.72
+        ]
+      }
+    },
+    {
+      "source": "hevc-serial",
+      "scenario": "stream",
+      "pictures": 96,
+      "outputSha256": "f3c524caac44256a18177ff92c25cf880aafd6eb5f4c54695f4c822585d5b332",
+      "runsMs": {
+        "1": [
+          116.16,
+          111.1,
+          111
+        ],
+        "2": [
+          116.22,
+          115.5,
+          114.92
+        ]
+      }
+    },
+    {
+      "source": "vvc-1080",
+      "scenario": "stream",
+      "pictures": 600,
+      "outputSha256": "d07fb329d855445425857aabaa904049ddb58f8bc7f882486d1c3f735cae60ca",
+      "runsMs": {
+        "2": [
+          1012.12,
+          978.28,
+          979.52
+        ],
+        "4": [
+          781.04,
+          773.06,
+          792.12
+        ]
+      }
+    },
+    {
+      "source": "vvc-4k10",
+      "scenario": "stream",
+      "pictures": 40,
+      "outputSha256": "6bfc3f885d332c48b3836695ae95de76d647a06b9c5cd74e15b8161b4dd12715",
+      "runsMs": {
+        "2": [
+          383.56,
+          385.66,
+          382.56
+        ],
+        "4": [
+          330.84,
+          336.9,
+          339.52
+        ]
+      }
+    },
+    {
+      "source": "ld-plain",
+      "scenario": "stream",
+      "pictures": 64,
+      "outputSha256": "2fd0920db51e1b93b940a38d675245825f92accce42cb662b654b5df4faa97ce",
+      "runsMs": {
+        "2": [
+          103.5,
+          88.34,
+          95.32
+        ],
+        "4": [
+          88.14,
+          88.9,
+          88.74
+        ]
+      }
+    },
+    {
+      "source": "ld-wpp",
+      "scenario": "stream",
+      "pictures": 64,
+      "outputSha256": "e4defb032c6600c89eb012c5901f821696d06acdc2c9d0fc02c912f4a2f977a6",
+      "runsMs": {
+        "2": [
+          95.04,
+          90.2,
+          90.18
+        ],
+        "4": [
+          94.26,
+          89.72,
+          95.8
+        ]
+      }
+    },
+    {
+      "source": "ld-tiles",
+      "scenario": "stream",
+      "pictures": 64,
+      "outputSha256": "e74b4644115b6080bdac9d1e46b55dec1e50f160b44011bf8cc5c1d7f8a8b3d7",
+      "runsMs": {
+        "2": [
+          93.8,
+          91.84,
+          98.76
+        ],
+        "4": [
+          88.4,
+          96.78,
+          89.14
+        ]
+      }
+    },
+    {
+      "source": "hevc-wpp",
+      "scenario": "stream",
+      "pictures": 96,
+      "outputSha256": "c2aad3c0fd246d35035aac47e6a9a4448e8e7a29ed2582ba3c6f46cd7fc27895",
+      "runsMs": {
+        "1": [
+          119.8,
+          114.24,
+          113.1
+        ],
+        "2": [
+          123,
+          127.24,
+          122.04
+        ]
+      }
+    },
+    {
+      "source": "avc-1slice",
+      "scenario": "stream",
+      "pictures": 96,
+      "outputSha256": "9e8679e868728427b14d34caeac81bff9cdc93d4c1c87ee6957be015b3de8251",
+      "runsMs": {
+        "2": [
+          94.9,
+          96.64,
+          95.6
+        ],
+        "4": [
+          86.22,
+          89.08,
+          87.78
+        ]
+      }
+    },
+    {
+      "source": "avc-4slice",
+      "scenario": "stream",
+      "pictures": 96,
+      "outputSha256": "e617b521f1da0ca74b62f2bd88a1677414b56a5573a72960803dae3d35ed2501",
+      "runsMs": {
+        "2": [
+          97.12,
+          94.46,
+          95.76
+        ],
+        "4": [
+          86.22,
+          90.18,
+          88.32
+        ]
+      }
+    },
+    {
+      "source": "avc-4k",
+      "scenario": "stream",
+      "pictures": 120,
+      "outputSha256": "05e396c9beebe33175f2b788c438cfc936d561a60aa72fe9b9b3f74bfe43d5ca",
+      "runsMs": {
+        "2": [
+          490.66,
+          489.2,
+          497
+        ],
+        "4": [
+          528.68,
+          527.88,
+          531.1
+        ]
+      }
+    }
+  ],
+  "webKitPlayback": [
+    {
+      "experiment": "browser",
+      "source": "vvc",
+      "activeThreads": 6,
+      "activeContexts": 6,
+      "fps": [
+        24.57,
+        24.52,
+        24.86
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        69,
+        69,
+        70
+      ],
+      "p95GapMs": [
+        50.96,
+        51.1,
+        51.26
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "vvc",
+      "activeThreads": 8,
+      "activeContexts": 8,
+      "fps": [
+        24.63,
+        24.6,
+        24.72
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        69,
+        69,
+        69
+      ],
+      "p95GapMs": [
+        51.48,
+        51.12,
+        51.46
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "hevc",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        24.78,
+        24.82,
+        24.87
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        70,
+        70,
+        70
+      ],
+      "p95GapMs": [
+        50.78,
+        51,
+        51.2
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "hevc",
+      "activeThreads": 8,
+      "activeContexts": 8,
+      "fps": [
+        24.92,
+        24.85,
+        24.9
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        70,
+        70,
+        70
+      ],
+      "p95GapMs": [
+        51.48,
+        51.2,
+        50.92
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "h264",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        24.85,
+        24.9,
+        24.91
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        70,
+        70,
+        70
+      ],
+      "p95GapMs": [
+        50.48,
+        51.28,
+        51.22
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "h264",
+      "activeThreads": 8,
+      "activeContexts": 8,
+      "fps": [
+        24.87,
+        24.69,
+        24.86
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        70,
+        69,
+        70
+      ],
+      "p95GapMs": [
+        50.98,
+        51.12,
+        51.5
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "vvc-60",
+      "activeThreads": 6,
+      "activeContexts": 6,
+      "fps": [
+        45.56,
+        47.27,
+        58.53
+      ],
+      "dropped": [
+        20,
+        18,
+        0
+      ],
+      "drawn": [
+        68,
+        71,
+        88
+      ],
+      "p95GapMs": [
+        33.56,
+        33.14,
+        18.16
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "vvc-60",
+      "activeThreads": 8,
+      "activeContexts": 8,
+      "fps": [
+        45.38,
+        51.12,
+        46.67
+      ],
+      "dropped": [
+        20,
+        11,
+        18
+      ],
+      "drawn": [
+        68,
+        77,
+        70
+      ],
+      "p95GapMs": [
+        33.7,
+        32.88,
+        33.04
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "hevc-60",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        59.54,
+        53.93,
+        59.58
+      ],
+      "dropped": [
+        0,
+        8,
+        0
+      ],
+      "drawn": [
+        89,
+        81,
+        89
+      ],
+      "p95GapMs": [
+        18.1,
+        32.4,
+        18.56
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "hevc-60",
+      "activeThreads": 8,
+      "activeContexts": 8,
+      "fps": [
+        59.36,
+        59.35,
+        58.66
+      ],
+      "dropped": [
+        0,
+        0,
+        1
+      ],
+      "drawn": [
+        89,
+        89,
+        88
+      ],
+      "p95GapMs": [
+        18.3,
+        18.42,
+        18.64
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "h264-60",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        59.69,
+        49.93,
+        58.24
+      ],
+      "dropped": [
+        0,
+        14,
+        2
+      ],
+      "drawn": [
+        90,
+        75,
+        87
+      ],
+      "p95GapMs": [
+        18.8,
+        33.4,
+        18.52
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser",
+      "source": "h264-60",
+      "activeThreads": 8,
+      "activeContexts": 8,
+      "fps": [
+        59.77,
+        59.82,
+        59.81
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        89,
+        89,
+        92
+      ],
+      "p95GapMs": [
+        18,
+        18.34,
+        18.38
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "ld-plain",
+      "activeThreads": 6,
+      "activeContexts": 6,
+      "fps": [
+        29.33,
+        29.92,
+        29.3
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        44,
+        45,
+        44
+      ],
+      "p95GapMs": [
+        35.96,
+        36.26,
+        49.3
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "ld-plain",
+      "activeThreads": 2,
+      "activeContexts": 2,
+      "fps": [
+        29.8,
+        29.73,
+        29.36
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        45,
+        45,
+        44
+      ],
+      "p95GapMs": [
+        36.2,
+        37,
+        36.54
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "hevc-serial",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        29.84,
+        29.47,
+        29.94
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        45,
+        44,
+        45
+      ],
+      "p95GapMs": [
+        35.66,
+        35.64,
+        35.56
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "hevc-serial",
+      "activeThreads": 2,
+      "activeContexts": 2,
+      "fps": [
+        29.87,
+        29.33,
+        29.94
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        45,
+        44,
+        45
+      ],
+      "p95GapMs": [
+        35.7,
+        36.64,
+        35.1
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "avc-1slice",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        29.57,
+        29.78,
+        29.52
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        44,
+        45,
+        44
+      ],
+      "p95GapMs": [
+        35.52,
+        36.9,
+        36.4
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "avc-1slice",
+      "activeThreads": 2,
+      "activeContexts": 2,
+      "fps": [
+        29.77,
+        29.65,
+        29.66
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        45,
+        45,
+        45
+      ],
+      "p95GapMs": [
+        36.44,
+        35.2,
+        50.04
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "hevc-60",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        58.63,
+        59.57,
+        59.85
+      ],
+      "dropped": [
+        1,
+        0,
+        0
+      ],
+      "drawn": [
+        88,
+        89,
+        92
+      ],
+      "p95GapMs": [
+        18.4,
+        18.4,
+        18.12
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "hevc-60",
+      "activeThreads": 6,
+      "activeContexts": 6,
+      "fps": [
+        59.5,
+        59.39,
+        59.6
+      ],
+      "dropped": [
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        89,
+        89,
+        90
+      ],
+      "p95GapMs": [
+        18.54,
+        18.52,
+        18.7
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "h264-60",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        48.54,
+        59.6,
+        50.57
+      ],
+      "dropped": [
+        17,
+        0,
+        14
+      ],
+      "drawn": [
+        73,
+        90,
+        76
+      ],
+      "p95GapMs": [
+        32.8,
+        18.38,
+        33.76
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-rule",
+      "source": "h264-60",
+      "activeThreads": 6,
+      "activeContexts": 6,
+      "fps": [
+        59.61,
+        57.28,
+        59.82
+      ],
+      "dropped": [
+        0,
+        3,
+        0
+      ],
+      "drawn": [
+        90,
+        86,
+        89
+      ],
+      "p95GapMs": [
+        18.48,
+        19.14,
+        18.58
+      ],
+      "passed": [
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-long",
+      "source": "vvc-long",
+      "activeThreads": 6,
+      "activeContexts": 6,
+      "fps": [
+        50.39,
+        52.86,
+        59.8,
+        46.57,
+        45.12
+      ],
+      "dropped": [
+        39,
+        28,
+        0,
+        55,
+        60
+      ],
+      "drawn": [
+        213,
+        224,
+        254,
+        195,
+        190
+      ],
+      "p95GapMs": [
+        33.02,
+        32.86,
+        18.36,
+        33.28,
+        33.38
+      ],
+      "passed": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-long",
+      "source": "vvc-long",
+      "activeThreads": 8,
+      "activeContexts": 8,
+      "fps": [
+        50.61,
+        47.29,
+        56.42,
+        56.87,
+        46.49
+      ],
+      "dropped": [
+        38,
+        51,
+        13,
+        12,
+        56
+      ],
+      "drawn": [
+        215,
+        198,
+        239,
+        241,
+        197
+      ],
+      "p95GapMs": [
+        33.52,
+        33.38,
+        32.06,
+        30.48,
+        33.4
+      ],
+      "passed": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-long",
+      "source": "hevc-long",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        59.81,
+        59.8,
+        59.77,
+        58.81,
+        59.78
+      ],
+      "dropped": [
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "drawn": [
+        253,
+        253,
+        252,
+        248,
+        252
+      ],
+      "p95GapMs": [
+        18.36,
+        18.42,
+        18.32,
+        18.64,
+        18.48
+      ],
+      "passed": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-long",
+      "source": "hevc-long",
+      "activeThreads": 6,
+      "activeContexts": 6,
+      "fps": [
+        59.89,
+        59.8,
+        59.86,
+        59.85,
+        59.88
+      ],
+      "dropped": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        252,
+        253,
+        253,
+        253,
+        253
+      ],
+      "p95GapMs": [
+        18.5,
+        18.34,
+        18.52,
+        18.32,
+        18.24
+      ],
+      "passed": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-long",
+      "source": "h264-long",
+      "activeThreads": 4,
+      "activeContexts": 4,
+      "fps": [
+        59.85,
+        59.9,
+        59.77,
+        59.86,
+        59.92
+      ],
+      "dropped": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "drawn": [
+        253,
+        253,
+        252,
+        254,
+        253
+      ],
+      "p95GapMs": [
+        18.36,
+        18.52,
+        18.34,
+        18.54,
+        18.2
+      ],
+      "passed": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "experiment": "browser-long",
+      "source": "h264-long",
+      "activeThreads": 6,
+      "activeContexts": 6,
+      "fps": [
+        59.93,
+        59.86,
+        56.18,
+        59.82,
+        57.38
+      ],
+      "dropped": [
+        0,
+        0,
+        16,
+        0,
+        10
+      ],
+      "drawn": [
+        254,
+        253,
+        238,
+        252,
+        243
+      ],
+      "p95GapMs": [
+        18.36,
+        18.54,
+        31.14,
+        18.56,
+        18.76
+      ],
+      "passed": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "failures": [
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    }
+  ],
+  "browserUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+  "browserPlaybackSamples": {
+    "avc-1slice.mp4": {
+      "sha256": "0cb79a10395655106c50def770985563cbbc11dfff62a891a6e99f34afc788fc",
+      "width": 960,
+      "height": 540,
+      "r_frame_rate": "30/1",
+      "duration": "3.200000",
+      "nb_frames": "96"
+    },
+    "avc-4slice.mp4": {
+      "sha256": "516a255a94606eab8c2c25a44cbbe6f5f215be1ce974d30774cd57e55c074b31",
+      "width": 960,
+      "height": 540,
+      "r_frame_rate": "30/1",
+      "duration": "3.200000",
+      "nb_frames": "96"
+    },
+    "h264-60.mp4": {
+      "sha256": "8d3911ef985e890bd35c7a692f3230f5803f76a43dc2a52601286b7a611995dd",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "60/1",
+      "duration": "2.023283",
+      "nb_frames": "120"
+    },
+    "h264-long.mp4": {
+      "sha256": "d960bdd296f8d72776a03fcea81a641aaa87e46f057b40674d6525c11f69dd9d",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "60/1",
+      "duration": "5.023283",
+      "nb_frames": "300"
+    },
+    "h264.mp4": {
+      "sha256": "d47defdb7efce08dc76c5ecc56987465e40aa0640f44a73a634390a32573a9e1",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "25/1",
+      "duration": "4.800000",
+      "nb_frames": "120"
+    },
+    "hevc-60.mp4": {
+      "sha256": "e581af28170da7571d7cfbf86e70816d2253084d90372513944179e3d8f3bde8",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "60/1",
+      "duration": "2.023283",
+      "nb_frames": "120"
+    },
+    "hevc-long.mp4": {
+      "sha256": "27522ebd8151733e9b2b6067ddc4bc55e529f81f090aa3f958048701d60b9dcd",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "60/1",
+      "duration": "5.023283",
+      "nb_frames": "300"
+    },
+    "hevc-serial.mp4": {
+      "sha256": "1699b64ad90a4213ab1831244db62f7bb5e8ef8aecfba550fcee894802a20d08",
+      "width": 960,
+      "height": 540,
+      "r_frame_rate": "30/1",
+      "duration": "3.200000",
+      "nb_frames": "96"
+    },
+    "hevc-wpp.mp4": {
+      "sha256": "83d9fce99187351bb3eac7111ea024c52410323342963becaf2c4ff1b0c0a8e7",
+      "width": 960,
+      "height": 540,
+      "r_frame_rate": "30/1",
+      "duration": "3.200000",
+      "nb_frames": "96"
+    },
+    "hevc.mp4": {
+      "sha256": "ae2aa55ec57c3fb681d2e0f8c582112bcc65ff66e413490b1ce30a0fb933a872",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "25/1",
+      "duration": "4.800000",
+      "nb_frames": "120"
+    },
+    "ld-plain.mp4": {
+      "sha256": "6e8398e3ea912c339500d3ac81936422f38c09d614a7c98b15f3da84e78b3643",
+      "width": 960,
+      "height": 576,
+      "r_frame_rate": "30/1",
+      "duration": "2.133333",
+      "nb_frames": "64"
+    },
+    "ld-tiles.mp4": {
+      "sha256": "94fbc4c022bbe9ebdf94571de78d31bb04dda34b1aa6e8c38f092ced43685185",
+      "width": 960,
+      "height": 576,
+      "r_frame_rate": "30/1",
+      "duration": "2.133333",
+      "nb_frames": "64"
+    },
+    "ld-wpp.mp4": {
+      "sha256": "6fd3fd8d868920f35235c208e7d881c4c493a4ae0d6c638f64bd998e99276795",
+      "width": 960,
+      "height": 576,
+      "r_frame_rate": "30/1",
+      "duration": "2.133333",
+      "nb_frames": "64"
+    },
+    "vvc-1080.mp4": {
+      "sha256": "088a1b66b61bd23ceebe863720e80c6bac62ad379ae633c510326678de7954fd",
+      "width": 1920,
+      "height": 1080,
+      "r_frame_rate": "60/1",
+      "duration": "10.000000",
+      "nb_frames": "600"
+    },
+    "vvc-4k10.mp4": {
+      "sha256": "80e84d07e2712465955a6885a477439c6c805c479a0d2bd17704fa4267f3fc83",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "25/1",
+      "duration": "1.600000",
+      "nb_frames": "40"
+    },
+    "vvc-60.mp4": {
+      "sha256": "4e617b9dece2150a62939b7286481fb0df60e3cbc10bddd7dd41fddba8466abf",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "60/1",
+      "duration": "2.023333",
+      "nb_frames": "120"
+    },
+    "vvc-long.mp4": {
+      "sha256": "61194f1c458f9beb4853503cde4988df8e2e7b223a2348fa57b12260065edde5",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "60/1",
+      "duration": "12.823000",
+      "nb_frames": "768"
+    },
+    "vvc.mp4": {
+      "sha256": "540bd8ec9d81bffd7354b7e1d85b03b35c4617dc5570de8e0c99fcb7d2e615c1",
+      "width": 3840,
+      "height": 2160,
+      "r_frame_rate": "25/1",
+      "duration": "4.800000",
+      "nb_frames": "120"
+    }
+  }
+}

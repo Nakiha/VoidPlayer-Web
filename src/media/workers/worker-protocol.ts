@@ -64,7 +64,7 @@ export interface FfmpegCommands {
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }
-export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'trackMetadata' | 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'>;
+export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & { pendingLightLayout?: boolean } & Pick<MediaInfo, 'trackMetadata' | 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'>;
 type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: DecodeThreads };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
@@ -77,7 +77,7 @@ export interface PacketCommands {
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
   'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: PacketInput }, PreparedFlv>;
-  native: Command<Empty, PacketInitResult | null>;
+  native: Command<{ threads?: DecodeThreads }, PacketInitResult | null>;
   init: Command<SoftwareOptions & { input: PacketInput; forceWasm?: boolean } & ({container: 'ts'|'matroska'; sourceVersion: string; preparedTsSession?: string;persistent?:boolean} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
   'analysis-ts-index': Command<Empty, import('../../../shared/media/indexing/ts-packet-index.ts').TsPacketIndex>;
   'analysis-flv-index': Command<Empty, import('../../../shared/media/indexing/flv-index-cache.ts').FlvIndexDocument>;

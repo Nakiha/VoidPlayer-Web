@@ -18,6 +18,7 @@ import {
   analyzeRange,
   analyzeStream,
 } from "../../../shared/analysis/bitstream/runner.ts";
+import { readCodingFeatures, configuredPicturePixels } from '../../../shared/media/codecs/coding-features.ts';
 import { decoderForCodec } from '../../../shared/analysis/bitstream/threading.ts';
 import type { AnalysisResult } from '../../../shared/analysis/bitstream/contract.ts';
 const buildId: string = workerData.buildId;
@@ -63,12 +64,14 @@ try {
   };
   try {
     const counters=emptyCounters();const delivered=new Set<number>();
-    const loadCore = async (codec: AnalysisResult['codec']) => {
+    const loadCore = async (codec: AnalysisResult['codec'], wholeStreamConfig?: Uint8Array) => {
       if (core) return core;
       const initStarted = performance.now();
       const stem = workerData.threaded ? 'voidplayer-analysis-mt' : 'voidplayer-analysis';
       const module = await import(pathToFileURL(path.join(workerData.coreDir, stem + '.js')).href);
-      const { threads, contexts } = decoderForCodec(codec, workerData.threadBudget, workerData.decoder);
+      const pixels = codec === 'vvc' && wholeStreamConfig && !workerData.decoder && workerData.threadBudget >= 4
+        ? configuredPicturePixels(readCodingFeatures(codec, wholeStreamConfig)) : 0;
+      const { threads, contexts } = decoderForCodec(codec, workerData.threadBudget, workerData.decoder, pixels);
       if (threads < workerData.threadBudget) parentPort!.postMessage({ type: 'decoder-threads', threads });
       const wasmBinary = await readFile(path.join(workerData.coreDir, stem + '.wasm'));
       core = workerData.threaded

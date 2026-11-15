@@ -7,6 +7,12 @@ select another demuxer. AVI, MPEG-PS and elementary MPEG video retain the
 FFmpeg container backend. Removed MOV/Matroska/TS demuxers are not fallback
 routes for rejected JS inputs.
 
+For automatic WASM playback of AVC, HEVC and VVC, a single-configuration picture of at most 960×576 pixels
+with one observed first-packet slice, one tile, wavefront disabled and indexed timing up to about 30 fps
+uses at most two decoder threads. Both CPU budget recovery and VVC live tuning respect this cap.
+Progressive FLV/TS opens can establish cadence when their index finishes. Manual VVC settings keep their
+independent thread and frame-context counts.
+
 ## Admitted combinations
 
 | Container | Video | Playback and analysis boundary |

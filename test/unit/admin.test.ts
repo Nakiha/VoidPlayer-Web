@@ -241,10 +241,15 @@ test('unexpected admin failures persist stack and request correlation while omit
 test('analysis workers reserve usable threads for the codec within the admitted budget', async () => {
   const { decoderForCodec } = await import('../../shared/analysis/bitstream/threading.ts');
   assert.deepEqual(decoderForCodec('vvc', 4), { threads: 2, contexts: 2 });
+  const hd = 1920 * 1080;
+  assert.deepEqual(decoderForCodec('vvc1', 4, undefined, hd), { threads: 4, contexts: 4 });
+  assert.deepEqual(decoderForCodec('vvc', 4, undefined, hd - 1), { threads: 2, contexts: 2 });
+  assert.deepEqual(decoderForCodec('vvc', 3, undefined, hd * 4), { threads: 2, contexts: 2 });
+  assert.deepEqual(decoderForCodec('hevc', 4, undefined, hd * 4), { threads: 2, contexts: 1 });
   assert.deepEqual(decoderForCodec('vvc', 1), { threads: 1, contexts: 1 });
   assert.deepEqual(decoderForCodec('h264', 4), { threads: 4, contexts: 4 });
   const manual = { threads: 4, contexts: 2 };
-  assert.deepEqual(decoderForCodec('vvc', 4, manual), manual);
+  assert.deepEqual(decoderForCodec('vvc', 4, manual, hd * 4), manual);
   assert.deepEqual(decoderForCodec('h264', 4, manual), { threads: 2, contexts: 2 });
   assert.deepEqual(decoderForCodec('hevc', 4, manual), { threads: 4, contexts: 1 });
   assert.deepEqual(decoderForCodec('hevc', 4), { threads: 2, contexts: 1 });

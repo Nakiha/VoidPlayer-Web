@@ -43,10 +43,10 @@ function hevcSpsHeader(nal: Uint8Array) {
   return { b, id, profileSpace, highTier, profileIdc, levelIdc, chroma, lumaBitDepth, pocBits, maxReorderFrames, codedWidth, codedHeight, left, top, width, height };
 }
 export function hevcSpsFeatures(nal: Uint8Array) {
-  const { b, id, profileSpace, highTier, profileIdc, levelIdc, chroma, lumaBitDepth, maxReorderFrames } = hevcSpsHeader(nal);
+  const { b, id, profileSpace, highTier, profileIdc, levelIdc, chroma, lumaBitDepth, maxReorderFrames, codedWidth, codedHeight } = hevcSpsHeader(nal);
   const ctuLog2 = 3 + b.ue(3) + b.ue(3);
   if (ctuLog2 > 6) throw Error('Invalid HEVC CTU size');
-  return { id, profileSpace, highTier, profileIdc, levelIdc, chromaFormatIdc: chroma, lumaBitDepth, maxReorderFrames, ctuSize: 2 ** ctuLog2 };
+  return { id, codedWidth, codedHeight, profileSpace, highTier, profileIdc, levelIdc, chromaFormatIdc: chroma, lumaBitDepth, maxReorderFrames, ctuSize: 2 ** ctuLog2 };
 }
 function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void,aspectWitness=false): HevcGeometry {
   const { b, pocBits, codedWidth, codedHeight, left, top, width, height } = hevcSpsHeader(nal);

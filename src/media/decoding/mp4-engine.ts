@@ -1,4 +1,4 @@
-import { readCodingFeatures } from '../../../shared/media/codecs/coding-features.ts';
+import { preparePacketThreads } from '../policy/packet-threads.ts';
 import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { inspectMp4Playback } from '../../../shared/media/containers/mp4-playback.ts';
 import { loadLibraryMp4Playback } from '../indexing/mp4-playback-client.ts';
@@ -48,23 +48,24 @@ export class Mp4Engine {
       this.index = index; this.rotation = rotation; this.displayBounds = displayBounds; this.nativeConfig = nativeConfig;
       const { codec, firstPts, duration, durations } = index;
       const pts = index.order.map(i => index.packets[i].pts);
+      const plan = await preparePacketThreads(index, !index.truncatedAt, threads, p => this.reader.read(p.offset, p.size));
       onProgress?.('decoder');
       const native=!forceWasm&&this.nativeConfig?await nativePacketDecoder(this.index,this.nativeConfig):null;
-      const decoder:PacketDecoder=native||await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
-      this.timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
+      const decoder:PacketDecoder=native||await wasmPacketDecoder(this.index,glueURL,wasmBinary,plan.budget);
+      this.timeline=new PacketTimeline(this.index,decoder,plan.read,true);
       onProgress?.('first-frame');
       try { this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts)); }
       catch(error) {
         if(decoder.kind!=='webcodecs'||!(error instanceof MediaOpenError)||error.stage!=='decode')throw error;
         this.timeline.close();this.timeline=undefined;
-        const software=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
-        this.timeline=new PacketTimeline(this.index,software,packet=>this.reader.read(packet.offset,packet.size),true);
+        const software=await wasmPacketDecoder(this.index,glueURL,wasmBinary,plan.budget);
+        this.timeline=new PacketTimeline(this.index,software,plan.read,true);
         this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts));
       }
       const firstPtsUs=this.primed.pts;
       const activeDecoder=this.timeline.decoder;
       const color=activeDecoder.kind==='webcodecs'?playback.color:null;
-      return { codecFeatures: readCodingFeatures(index.codec, index.configurations?.[0] ?? index.description, this.timeline.firstPacket),
+      return { lightweight: plan.lightweight, codecFeatures: plan.features && { ...plan.features, firstPacket: this.timeline.firstPacket },
        codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.displayed(this.primed).width,height:this.displayed(this.primed).height,...activeDecoder.metadata?.(),
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
         ...(recovered?{timelineSource:'hevc-poc' as const}:{}),

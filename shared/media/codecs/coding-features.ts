@@ -6,7 +6,7 @@ import { ParameterBits } from './parameter-bits.ts';
 export interface ParameterSetFeatures {
   kind: 'SPS' | 'PPS'; layer: number; id: number; spsId?: number;
   profileIdc?: number; levelIdc?: number; profileSpace?: number; highTier?: boolean;
-  lumaBitDepth?: number; chromaFormatIdc?: number; ctuSize?: number; maxReferenceFrames?: number;
+  codedWidth?: number; codedHeight?: number; lumaBitDepth?: number; chromaFormatIdc?: number; ctuSize?: number; maxReferenceFrames?: number;
   frameMbsOnly?: boolean; maxReorderFrames?: number; entropyCoding?: 'CABAC' | 'CAVLC';
   wavefront?: boolean; tileColumns?: number; tileRows?: number; entryPointOffsets?: boolean;
 }
@@ -91,12 +91,12 @@ function vvcPps(b: ParameterBits) {
   if (!width || !height) throw Error('Invalid VVC PPS geometry');
   for (let window = 0; window < 2; window++) if (b.read(1)) for (let i = 0; i < 4; i++) b.ue();
   b.skip(1);
-  if (b.read(1)) return { id, spsId, tileColumns: 1, tileRows: 1 };
+  if (b.read(1)) return { id, spsId, codedWidth: width, codedHeight: height, tileColumns: 1, tileRows: 1 };
   if (b.read(1)) { const count = b.ue(999) + 1, bits = b.ue(15) + 1; b.skip(count * bits); }
   const ctu = 2 ** (5 + b.read(2)), columns = b.ue(29) + 1, rows = b.ue(989) + 1;
   const tileColumns = tileCount(b, columns, Math.ceil(width / ctu), 30), tileRows = tileCount(b, rows, Math.ceil(height / ctu), 990);
   if (ctu > 128 || tileColumns * tileRows > 990) throw Error('Invalid VVC tile geometry');
-  return { id, spsId, tileColumns, tileRows };
+  return { id, spsId, codedWidth: width, codedHeight: height, tileColumns, tileRows };
 }
 
 /** Configuration snapshot only. Per-picture slice layout and in-band switches need AU evidence. */
@@ -118,7 +118,7 @@ export function readCodingFeatures(codec: string, description: Uint8Array, first
       let fields: Omit<ParameterSetFeatures, 'kind' | 'layer'>;
       if (codec === 'h264' && kind === 'SPS') {
         const { geometry, ...details } = parseAvcSpsDetails(nal);
-        fields = { ...details, frameMbsOnly: !geometry.interlaced, ...(geometry.maxReorderFrames === null ? {} : {maxReorderFrames: geometry.maxReorderFrames}) };
+        fields = { ...details, codedWidth: geometry.codedWidth, codedHeight: geometry.codedHeight, frameMbsOnly: !geometry.interlaced, ...(geometry.maxReorderFrames === null ? {} : {maxReorderFrames: geometry.maxReorderFrames}) };
       } else if (codec === 'h264') {
         const b = payload(nal, 1);
         fields = { id: b.ue(255), spsId: b.ue(31), entropyCoding: b.read(1) ? 'CABAC' : 'CAVLC' };
@@ -129,4 +129,13 @@ export function readCodingFeatures(codec: string, description: Uint8Array, first
   }
   if (firstPacket) report.firstPacket = firstPacket;
   return report;
+}
+
+/** Use picture dimensions from one unambiguous base-layer SPS/PPS pair. VVC carries them in the PPS. */
+export function configuredPicturePixels(features?: CodingFeatures): number {
+  if (!features || features.unreadableParameterSets || features.parameterSets.length !== 2) return 0;
+  const sps = features.parameterSets.find(p => p.kind === 'SPS'), pps = features.parameterSets.find(p => p.kind === 'PPS');
+  if (!sps || !pps || sps.layer || pps.layer || sps.id !== pps.spsId) return 0;
+  const size = features.format === 'vvcC' ? pps : sps;
+  return (size.codedWidth ?? 0) * (size.codedHeight ?? 0);
 }

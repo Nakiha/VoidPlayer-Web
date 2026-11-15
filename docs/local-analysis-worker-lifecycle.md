@@ -17,7 +17,7 @@ Snapshot/index providers retain their invocation timing; promise chains now obse
 `node-bitstream-analysis` adds 30 controlled browser-like transport cases through the public service API, using valid synthetic result/stream metadata and an explicitly opaque snapshot fixture. The old client fails all 30 lifecycle cases; the fixed client passes these plus the existing bitstream/Session cases (131 test cases total) under strict unhandled-rejection handling. Fake Workers do not claim actual demux or corrupted-browser-payload acceptance; real codec/container and stream checks remain in the existing media/browser suites.
 
 For isolated local analysis on hosts reporting at least two logical CPUs, the file worker uses
-up to four threads for H.264 and two for HEVC or VVC. Its budget is half the logical CPUs (rounded down),
+up to four threads for H.264 and two for HEVC. Whole-stream VVC analysis at 1920×1080 pixels or more uses four threads and four frame contexts when the budget reaches four. Other automatic VVC tasks use up to two of each. Its budget is half the logical CPUs (rounded down),
 with a minimum of two on eligible hosts. Its nested workers load the content-versioned
 glue URL of their parent module. Threaded and single-threaded output caches use their
 respective manifest build IDs. Completion and failure close the pool, and cancelling the

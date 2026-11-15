@@ -1,4 +1,4 @@
-import { readCodingFeatures } from '../../../shared/media/codecs/coding-features.ts';
+import { hasLightPlaybackCadence, preparePacketThreads } from '../policy/packet-threads.ts';
 import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { RangeReader, type RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
 import { TsPacketSource } from '../../../shared/media/containers/ts-packet-source.ts';
@@ -61,7 +61,8 @@ export class JsContainerEngine {
     this.onIndexWaiting?.(false);
     this.check();
   };
-  private indexTask?: Promise<ReturnType<JsContainerEngine['timing']>>;
+  private indexTask?: Promise<ReturnType<JsContainerEngine['completedTiming']>>;
+  private singleSliceLayout = false;
   get indexComplete() { return !this.startup; }
   tuneVvc(axis?: import('../contract.ts').VvcTuningAxis) { return this.timeline?.decoder.tuneVvc?.(axis) ?? null; }
 
@@ -159,9 +160,12 @@ export class JsContainerEngine {
     this.wakeIndex();
   }
 
+  private completedTiming() {
+    return { ...this.timing(), lightweight: this.singleSliceLayout && this.document?.indexIntegrity !== 'prefix' && hasLightPlaybackCadence(this.index!) };
+  }
   async completeIndex(publish?: (progress: IndexProgress)=>void) {
     this.check();
-    if (!this.startup) return this.timing();
+    if (!this.startup) return this.completedTiming();
     if (!this.indexTask) {
       const source = this.tsSource(this.reader);
       this.indexTask = (async()=>{
@@ -182,7 +186,7 @@ export class JsContainerEngine {
           this.timeline!.appendIndex(index);
           this.timeline!.setGrowth();
           this.wakeIndex();
-          return this.timing();
+          return this.completedTiming();
         } catch (error) {
           if (this.source !== source) source.close();
           this.timeline?.setGrowth();
@@ -213,9 +217,9 @@ export class JsContainerEngine {
   /** Untrusted when serialized across runtimes; recipients must verify/rebuild. */
   get packetIndex() { return this.document; }
   private check() { if (this.closed) throw new MediaOpenError('input', 'JS TS engine is closed'); }
-  private makeTimeline(decoder: PacketDecoder) {
+  private makeTimeline(decoder: PacketDecoder, read = (packet: PacketDecodeIndex['packets'][number]) => this.source!.readUnit(packet.sequenceNumber!)) {
     if (this.closed) { decoder.close(); this.check(); }
-    return new PacketTimeline(this.index!, decoder, packet => this.source!.readUnit(packet.sequenceNumber!),
+    return new PacketTimeline(this.index!, decoder, read,
       true, () => !this.closed && this.indexComplete, jsPictureStream(this.document!));
   }
   private async first(timeline: PacketTimeline, pts: number) {
@@ -262,14 +266,16 @@ export class JsContainerEngine {
       onProgress?.('index');
       this.document = await this.prepare(onIndexProgress);
       this.index ??= jsDecodeIndex(this.document);
+      const plan = await preparePacketThreads(this.index, this.indexComplete, threads, p => this.source!.readUnit(p.sequenceNumber!));
+      this.singleSliceLayout = plan.singleSliceLayout;
       onProgress?.('decoder');
       let native:PacketDecoder|null=null;
       if(!forceWasm)try{native=await this.createNative(this.index,this.source!.nativeConfig);}catch(error){
         const codecFailure=error instanceof MediaOpenError&&error.stage==='decode'||error instanceof DOMException&&['NotSupportedError','EncodingError'].includes(error.name);
         if(!codecFailure)throw error;
       }
-      const decoder = native ?? await this.createSoftware(this.index, glueURL, wasmBinary, threads);
-      this.timeline = this.makeTimeline(decoder);
+      const decoder = native ?? await this.createSoftware(this.index, glueURL, wasmBinary, plan.budget);
+      this.timeline = this.makeTimeline(decoder, plan.read);
       onProgress?.('first-frame');
       try { this.primed = await this.first(this.timeline, this.index.firstPts); }
       catch (error) {
@@ -277,14 +283,14 @@ export class JsContainerEngine {
         this.timeline = undefined;
         failed?.close();
         if (decoder.kind !== 'webcodecs' || !(error instanceof MediaOpenError) || error.stage !== 'decode') throw error;
-        const software = await this.createSoftware(this.index, glueURL, wasmBinary, threads);
-        this.timeline = this.makeTimeline(software);
+        const software = await this.createSoftware(this.index, glueURL, wasmBinary, plan.budget);
+        this.timeline = this.makeTimeline(software, plan.read);
         this.primed = await this.first(this.timeline, this.index.firstPts);
       }
       this.outputSize = { width: this.primed.width, height: this.primed.height };
       this.firstPtsUs = this.primed.pts;
       if (this.startup) { this.timeline.replaceIndex(this.index); this.timeline.setGrowth(this.waitForGrowth); }
-      return { codecFeatures: readCodingFeatures(this.index.codec, this.index.configurations?.[0] ?? this.index.description, this.timeline.firstPacket),
+      return { lightweight: plan.lightweight, codecFeatures: plan.features && { ...plan.features, firstPacket: this.timeline.firstPacket },
         ...this.decoderInfo(),...this.timing(),indexState:this.startup?'building' as const:'complete' as const,
         jsIndexReused:this.source!.indexReused };
     } catch (error) { this.close(); throw error; }

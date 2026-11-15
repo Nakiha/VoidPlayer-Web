@@ -1,3 +1,4 @@
+import { configuredPicturePixels } from '../../../shared/media/codecs/coding-features.ts';
 import { decoderForCodec } from '../../../shared/analysis/bitstream/threading.ts';
 import {analysisIndexIdentity} from '../../../shared/analysis/bitstream/products.ts';
 import type {ProductIndexIdentity} from '../../../shared/analysis/bitstream/products.ts';
@@ -52,10 +53,10 @@ export type DeepAnalysisState = {
   reason?: AnalysisFailureInfo;
   cacheHit?: boolean;
 };
-export function localDecoderSettings(codec: string) {
+export function localDecoderSettings(codec: string, wholeStreamPixels = 0) {
   const cpus = navigator.hardwareConcurrency ?? 1;
   if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined' || cpus < 2) return { threads: 1, contexts: 1 };
-  return decoderForCodec(codec, Math.max(2, Math.floor(cpus / 2)));
+  return decoderForCodec(codec, Math.max(2, Math.floor(cpus / 2)), undefined, wholeStreamPixels);
 }
 
 export class BitstreamAnalysisService {
@@ -443,7 +444,11 @@ export class BitstreamAnalysisService {
     };
     try {
       if (source.info.source) await this.remoteRange(source, target, controller.signal, consume, onProgress);
-      else if (source.bitstreamFile) await this.localRange(source.bitstreamFile, target, controller.signal, consume, onProgress, source.getBitstreamIndex?.bind(source), (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source), localDecoderSettings(source.info.codec));
+      else if (source.bitstreamFile) {
+        const pixels = target.window ? 0 : configuredPicturePixels(source.info.codecFeatures) || source.info.width * source.info.height;
+        await this.localRange(source.bitstreamFile, target, controller.signal, consume, onProgress, source.getBitstreamIndex?.bind(source),
+          (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source), localDecoderSettings(source.info.codec, pixels));
+      }
       else throw new AnalysisFailure('invalid-request', 'No stream input');
       controller.signal.throwIfAborted();
       if (!consumed || consumed !== progress.totalPictures || !progress.indexComplete) throw new AnalysisFailure('incomplete-reference-state', 'Incomplete stream coverage');

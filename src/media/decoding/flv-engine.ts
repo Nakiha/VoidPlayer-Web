@@ -1,4 +1,4 @@
-import { readCodingFeatures } from '../../../shared/media/codecs/coding-features.ts';
+import { hasLightPlaybackCadence, preparePacketThreads } from '../policy/packet-threads.ts';
 import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { FlvCachedAudio } from '../audio/flv-cached-audio.ts';
 import { PacketTimeline } from './packet-timeline.ts';
@@ -50,6 +50,7 @@ export class FlvEngine {
   };
   private wake() { for (const resolve of this.waiters) resolve(); this.waiters.clear(); }
   /** Indexing is terminal; file integrity is reported separately. */
+  private singleSliceLayout = false;
   get indexComplete(): boolean { return !!this.checkpoint?.complete; }
   tuneVvc(axis?: import('../contract.ts').VvcTuningAxis) { return this.decoder?.tuneVvc?.(axis) ?? null; }
   private publishIndex(checkpoint: FlvCheckpoint) {
@@ -93,6 +94,7 @@ export class FlvEngine {
   }
   async completeIndex(onProgress?: MediaOpenProgress, cached?: FlvIndex, publish?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void) {
     if (this.libraryPlayback && this.indexComplete) return {
+      lightweight: this.singleSliceLayout && hasLightPlaybackCadence(this.index),
       ...flvMediaTiming(this.index), indexSource: 'server' as const, indexWarning: flvIndexWarning(this.index),
       indexIntegrity: flvIndexIntegrity(this.index), indexTruncatedAt: this.index.truncatedAt,
     };
@@ -121,7 +123,7 @@ export class FlvEngine {
         commit(completed);
       }
       if (!cached) void this.cache.save(this.index).catch(() => {});
-      return { indexWarning: flvIndexWarning(this.index), indexIntegrity:flvIndexIntegrity(this.index), indexTruncatedAt:this.index.truncatedAt, indexSource: cached ? 'server' as const : 'client' as const, ...flvMediaTiming(this.index) };
+      return { lightweight: this.singleSliceLayout && hasLightPlaybackCadence(this.index), indexWarning: flvIndexWarning(this.index), indexIntegrity:flvIndexIntegrity(this.index), indexTruncatedAt:this.index.truncatedAt, indexSource: cached ? 'server' as const : 'client' as const, ...flvMediaTiming(this.index) };
     } catch (error) {
       this.indexingFailure = error; this.wake(); throw error;
     } finally { this.serverProgress=undefined; this.scanReader?.close(); this.scanReader = undefined; }
@@ -129,6 +131,8 @@ export class FlvEngine {
   async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads: DecodeThreads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
     try {
       await this.prepare(onProgress);
+      const plan = await preparePacketThreads(this.index, this.indexComplete && !this.index.truncatedAt, threads, p => this.reader.read(p.offset, p.size));
+      this.singleSliceLayout = plan.singleSliceLayout;
       if (!forceWasm) {
         this.nativeDiagnostics = [];
         let phase = 'capability';
@@ -136,7 +140,7 @@ export class FlvEngine {
           onProgress?.('decode');
           const native = await nativeFlvDecoder(this.index, undefined, event => this.nativeDiagnostics.push(event));
           phase = 'first-frame';
-          if (native) { this.decoder = native; this.timeline=new PacketTimeline(this.index,native,p=>this.reader.read(p.offset,p.size),true,()=>this.indexComplete); onProgress?.('first-frame'); this.primed = await this.extract(0); }
+          if (native) { this.decoder = native; this.timeline=new PacketTimeline(this.index,native,plan.read,true,()=>this.indexComplete); onProgress?.('first-frame'); this.primed = await this.extract(0); }
         } catch (error) {
           if (error instanceof MediaOpenError && error.stage !== 'decode') throw error;
           this.nativeDiagnostics.push({ reason: 'native-failed', phase, error: error instanceof Error ? error.message : String(error) });
@@ -147,13 +151,13 @@ export class FlvEngine {
       if (!this.decoder) {
         onProgress?.('decoder');
         this.decodeFailure = undefined;
-        this.decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
-        this.timeline=new PacketTimeline(this.index,this.decoder,p=>this.reader.read(p.offset,p.size),true,()=>this.indexComplete);
+        this.decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, plan.budget);
+        this.timeline=new PacketTimeline(this.index,this.decoder,plan.read,true,()=>this.indexComplete);
         onProgress?.('first-frame');
         this.primed = await this.extract(0);
       }
       this.retainStartup();
-      return { codecFeatures: readCodingFeatures(this.index.codec, this.index.configurations?.[0] ?? this.index.description, this.timeline?.firstPacket),
+      return { lightweight: plan.lightweight, pendingLightLayout: !this.indexComplete && plan.singleSliceLayout, codecFeatures: plan.features && { ...plan.features, firstPacket: this.timeline?.firstPacket },
         codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
         hardwareAcceleration: this.decoder.hardwareAcceleration,
         ...this.decoder.metadata?.(), decodedPixelFormat: this.primed!.frame?.format ?? null,

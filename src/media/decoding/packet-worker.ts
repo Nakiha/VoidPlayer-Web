@@ -110,7 +110,7 @@ async function start() {
           engine?.close(); engine = new FlvEngine(message.input);
           send(reply(message, await engine.prepare(progress => send({ id, type: 'progress', progress }))));
         } else if (type === 'native' && engine instanceof FlvEngine) {
-          const data = await engine.open('', undefined, false, 1, progress => send({ id, type: 'progress', progress }), true);
+          const data = await engine.open('', undefined, false, message.threads, progress => send({ id, type: 'progress', progress }), true);
           send(reply(message, data, engine.nativeDiagnostics));
         } else if (type === 'init') {
           const preparedTs = (message.container === 'ts'||message.container==='matroska') && message.preparedTsSession !== undefined;

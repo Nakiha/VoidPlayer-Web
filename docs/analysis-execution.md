@@ -91,6 +91,9 @@ include a two-thread/one-frame-context control, first-output latency and whole-s
 
 The threaded artifact applies configured frame contexts to H264 frame threads
 as well as VVC delayed-frame contexts, within the configured worker budget.
+For whole-stream VVC analysis, both hosts select four threads and four frame contexts when the picture contains at least
+1920×1080 pixels and the host can allocate four threads. Smaller pictures, viewports, ranges, individual pictures and
+smaller budgets keep the existing one- or two-thread policy. Explicit server decoder settings take precedence.
 One frame context keeps H264 serial. HEVC keeps one frame context and uses slice threads for wavefront-enabled rows.
 Those workers join before processing the next NAL, so parameter changes, suffix SEI and
 full replay use the same picture-level pruning state. Other slice layouts use serial parsing.

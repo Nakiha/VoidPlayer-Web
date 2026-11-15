@@ -35,8 +35,8 @@ import { AnalysisFailure, RetryFullAnalysis, coreFailure } from "./failure.ts";
 import { groupAnalysisGops, gopForAu, viewportAnalysisGops } from './stream.ts';
 import type { AnalysisIndexFrontier, StreamProgress } from './stream.ts';
 // Bind a host's codec-aware loader only after the input has identified its decoder.
-function coreForInput(core: any, codec: AnalysisResult['codec']) {
-  const factory = typeof core?.forCodec === 'function' ? () => core.forCodec(codec) : core;
+function coreForInput(core: any, codec: AnalysisResult['codec'], wholeStreamConfig?: Uint8Array) {
+  const factory = typeof core?.forCodec === 'function' ? () => core.forCodec(codec, wholeStreamConfig) : core;
   if (typeof factory !== 'function') return core;
   let instance: Promise<any> | undefined;
   return () => instance ??= Promise.resolve().then(() => factory());
@@ -735,7 +735,7 @@ async function runStream(
   const input = await openAnalysisInput(reader, signal, true, {  sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity,frontier,
     waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
   const first = input.packets[0];
-  core = coreForInput(core, input.codec);
+  core = coreForInput(core, input.codec, input.configurations[first.configuration]);
   const pictureTarget = { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion,
     sourcePtsUs: first.pts, normalizedMediaUs: Math.max(0, first.pts - target.firstPtsUs) };
   const streamOptions = { input, sequential: true, stream: target, onResult, onProgress: report, cached };

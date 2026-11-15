@@ -24,7 +24,10 @@ export function setWasmThreadMode(value: WasmThreadMode) {
 }
 
 export const MAX_WASM_DECODE_COUNT = 0x7fffffff;
-export type DecodeThreads = number | { general: number; vvc: number; vvcFrameContexts: number; vvcTuning?: { contexts: number; threads: number } };
+export type DecodeThreads = number | { general: number; vvc: number; vvcFrameContexts: number; selectForSource?: boolean; vvcTuning?: { contexts: number; threads: number } };
+export function lightPlaybackThreads(budget: Exclude<DecodeThreads, number>) {
+  return { general: Math.min(2, budget.general), vvc: Math.min(2, budget.vvc), vvcFrameContexts: Math.min(2, budget.vvcFrameContexts) };
+}
 export const VVC_EXPERIMENTAL_CAPACITY = 12;
 const vvcThreadsKey = 'voidplayer.vvc-thread-mode';
 const vvcContextsKey = 'voidplayer.vvc-frame-contexts';

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
 import { liveHeap } from '../../shared/wasm/core.ts';
 import { checkedHeap } from '../../src/media/decoding/flv-decoder.ts';
+import { preparePacketThreads } from '../../src/media/policy/packet-threads.ts';
 import { fallbackDecodeThreads, reserveFallbackThreads } from '../../src/media/decoding/fallback-runtime.ts';
 import { decodeThreadsForCodec, setVvcFrameContextCount, setVvcThreadCount } from '../../src/media/policy/wasm-threads.ts';
 
@@ -33,6 +34,46 @@ test('fallback reservations recover released headroom and roll back failed or di
   } finally { old.release(); incoming.release(); }
 });
 
+test('a lightweight track releases surplus capacity and can only recover up to two threads', t => {
+  t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 8);
+  const first = reserveFallbackThreads('auto'), incoming = reserveFallbackThreads('auto');
+  try {
+    incoming.limitToLightSource();
+    assert.equal(incoming.threads.vvc, 1);
+    first.limitToLightSource();
+    assert.deepEqual(incoming.grow()?.threads, { general: 2, vvc: 2, vvcFrameContexts: 2 });
+    first.release();
+    assert.equal(incoming.grow(), undefined);
+    const other = reserveFallbackThreads('auto');
+    try { assert.equal(other.threads.vvc, 3); } finally { other.release(); }
+  } finally { first.release(); incoming.release(); }
+});
+
+test('light playback uses cadence, initial layout and one slice and reuses its packet read', async () => {
+  // 960×540 x264 High SPS/PPS and a length-prefixed IDR slice header.
+  const description = Buffer.from('0164001fffe1001a6764001facd940f0117ef0110000030001000003003c0f18319601000668eae3cb22c0fdf8f800', 'hex');
+  const slice = Buffer.from('000000026580', 'hex');
+  const packets = [0, 33333].map((pts, i) => ({ pts, dts: pts, offset: i * slice.length, size: slice.length, key: !i }));
+  const index = { codec: 'h264' as const, description, packets, durations: [33333,33333], order: [0,1], duration: 66666, firstPts: 0 };
+  const manual = { general: 4, vvc: 5, vvcFrameContexts: 3 };
+  const auto = { ...manual, selectForSource: true, vvcTuning: { threads: 8, contexts: 8 } };
+  let reads = 0;
+  const read = async () => { reads++; return slice; };
+  const plan = await preparePacketThreads(index, true, auto, read);
+  assert.deepEqual(plan.budget, { general: 2, vvc: 2, vvcFrameContexts: 2 });
+  assert.equal(await plan.read(packets[0]), slice);
+  assert.equal(reads, 1);
+  assert.equal((await preparePacketThreads(index, true, manual, read)).budget, manual);
+  const prefix = await preparePacketThreads(index, false, auto, read);
+  assert.equal(prefix.singleSliceLayout, true);
+  assert.equal(prefix.lightweight, false);
+  assert.equal((await preparePacketThreads({ ...index, durations: [16667,16667] }, true, auto, read)).lightweight, false);
+  assert.equal((await preparePacketThreads({ ...index, configurations: [description, description] }, true, auto, read)).lightweight, false);
+  assert.equal(reads, 2);
+  const multi = await preparePacketThreads(index, true, auto, async () => Buffer.concat([slice, slice]));
+  assert.equal(multi.lightweight, false);
+});
+
 test('fallback growth shares free CPU headroom without shrinking or borrowing another live reservation', t => {
   t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 12);
   const old = reserveFallbackThreads('auto'), peer = reserveFallbackThreads('auto'), incoming = reserveFallbackThreads('auto');
@@ -60,6 +101,7 @@ test('VVC automatic settings share CPU headroom and explicit tuning bypasses the
   setVvcFrameContextCount('18');
   const manual = reserveFallbackThreads('manual');
   try {
+    manual.limitToLightSource();
     assert.equal(decodeThreadsForCodec(manual.threads, 'vvc'), 14);
     assert.equal(manual.threads.vvcFrameContexts, 18);
   } finally { manual.release(); }
