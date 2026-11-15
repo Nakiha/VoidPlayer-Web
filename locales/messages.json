@@ -1451,10 +1451,6 @@
     "source": "色度采样",
     "params": {}
   },
-  "analysis.features.close": {
-    "source": "关闭面板",
-    "params": {}
-  },
   "analysis.features.ctu": {
     "source": "编码树单元（CTU）",
     "params": {}
@@ -1463,20 +1459,12 @@
     "source": "亮度位深",
     "params": {}
   },
-  "analysis.features.empty": {
-    "source": "载入视频后可查看编码特性。",
-    "params": {}
-  },
   "analysis.features.entropy": {
     "source": "熵编码",
     "params": {}
   },
   "analysis.features.entryPoints": {
     "source": "子码流入口偏移",
-    "params": {}
-  },
-  "analysis.features.export": {
-    "source": "导出 JSON",
     "params": {}
   },
   "analysis.features.firstPacket": {
@@ -5021,6 +5009,10 @@
       "p0": "string | number"
     }
   },
+  "tracks.exportAllCodingFeatures": {
+    "source": "导出全部轨道 JSON",
+    "params": {}
+  },
   "tracks.fileIntegrity": {
     "source": "文件完整性",
     "params": {}
@@ -5055,6 +5047,12 @@
     "source": "索引失败：{p0}",
     "params": {
       "p0": "string | number"
+    }
+  },
+  "tracks.initialCodecConfiguration": {
+    "source": "初始解码配置 · {format}",
+    "params": {
+      "format": "string | number"
     }
   },
   "tracks.inspectSubtrack": {

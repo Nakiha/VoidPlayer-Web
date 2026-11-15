@@ -1,4 +1,3 @@
-import { installCodingFeatures } from './coding-features.ts';
 import { icon } from '../icons.ts';
 import { analysisRetryButton } from './retry.ts';
 import { createSettledAnalysisDemand } from './settled-demand.ts';
@@ -85,7 +84,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     <header class="analysis-head">
       <div class="analysis-primary"><div id="analysis-diagrams" class="analysis-diagram-toggles" role="group" aria-label="${th(msg('analysis.diagrams','分析图示'))}"></div></div>
       <div class="analysis-tools" role="group" aria-label="${th(msg("analysis.tools", "分析选项"))}">
-        <button type="button" id="analysis-features" class="choice-trigger" aria-haspopup="dialog" aria-controls="coding-features"></button>
         <div class="segmented" id="analysis-axis" role="group" aria-label="${th(msg("analysis.timeBase", "时间基准"))}" title="${th(msg("analysis.timeBaseTitle", "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图"))}">
           <button type="button" data-axis="pts">PTS</button>
           <button type="button" data-axis="dts">DTS</button>
@@ -118,7 +116,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     <output class="sr-only" aria-live="polite"></output>`);
 
   const $ = <T extends Element = HTMLElement>(sel: string) => section.querySelector(sel) as unknown as T;
-  const refreshCodingFeatures = installCodingFeatures($<HTMLButtonElement>('#analysis-features'), session, signal);
   let diagrams = new Set<AnalysisDiagram>(selectedAnalysisDiagrams(prefs));
   let diagramSolo: { target: AnalysisDiagram; previous: Set<AnalysisDiagram> } | undefined;
   const overviewVisible = () => diagrams.has('bitrate') || diagrams.has('size');
@@ -262,7 +259,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     });
     const overview = overviewVisible();
     overviewHost.hidden = !overview;
-    for (const control of $<HTMLElement>('.analysis-tools').children) (control as HTMLElement).hidden = !overview && !(control as HTMLElement).classList.contains('analysis-zoom-controls') && control.id !== 'analysis-features' && control.id !== 'analysis-axis' && (control as HTMLElement).dataset.seg !== 'full';
+    for (const control of $<HTMLElement>('.analysis-tools').children) (control as HTMLElement).hidden = !overview && !(control as HTMLElement).classList.contains('analysis-zoom-controls') && control.id !== 'analysis-axis' && (control as HTMLElement).dataset.seg !== 'full';
     $<HTMLElement>('#analysis-window').hidden = !prefs.showBitrate || !loadMetrics.has('bitrate');
     loadLegend.hidden = !prefs.showBitrate;
     loadLabel.textContent=t(prefs.axis==='pts'?msg('analysis.presentationLoad','展示负载率'):msg('analysis.streamSection','码流'));
@@ -1147,7 +1144,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const onSession = () => {
     if (signal.aborted) return;
     const state = session.getState();
-    refreshCodingFeatures(state.tracks);
     positionUs = state.positionUs;
     durationUs = state.durationUs;
     status.syncFrames(state.tracks);

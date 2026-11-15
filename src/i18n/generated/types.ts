@@ -329,13 +329,10 @@ export interface Sources {
   "analysis.emptyQuerying": "正在查询统计…";
   "analysis.enterFrameNumber": "输入轨道 {slot} 的{axis}帧号后按回车跳转";
   "analysis.features.chroma": "色度采样";
-  "analysis.features.close": "关闭面板";
   "analysis.features.ctu": "编码树单元（CTU）";
   "analysis.features.depth": "亮度位深";
-  "analysis.features.empty": "载入视频后可查看编码特性。";
   "analysis.features.entropy": "熵编码";
   "analysis.features.entryPoints": "子码流入口偏移";
-  "analysis.features.export": "导出 JSON";
   "analysis.features.firstPacket": "首个压缩包的 VCL NAL 数";
   "analysis.features.frameOnly": "仅帧编码";
   "analysis.features.level": "编码级别（level_idc）";
@@ -1160,6 +1157,7 @@ export interface Sources {
   "tracks.dimensions": "尺寸";
   "tracks.duration": "时长";
   "tracks.durationCoversIndexedPortion": "{p0} · 时长为已索引范围";
+  "tracks.exportAllCodingFeatures": "导出全部轨道 JSON";
   "tracks.fileIntegrity": "文件完整性";
   "tracks.fileSize": "大小";
   "tracks.frameDuration": "帧时长";
@@ -1168,6 +1166,7 @@ export interface Sources {
   "tracks.hdrSource": "HDR 源";
   "tracks.hideTrack": "隐藏轨道 {slot}";
   "tracks.indexFailed": "索引失败：{p0}";
+  "tracks.initialCodecConfiguration": "初始解码配置 · {format}";
   "tracks.inspectSubtrack": "检视子轨道 {p0}";
   "tracks.loadAVideoToViewTracksAnd": "载入视频后查看轨道与标记";
   "tracks.mark": "标记 {p0} {p1} {p2}";
@@ -1565,13 +1564,10 @@ export interface MessageParameters {
   "analysis.emptyQuerying": {  };
   "analysis.enterFrameNumber": { "axis": string | number; "slot": string | number };
   "analysis.features.chroma": {  };
-  "analysis.features.close": {  };
   "analysis.features.ctu": {  };
   "analysis.features.depth": {  };
-  "analysis.features.empty": {  };
   "analysis.features.entropy": {  };
   "analysis.features.entryPoints": {  };
-  "analysis.features.export": {  };
   "analysis.features.firstPacket": {  };
   "analysis.features.frameOnly": {  };
   "analysis.features.level": {  };
@@ -2396,6 +2392,7 @@ export interface MessageParameters {
   "tracks.dimensions": {  };
   "tracks.duration": {  };
   "tracks.durationCoversIndexedPortion": { "p0": string | number };
+  "tracks.exportAllCodingFeatures": {  };
   "tracks.fileIntegrity": {  };
   "tracks.fileSize": {  };
   "tracks.frameDuration": {  };
@@ -2404,6 +2401,7 @@ export interface MessageParameters {
   "tracks.hdrSource": {  };
   "tracks.hideTrack": { "slot": string | number };
   "tracks.indexFailed": { "p0": string | number };
+  "tracks.initialCodecConfiguration": { "format": string | number };
   "tracks.inspectSubtrack": { "p0": string | number };
   "tracks.loadAVideoToViewTracksAnd": {  };
   "tracks.mark": { "p0": string | number; "p1": string | number; "p2": string | number };

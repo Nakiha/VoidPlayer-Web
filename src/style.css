@@ -896,6 +896,11 @@ button[aria-haspopup=menu], .choice-menu button { -webkit-user-select: none; use
 .track-properties dl { display: block; }
 .track-properties dl > div { display: grid; grid-template-columns: fit-content(55%) minmax(0, 1fr); align-items: baseline; }
 .track-properties dt { overflow-wrap: break-word; }
+#inspect-coding-features { margin: var(--section-gap) 0 var(--list-gap); }
+#inspect-coding-features summary { cursor: pointer; font-size: var(--text-sm); font-weight: 600; }
+#inspect-coding-features h4 { margin: var(--list-gap) 0 0; font-size: var(--text-sm); }
+#inspect-coding-features small, #inspect-coding-features p { color: var(--text-secondary); }
+#inspect-coding-features button { margin-top: var(--list-gap); }
 
 .analysis-picture-overlay { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
 

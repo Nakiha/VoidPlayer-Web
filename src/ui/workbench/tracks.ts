@@ -1,3 +1,4 @@
+import { createCodingFeatures } from './coding-features.ts';
 import { t, msg } from '../../i18n.ts';
 import { indexProgressLabel } from '../index-progress.ts';
 import { installTimeInput } from '../time-input.ts';
@@ -37,6 +38,9 @@ const performanceFormat = new Intl.NumberFormat('en-US', { ...inspectorNumberOpt
 export function createTracksPane(shared: WorkbenchShared) {
   const { session, act, view } = shared;
   let trackSignature = '', selectorSignature = '', inspectorSource = '';
+  const features = createCodingFeatures(() => session.getState().tracks);
+  const beforeFeatures = document.createElement('div'), afterFeatures = document.createElement('div');
+  $('track-properties').replaceChildren(beforeFeatures, features.details, afterFeatures);
   let metadataWait: Promise<void> | undefined;
   let dockSignature = '';
   let annotationSignature = '';
@@ -239,7 +243,8 @@ export function createTracksPane(shared: WorkbenchShared) {
 
   function renderInspector(state: WorkbenchState) {
     const selected = state.tracks.find(t => t.slot === view.selected);
-    const signature = JSON.stringify([state.tracks.map(t => [inspectorSourceKey(t), t.metadataRevision]), view.selected, state.colorMode, state.referenceDecode.decoder]);
+    const sourceKey = selected ? inspectorSourceKey(selected) : '';
+    const signature = JSON.stringify([sourceKey, selected?.metadataRevision, state.colorMode, state.referenceDecode.decoder]);
     const selection = state.tracks.map(t => inspectorSourceKey(t)).join('/') + view.selected;
     if (selection !== selectorSignature) {
       selectorSignature = selection;
@@ -272,15 +277,16 @@ export function createTracksPane(shared: WorkbenchShared) {
     }
     if (signature !== trackSignature) {
       trackSignature = signature;
-      inspectorSource = selected ? inspectorSourceKey(selected) : '';
-      const properties = $('track-properties'); properties.replaceChildren();
+      inspectorSource = sourceKey;
+      features.select(inspectorSource, selected?.codecFeatures);
+      beforeFeatures.replaceChildren(); afterFeatures.replaceChildren();
       frameTimingSource = '';
-      if (!selected) properties.append(text('p', t(msg("tracks.noTracksLoaded", "尚未载入轨道")), 'panel-empty'));
+      if (!selected) beforeFeatures.append(text('p', t(msg("tracks.noTracksLoaded", "尚未载入轨道")), 'panel-empty'));
       else {
         const title = text('h3', t(msg('tracks.track', '轨道 {p0}'), { p0: selected.slot })); title.dataset.inspectorTitle = '';
         const file = document.createElement('dl'); file.dataset.fileProperties = '';
         file.append(propertyRow(t(msg('tracks.fileSize', '大小')), text('dd', sizeText(selected.size))));
-        properties.append(title, file);
+        beforeFeatures.append(title, file);
         for (const group of propertyGroups(selected, state)) {
           const section = document.createElement('section'); section.dataset.metadataGroup = group.id;
           const heading = text('h3', group.title); heading.id = `inspect-heading-${group.id}`;
@@ -290,15 +296,16 @@ export function createTracksPane(shared: WorkbenchShared) {
             const dd = text('dd', value); decorateProperty(dd, id, selected);
             dl.append(propertyRow(label, dd));
           }
-          section.append(heading, dl); properties.append(section);
+          section.append(heading, dl);
+          (group.id === 'audio' ? afterFeatures : beforeFeatures).append(section);
         }
         const frameTitle = text('h3', t(msg('tracks.currentFrame', '当前帧'))); frameTitle.dataset.frameTitle = '';
-        properties.append(frameTitle);
+        afterFeatures.append(frameTitle);
         const timing = document.createElement('dl'); timing.dataset.frameTiming = '';
         for (const [label, id] of frameTimingRows()) {
           const dd = text('dd', '—'); dd.id = id; timing.append(propertyRow(label, dd));
         }
-        properties.append(timing);
+        afterFeatures.append(timing);
         const performance = document.createElement('section');
         const heading = text('h3', t(msg('tracks.playbackPerformance', '播放性能')));
         heading.id = 'inspect-playback-title';
@@ -310,7 +317,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         const contexts = text('dd', '—'); contexts.id = 'inspect-decoder-contexts';
         concurrency.append(propertyRow(t(msg('tracks.decoderThreads', '解码线程')), threads),
           propertyRow(t(msg('tracks.decoderFrameContexts', '帧上下文')), contexts));
-        performance.append(heading, stats, concurrency); properties.append(performance);
+        performance.append(heading, stats, concurrency); afterFeatures.append(performance);
       }
     }
     if (selected) {
@@ -461,6 +468,7 @@ export function createTracksPane(shared: WorkbenchShared) {
   }
 
   function localize(state: WorkbenchState) {
+    features.localize();
     // Relabel only the source whose coherent snapshot is currently displayed.
     // Hidden replacements wait for their first query when the inspector reopens.
     // Stable signatures preserve nodes, including focused property tooltips.

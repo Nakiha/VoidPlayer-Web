@@ -56,6 +56,32 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
             assert.ok(codecFeatures.parameterSets.some(set => set.kind === 'PPS' && set.spsId !== undefined));
             assert.deepEqual((await call('export_review')).media[0].codecFeatures, codecFeatures);
           }
+          if (decoding === 'browser' && row.codec === 'h264' && row.container === 'mp4') {
+            const opened = requests.length;
+            if (!await page.locator('#inspector-panel').isVisible()) await page.locator('#toggle-inspector').click();
+            const details = page.locator('#inspect-coding-features');
+            assert.equal(await details.evaluate(node => node.open), false);
+            assert.equal(await details.locator('dd').count(), 0);
+            await details.locator('summary').click();
+            const {codecFeatures} = (await call('get_review_session')).tracks[0];
+            const entropy = codecFeatures.parameterSets.find(set => set.kind === 'PPS').entropyCoding;
+            await details.getByText(entropy, {exact: true}).waitFor({state: 'visible'});
+            const changes = await details.evaluateHandle(node => {
+              const observed = { count: 0, observer: new MutationObserver(records => { observed.count += records.length; }) };
+              observed.observer.observe(node, {subtree: true, childList: true, characterData: true, attributes: true});
+              return observed;
+            });
+            const lastField = await details.locator('dd').last().elementHandle();
+            await verifyPlaybackPresentation(page, {minPlayingMs: 150}, {engine, caseName: 'inspector-coding-features', targetPtsUs: 0});
+            await call('step_review', {direction: 1});
+            await call('seek_review', {ptsUs: 0});
+            assert.equal(await changes.evaluate(state => { state.observer.disconnect(); return state.count; }), 0, 'static features receive no playback mutations');
+            await changes.dispose();
+            assert.ok(await lastField.evaluate(node => node.isConnected && node.closest('details').open), 'frame changes retain the expanded fields');
+            assert.ok(!requests.slice(opened).some(r => /voidplayer-analysis|local-worker|bitstream-analysis/.test(r.url)), 'inspecting coding features uses no deep analysis');
+            await details.locator('summary').click();
+            await page.locator('#toggle-inspector').click();
+          }
           if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264' && row.container === 'mp4') {
             await page.locator('#toggle-analysis').click();
             await selectDiagrams(page, 'nalu-size');
@@ -312,22 +338,6 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
             );
             await hideOverlay();
             rows.push({ kind: "sustained-cache", input, ...sustained });
-            if (input === 'local-file') {
-              await page.locator('#toggle-analysis').click();
-              await page.locator('#analysis-features').click();
-              const dialog = page.locator('#coding-features[open]');
-              const {codecFeatures} = (await call('get_review_session')).tracks[0];
-              const entropy = codecFeatures.parameterSets.find(set => set.kind === 'PPS').entropyCoding;
-              assert.ok(await dialog.getByText(entropy, {exact: true}).isVisible());
-              assert.ok(codecFeatures.firstPacket.vclNalUnits >= 1);
-              const downloaded = page.waitForEvent('download');
-              await dialog.locator('footer button').first().click();
-              const file = await downloaded;
-              assert.equal(file.suggestedFilename(), 'VoidPlayer-coding-features.json');
-              assert.deepEqual(JSON.parse(await readFile(await file.path(), 'utf8')).tracks[0].codecFeatures, codecFeatures);
-              await dialog.locator('footer button').last().click();
-              await page.locator('#toggle-analysis').click();
-            }
           }
           await call("set_review_track_offset", {
             slot: "A",

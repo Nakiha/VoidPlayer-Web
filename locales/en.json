@@ -1315,10 +1315,6 @@
     "source": "色度采样",
     "translation": "Chroma sampling"
   },
-  "analysis.features.close": {
-    "source": "关闭面板",
-    "translation": "Close panel"
-  },
   "analysis.features.ctu": {
     "source": "编码树单元（CTU）",
     "translation": "Coding tree unit (CTU)"
@@ -1327,10 +1323,6 @@
     "source": "亮度位深",
     "translation": "Luma bit depth"
   },
-  "analysis.features.empty": {
-    "source": "载入视频后可查看编码特性。",
-    "translation": "Load a video to inspect its coding features."
-  },
   "analysis.features.entropy": {
     "source": "熵编码",
     "translation": "Entropy coding"
@@ -1338,10 +1330,6 @@
   "analysis.features.entryPoints": {
     "source": "子码流入口偏移",
     "translation": "Substream entry point offsets"
-  },
-  "analysis.features.export": {
-    "source": "导出 JSON",
-    "translation": "Export JSON"
   },
   "analysis.features.firstPacket": {
     "source": "首个压缩包的 VCL NAL 数",
@@ -4665,6 +4653,10 @@
     "source": "{p0} · 时长为已索引范围",
     "translation": "{p0} · Duration covers indexed portion"
   },
+  "tracks.exportAllCodingFeatures": {
+    "source": "导出全部轨道 JSON",
+    "translation": "Export all tracks as JSON"
+  },
   "tracks.fileIntegrity": {
     "source": "文件完整性",
     "translation": "File integrity"
@@ -4697,6 +4689,10 @@
   "tracks.indexFailed": {
     "source": "索引失败：{p0}",
     "translation": "Index failed: {p0}"
+  },
+  "tracks.initialCodecConfiguration": {
+    "source": "初始解码配置 · {format}",
+    "translation": "Initial decoder configuration · {format}"
   },
   "tracks.inspectSubtrack": {
     "source": "检视子轨道 {p0}",

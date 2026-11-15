@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
 const name = process.argv[2] ?? 'webkit';
@@ -16,7 +17,14 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
    assert.ok(rows['像素格式'] || rows['解码像素格式']);
    if(slot==='A') {assert.notEqual(rows['解码像素格式'],'未提供');assert.equal(rows['色域原色'],'未标记');}
    if(slot==='B') {assert.equal(rows['像素格式'],'yuv444p10le');assert.equal(rows['范围'],'有限范围 (TV)');}
+   const features = page.locator('#inspect-coding-features');
+   if (slot === 'B') {
+     await features.locator('summary').click();
+     await features.getByText(/当前片源没有可读取/).waitFor();
+   }
    if(slot==='C') {
+     assert.ok(await features.evaluate(node => node.open), 'switching tracks preserves disclosure state');
+     await features.getByText('波前并行（WPP）').waitFor();
      for(const label of ['色域原色','传递特性','矩阵系数'])assert.equal(rows[label],'BT.709');
      const source=await page.evaluate(()=>window.voidPlayer.getState().tracks.find(t=>t.slot==='C').colorSource);
      // The MP4 colr tag is PC, while its HEVC frame bitstream tags TV (ffprobe -show_frames).
@@ -26,6 +34,14 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
  }
  const exported=await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='export_review').execute({}));
  assert.ok(JSON.stringify(exported).includes('yuv444p10le'),'exports carry the same metadata');
+ const features = page.locator('#inspect-coding-features');
+ const pendingDownload = page.waitForEvent('download');
+ await features.getByRole('button', {name: '导出全部轨道 JSON'}).click();
+ const file = await pendingDownload;
+ assert.equal(file.suggestedFilename(), 'VoidPlayer-coding-features.json');
+ const json = JSON.parse(await readFile(await file.path(), 'utf8'));
+ assert.deepEqual(json.tracks.map(t => t.slot), ['A','B','C','D']);
+ for (const track of json.tracks) assert.deepEqual(track.codecFeatures, exported.media.find(m => m.id === track.id).codecFeatures ?? null);
  if(process.env.METADATA_SCREENSHOT)await page.locator('#inspector-panel').screenshot({path:artifact('voidplayer-metadata-panel.png')});
  assert.deepEqual(errors,[]);console.log(`PASS ${name}: native output/source pixel formats, separate color attributes, PC/TV/unspecified ranges and shared exports`);
 });
