@@ -91,9 +91,11 @@ include a two-thread/one-frame-context control, first-output latency and whole-s
 
 The threaded artifact applies configured frame contexts to H264 frame threads
 as well as VVC delayed-frame contexts, within the configured worker budget.
-One frame context keeps H264 serial. HEVC still uses one decoder thread because
-its pruning state requires serial execution; requesting two workers does not
-make HEVC decoding parallel. Result delivery retains source AU identities,
+One frame context keeps H264 serial. HEVC keeps one frame context and uses slice threads for wavefront-enabled rows.
+Those workers join before processing the next NAL, so parameter changes, suffix SEI and
+full replay use the same picture-level pruning state. Other slice layouts use serial parsing.
+The [HEVC measurements](evidence/hevc-wavefront-analysis-2026-11-15.json) compare single- and two-thread
+output for the same 4K stream and record the playback benchmark at both revisions. Result delivery retains source AU identities,
 complete draining and awaited per-picture backpressure. Between synchronous
 WASM calls, the host yields at cooperative checkpoints after about 8 ms of work
 instead of installing a timer after every packet. Cancellation checks remain

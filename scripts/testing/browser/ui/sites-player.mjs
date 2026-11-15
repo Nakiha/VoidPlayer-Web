@@ -82,7 +82,7 @@ try {
       const analysis = await page.evaluate(async () => {
         const api = window.voidPlayer, position = api.getState().positionUs;
         const result = await api.tools.find(tool => tool.name === 'request_bitstream_analysis').execute({ slot: 'A' });
-        return { buildId: result.buildId, threadsAvailable: navigator.hardwareConcurrency >= 4, schema: result.schema, codec: result.codec, blocks: result.blocks.length, before: position, after: api.getState().positionUs };
+        return { buildId: result.buildId, threadsAvailable: navigator.hardwareConcurrency >= 2, schema: result.schema, codec: result.codec, blocks: result.blocks.length, before: position, after: api.getState().positionUs };
       });
       assert.match(analysis.buildId, isolated && analysis.threadsAvailable ? /:mt-[0-9a-f]{16}$/ : /:refs-[0-9a-f]{16}$/);
       assert.equal(analysis.schema, 1); assert.equal(analysis.codec, 'h264');

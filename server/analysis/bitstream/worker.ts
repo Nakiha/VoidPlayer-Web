@@ -18,7 +18,7 @@ import {
   analyzeRange,
   analyzeStream,
 } from "../../../shared/analysis/bitstream/runner.ts";
-import { decoderForCodec } from './limits.ts';
+import { decoderForCodec } from '../../../shared/analysis/bitstream/threading.ts';
 import type { AnalysisResult } from '../../../shared/analysis/bitstream/contract.ts';
 const buildId: string = workerData.buildId;
 let core: any;

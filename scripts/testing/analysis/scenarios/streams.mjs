@@ -110,7 +110,7 @@ const { page, artifact, limitsDir, requests, rows, call, analyze, stable, librar
       if (input === 'local-file') assert.equal(requests.slice(start).filter(r => /assets\/local-worker-.*\.js/.test(r.url)).length, 1);
       else {
         assert.equal(requests.slice(start).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).length, 1);
-        assert.ok(!requests.slice(start).some(r => /voidplayer-analysis\.(js|wasm)|local-worker/.test(r.url)));
+        assert.ok(!requests.slice(start).some(r => /voidplayer-analysis(?:-mt)?\.(js|wasm)|local-worker/.test(r.url)));
       }
       const diagrams = await call('query_bitstream_diagrams', { slot: 'A', startAu: 0, limit: 128 });
       assert.equal(diagrams.count, 120); assert.equal(diagrams.pictures.length, 120);
@@ -247,7 +247,7 @@ const { page, artifact, limitsDir, requests, rows, call, analyze, stable, librar
       assert.ok(afterRevision >= beforeRevision);
       assert.deepEqual(afterChart, beforeChart,
         'cached stream preserves picture, NALU and reference records');
-      assert.equal(requests.slice(cacheStart).filter(r => new URL(r.url).pathname.endsWith('/voidplayer-analysis.wasm')).length, 0,
+      assert.equal(requests.slice(cacheStart).filter(r => /\/voidplayer-analysis(?:-mt)?\.wasm$/.test(new URL(r.url).pathname)).length, 0,
         'complete cached stream never initializes the local analysis WASM');
       let release;
       const gate = new Promise(r => { release = r; });

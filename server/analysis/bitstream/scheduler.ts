@@ -85,7 +85,7 @@ export class AnalysisScheduler {
   private closed = false;
   private concurrency = DEFAULT_ANALYSIS_CONCURRENCY;
   private decoder?: AnalysisDecoderSettings;
-  private readonly cpuBudget = Math.max(1, availableParallelism() - 1);
+  private readonly cpuBudget: number;
   setConcurrency(value: number) {
     this.configure(value, this.decoder);
   }
@@ -149,6 +149,8 @@ export class AnalysisScheduler {
     now = () => Date.now(),
     leaseMs: number = BUDGET.leaseMs,
   ) {
+    const cpus = availableParallelism();
+    this.cpuBudget = cpus <= 2 ? cpus : cpus - 1;
     this.library = library;
     this.coreDir = coreDir;
     this.now = now;

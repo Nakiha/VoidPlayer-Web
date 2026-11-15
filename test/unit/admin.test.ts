@@ -239,14 +239,15 @@ test('unexpected admin failures persist stack and request correlation while omit
 }));
 
 test('analysis workers reserve usable threads for the codec within the admitted budget', async () => {
-  const { decoderForCodec } = await import('../../server/analysis/bitstream/limits.ts');
+  const { decoderForCodec } = await import('../../shared/analysis/bitstream/threading.ts');
   assert.deepEqual(decoderForCodec('vvc', 4), { threads: 2, contexts: 2 });
   assert.deepEqual(decoderForCodec('vvc', 1), { threads: 1, contexts: 1 });
   assert.deepEqual(decoderForCodec('h264', 4), { threads: 4, contexts: 4 });
   const manual = { threads: 4, contexts: 2 };
   assert.deepEqual(decoderForCodec('vvc', 4, manual), manual);
   assert.deepEqual(decoderForCodec('h264', 4, manual), { threads: 2, contexts: 2 });
-  assert.deepEqual(decoderForCodec('hevc', 4, manual), { threads: 1, contexts: 1 });
+  assert.deepEqual(decoderForCodec('hevc', 4, manual), { threads: 4, contexts: 1 });
+  assert.deepEqual(decoderForCodec('hevc', 4), { threads: 2, contexts: 1 });
 });
 
 test('analysis settings persist, hot-apply across listeners and reject stale or invalid writes', async () => fixture(async ({ root, base, library, admin, config }) => {

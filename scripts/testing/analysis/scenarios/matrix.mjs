@@ -83,6 +83,12 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
             slot: "A",
           });
           assert.equal(result.confidence, row.expected);
+          if (input === 'local-file') {
+            const parallel = await page.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined' && navigator.hardwareConcurrency >= 2);
+            assert.match(result.buildId, parallel ? /:mt-[0-9a-f]{16}$/ : /:refs-[0-9a-f]{16}$/, row.codec + ' local decoder build');
+            const wasm = parallel ? 'voidplayer-analysis-mt.wasm' : 'voidplayer-analysis.wasm';
+            assert.ok(requests.some(request => new URL(request.url).pathname.endsWith('/' + wasm)), 'local analysis fetched its WASM variant');
+          }
           assert.deepEqual(result.picture, token.picture);
           assert.equal(result.sourcePtsUs, token.sourcePtsUs);
           assert.ok(result.blocks.length > 0);
@@ -91,7 +97,7 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
               !requests
                 .slice(start)
                 .some((r) =>
-                  /voidplayer-analysis\.(js|wasm)|local-worker/.test(r.url),
+                  /voidplayer-analysis(?:-mt)?\.(js|wasm)|local-worker/.test(r.url),
                 ),
               "library analysis loads no browser decoder",
             );
@@ -257,7 +263,7 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
           const beforeCachedRange = requests.length;
           const cachedRange = await call('request_bitstream_range', { slot: 'A', startUs: 10000, endUs: 50000 });
           assert.ok(cachedRange.pictures >= 2, 'overlapping range enumerates its own pictures');
-          if (input === 'local-file') assert.ok(!requests.slice(beforeCachedRange).some(r => /voidplayer-analysis\.(js|wasm)/.test(r.url)),
+          if (input === 'local-file') assert.ok(!requests.slice(beforeCachedRange).some(r => /voidplayer-analysis(?:-mt)?\.(js|wasm)/.test(r.url)),
             'a completely cached local range reads metadata without loading analysis WASM');
           if (decoding === "browser" && row.codec === "h264" && row.container === "mp4") {
             await call("request_bitstream_range", {
@@ -422,11 +428,6 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
       assert.ok(coreRequests.some(url => /voidplayer-core.*\.wasm$/.test(url.pathname)), 'playback Worker fetches a real core');
 
       assert.ok(coreRequests.some(url => /\/voidplayer-analysis(?:-mt)?\.wasm$/.test(url.pathname)), 'analysis Worker fetches a real core');
-      const localParallel = await page.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined' && navigator.hardwareConcurrency >= 4);
-      if (localParallel && rows.some(row => row.input === 'local-file' && ['h264','vvc'].includes(row.codec))) {
-        assert.ok(coreRequests.some(url => url.pathname.endsWith('/voidplayer-analysis-mt.wasm')), 'eligible local analysis loads the threaded artifact');
-      }
-
       for (const url of coreRequests) assert.equal(url.searchParams.get('v'), built.coreAssetDigests[url.pathname], `main/Worker core version: ${url.pathname}`);
 
       assert.equal(rows.filter(row => row.codec).length, checkpointOnly ? matrixRows.length : matrixRows.reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');

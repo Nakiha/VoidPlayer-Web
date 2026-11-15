@@ -1,3 +1,4 @@
+import { decoderForCodec } from '../../../shared/analysis/bitstream/threading.ts';
 import {analysisIndexIdentity} from '../../../shared/analysis/bitstream/products.ts';
 import type {ProductIndexIdentity} from '../../../shared/analysis/bitstream/products.ts';
 import {coreAssetUrl} from '../../media/decoding/core-url.ts';
@@ -51,9 +52,10 @@ export type DeepAnalysisState = {
   reason?: AnalysisFailureInfo;
   cacheHit?: boolean;
 };
-function localDecoderThreads(codec: string) {
-  if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined' || (navigator.hardwareConcurrency ?? 1) < 4) return 1;
-  return /^(?:h264|avc[13]?|h266|vvc1?|vvi1)(?:\.|$)/i.test(codec) ? 2 : 1;
+export function localDecoderSettings(codec: string) {
+  const cpus = navigator.hardwareConcurrency ?? 1;
+  if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined' || cpus < 2) return { threads: 1, contexts: 1 };
+  return decoderForCodec(codec, Math.max(2, Math.floor(cpus / 2)));
 }
 
 export class BitstreamAnalysisService {
@@ -111,7 +113,7 @@ export class BitstreamAnalysisService {
   }
   private async currentBuild(source:MediaSource,preparationSequence:number,signal?:AbortSignal) {
     try {
-      const url=source.info.source?new URL(source.info.source.url,location.href):new URL(coreAssetUrl('/vendor/voidplayer-analysis/' + (localDecoderThreads(source.info.codec) > 1 ? 'threading.json' : 'manifest.json'),location.href));
+      const url=source.info.source?new URL(source.info.source.url,location.href):new URL(coreAssetUrl('/vendor/voidplayer-analysis/' + (localDecoderSettings(source.info.codec).threads > 1 ? 'threading.json' : 'manifest.json'),location.href));
       if(source.info.source)url.pathname=url.pathname.replace(/\/content$/,'')+'/bitstream-analysis/capabilities';
       const response=await fetch(url,{signal,cache:'no-store'});
       if(!response.ok)throw new AnalysisFailure('source-changed','Analysis identity unavailable');
@@ -193,7 +195,7 @@ export class BitstreamAnalysisService {
       const result = source.info.source
         ? await this.remote(source, target, controller.signal)
         : source.bitstreamFile
-          ? await this.local(source.bitstreamFile, target, controller.signal, (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source), localDecoderThreads(source.info.codec))
+          ? await this.local(source.bitstreamFile, target, controller.signal, (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source), localDecoderSettings(source.info.codec))
           : await Promise.reject(
               new Error("This source has no local File reference"),
             );
@@ -293,7 +295,7 @@ export class BitstreamAnalysisService {
           target,
           controller.signal,
           consume,
-          undefined, undefined, (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source), localDecoderThreads(source.info.codec),
+          undefined, undefined, (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source), localDecoderSettings(source.info.codec),
         );
       else throw new Error("No local analysis source");
       controller.signal.throwIfAborted();
@@ -441,7 +443,7 @@ export class BitstreamAnalysisService {
     };
     try {
       if (source.info.source) await this.remoteRange(source, target, controller.signal, consume, onProgress);
-      else if (source.bitstreamFile) await this.localRange(source.bitstreamFile, target, controller.signal, consume, onProgress, source.getBitstreamIndex?.bind(source), (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source), localDecoderThreads(source.info.codec));
+      else if (source.bitstreamFile) await this.localRange(source.bitstreamFile, target, controller.signal, consume, onProgress, source.getBitstreamIndex?.bind(source), (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source), localDecoderSettings(source.info.codec));
       else throw new AnalysisFailure('invalid-request', 'No stream input');
       controller.signal.throwIfAborted();
       if (!consumed || consumed !== progress.totalPictures || !progress.indexComplete) throw new AnalysisFailure('incomplete-reference-state', 'Incomplete stream coverage');
@@ -467,7 +469,7 @@ export class BitstreamAnalysisService {
     onProgress?: (progress: StreamProgress) => void,
     frontier?: () => Promise<import('../../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>,
     snapshot?: () => Promise<import("../../../shared/analysis/bitstream/types.ts").AnalysisIndexSnapshot>,
-    threads = 1,
+    decoder = { threads: 1, contexts: 1 },
   ): Promise<void> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {
@@ -536,7 +538,7 @@ export class BitstreamAnalysisService {
           }
         } else data.ok ? done() : done(restoreFailure(data.reason, data.error));
       };
-      try { worker.postMessage({ file, target, threads, externalIndex: !!frontier, externalSnapshot: !!snapshot, base: location.href }); } catch (error) { done(error); }
+      try { worker.postMessage({ file, target, decoder, externalIndex: !!frontier, externalSnapshot: !!snapshot, base: location.href }); } catch (error) { done(error); }
     });
   }
   private async remoteRange(
@@ -651,7 +653,7 @@ export class BitstreamAnalysisService {
     target: AnalysisTarget,
     signal: AbortSignal,
     snapshot?: () => Promise<import("../../../shared/analysis/bitstream/types.ts").AnalysisIndexSnapshot>,
-    threads = 1,
+    decoder = { threads: 1, contexts: 1 },
   ): Promise<AnalysisOutput> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {
@@ -697,7 +699,7 @@ export class BitstreamAnalysisService {
           ? done(undefined, data.result)
           : done(restoreFailure(data.reason, data.error));
       };
-      try { worker.postMessage({ file, target, threads, externalSnapshot: !!snapshot, base: location.href }); } catch (error) { done(error); }
+      try { worker.postMessage({ file, target, decoder, externalSnapshot: !!snapshot, base: location.href }); } catch (error) { done(error); }
     });
   }
   private async remote(

@@ -25,7 +25,8 @@ scope.onmessage = async ({ data }) => {
   if (data.ok) { const ack = acknowledgement; acknowledgement = undefined; ack?.(true); return; }
   let threadedCore: any;
   try {
-    const threaded = data.threads === 2;
+    const { threads, contexts } = data.decoder;
+    const threaded = threads > 1;
     const asset = (name: string) => coreAssetUrl('/vendor/voidplayer-analysis/' + name, data.base);
     const counters=emptyCounters();const delivered=new Set<number>();
     const response = await fetch(
@@ -41,8 +42,8 @@ scope.onmessage = async ({ data }) => {
       if (threaded) {
         const response = await fetch(asset(stem + '.wasm'));
         if (!response.ok) throw new Error('Analysis core unavailable');
-        core = threadedCore = await createThreadedAnalysisCore(module.default, new Uint8Array(await response.arrayBuffer()), 2);
-        if (core._vpa_configure_threads(2, 2) !== 0) throw new Error('Analysis decoder thread settings rejected');
+        core = threadedCore = await createThreadedAnalysisCore(module.default, new Uint8Array(await response.arrayBuffer()), threads);
+        if (core._vpa_configure_threads(threads, contexts) !== 0) throw new Error('Analysis decoder thread settings rejected');
       } else {
         core = await module.default({ locateFile: asset });
       }

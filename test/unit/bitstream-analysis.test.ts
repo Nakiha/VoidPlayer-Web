@@ -13,6 +13,28 @@ import {
 import { AnalysisCache } from "../../shared/analysis/bitstream/cache.ts";
 import { selectNaluType, discoverNaluTypes, resetNaluFilter } from '../../src/ui/analysis/nalu-filter.ts';
 import type { AnalysisResult } from "../../shared/analysis/bitstream/contract.ts";
+test('local analysis selects the codec pool only when the browser can share memory', async t => {
+  const { localDecoderSettings } = await import('../../src/analysis/bitstream/service.ts');
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
+  const isolate = (value: boolean) => Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'crossOriginIsolated', previous);
+    else Reflect.deleteProperty(globalThis, 'crossOriginIsolated');
+  });
+  const cpus = t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 8);
+  isolate(false);
+  assert.deepEqual(localDecoderSettings('avc1.640028'), { threads: 1, contexts: 1 });
+  isolate(true);
+  assert.deepEqual(localDecoderSettings('avc1.640028'), { threads: 4, contexts: 4 });
+  assert.deepEqual(localDecoderSettings('hvc1.1.6.L93'), { threads: 2, contexts: 1 });
+  assert.deepEqual(localDecoderSettings('vvi1'), { threads: 2, contexts: 2 });
+  assert.deepEqual(localDecoderSettings('av01'), { threads: 1, contexts: 1 });
+  cpus.mock.mockImplementation(() => 2);
+  assert.deepEqual(localDecoderSettings('h264'), { threads: 2, contexts: 2 });
+  cpus.mock.mockImplementation(() => 1);
+  assert.deepEqual(localDecoderSettings('hevc'), { threads: 1, contexts: 1 });
+});
+
 test('NALU solo selection survives types discovered after the press and stays track-owned', () => {
   const a={hiddenTypes:new Set<number>()},b={hiddenTypes:new Set<number>()};
   selectNaluType(a,8,true,[1,5,7,8]);
