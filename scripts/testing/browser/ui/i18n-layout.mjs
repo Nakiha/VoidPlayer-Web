@@ -12,7 +12,7 @@ await withBrowserFixture({caseName:'i18n-layout',engine,staticDir:pseudoDir,page
  const checks=[];
  for(const width of [1280,600,390,320]){
   await page.setViewportSize({width,height:800});
-  for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','about']){
+  for(const pane of ['appearance','caches','identity','shortcuts','logs','performance','about']){
    await page.locator(`#settings-tab-${pane}`).click();
    const layout=await page.locator(`#settings-pane-${pane}`).evaluate(el=>{
     const bounds=el.getBoundingClientRect(),errors=[];
@@ -24,7 +24,7 @@ await withBrowserFixture({caseName:'i18n-layout',engine,staticDir:pseudoDir,page
     return {pane:el.id,errors,font:getComputedStyle(el).fontFamily};
    });
    checks.push({width,...layout});
-   if(width===1280&&pane==='appearance'||width===390&&pane==='performance')await page.screenshot({path:artifact(`pseudo-${pane}-${width}.png`)});
+   if(width===1280&&pane==='appearance'||width===390&&['performance','caches'].includes(pane))await page.screenshot({path:artifact(`pseudo-${pane}-${width}.png`)});
   }
  }
  assert.match(await page.locator('#settings-current-title').innerText(),/［/);
