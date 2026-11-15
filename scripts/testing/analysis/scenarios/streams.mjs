@@ -258,6 +258,7 @@ const call = (name, input = {}) => {
         'complete cached stream never initializes the local analysis WASM');
       let release;
       const gate = new Promise(r => { release = r; });
+      context.defer(`summary-cancel-gate-${input}`, () => { release(); });
       // Cached local streams still read the manifest to verify build identity.
       const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/{manifest,threading}.json*' : '**/bitstream-analysis/capabilities*';
       console.log('analysis-operation', `streams-${input}-install-cancel-gate`);
