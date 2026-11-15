@@ -57,6 +57,10 @@ export async function withAnalysisFixture(options, run) {
     page.on('pageerror',error=>errors.push(error.message));
     page.on('request',request=>requests.push({url:request.url(),method:request.method(),...(request.method()==='POST'&&/bitstream-analysis\/requests/.test(request.url())?{target:request.postDataJSON()?.target}:{})}));
     await page.addInitScript(()=>{window.__vpAnalysisQA=true;});
+    // Prime Chromium interception before Worker sessions exist. Later fault
+    // gates then update handlers without enabling interception on a busy page.
+    if (engine === 'chromium' && !desktopPerformance)
+      await fixture.phase('prepare-network-interception', () => page.route('**/*', route => route.continue()));
     await ready();page.setDefaultTimeout(30000);
     if(await page.locator('#identity-welcome').isVisible().catch(()=>false))await page.locator('#identity-welcome [data-guest]').click();
     const context={...options,...fixture,limitsDir,staticDir,referenceFixtures,gate,errors,requests,rows,overlayOnly:scenario==='overlay',...await createAnalysisControls(page)};

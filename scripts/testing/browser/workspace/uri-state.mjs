@@ -65,6 +65,7 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   assert.deepEqual(decoded.state, state);
   assert.equal(JSON.stringify(decoded).includes('独立片源标注'), false);
   const recipient = await context.newPage();
+  await recipient.bringToFront();
   await recipient.setViewportSize({ width: 1024, height: 760 });
   await recipient.goto(origin + '/?s=' + encodeUriState({ ...decoded.state, positionUs: 2000000, viewport: { ...decoded.state.viewport, channel: 'y' } }));
   await recipient.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
@@ -105,6 +106,7 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   await recipient.evaluate(state => window.voidPlayer.applyState(state), beforeMarkJump);
   assert.equal(recipient.url(), origin + '/', 'applying a snapshot never repopulates the clean address');
   const independent = await context.newPage();
+  await independent.bringToFront();
   await independent.goto(`${origin}/?s=${encodeUriState({ ...emptyUriState(), tracks: [{ slot: 'H', id: a.id, version: a.version, offsetUs: 0, visible: true }], positionUs: 1000000 })}`);
   await independent.waitForFunction(id => window.voidPlayer?.getState().tracks[0]?.slot === 'H' && window.voidPlayer.getState().marks.some(mark => mark.id === id), mark.id);
   await independent.locator('#toggle-sources').click();
