@@ -36,6 +36,26 @@ try {
   await enterPath('library:archive/sample.mp4');
   await pathPage.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
   assert.equal(await pathPage.locator('#library-location').inputValue(), '项目归档', 'root-level file reveals the mount');
+  assert.equal(await pathPage.locator('#library-compact').evaluate(button => button.nextElementSibling?.id), 'library-view', 'view choice immediately follows density');
+  const chooseView = async mode => {
+    await pathPage.locator('#library-view').click();
+    await pathPage.locator(`#library-view-menu [data-value=${mode}]`).click();
+  };
+  await chooseView('columns');
+  await pathPage.locator('.library-column[data-root=archive][data-directory=""] .source-file.in-use').waitFor();
+  await enterPath('library:archive/实验一/nested');
+  await pathPage.locator('.library-column[data-directory="实验一/nested"] .source-file').waitFor();
+  assert.equal(await pathPage.locator('.library-column').count(), 4, 'columns retain the mount and each ancestor');
+  const ancestorFile = pathPage.locator('.library-column[data-root=archive][data-directory=""] .source-file');
+  assert.equal(await ancestorFile.locator('.source-track-badges').innerText(), 'B', 'ancestor files retain player track actions');
+  await pathPage.evaluate(async () => { await window.voidPlayer.removeTrack('B'); });
+  await pathPage.waitForFunction(() => !document.querySelector('.library-column[data-root=archive][data-directory=""] .source-file')?.classList.contains('in-use'));
+  await pathPage.locator('#library-compact').click();
+  assert.equal(await pathPage.locator('.library-column[data-directory="实验一/nested"] .source-file').evaluate(row => parseFloat(getComputedStyle(row).minHeight) > 28), true, 'column rows use the shared detailed density');
+  await pathPage.locator('#library-compact').click();
+  await chooseView('list');
+  assert.equal(await pathPage.locator('#library-location').inputValue(), 'nested', 'view switching retains the current directory');
+  await pathPage.locator('.library-list-view .filename').filter({hasText:/^deep-clip\.mp4$/}).waitFor();
   await pathPage.evaluate(async () => { for (const track of window.voidPlayer.getState().tracks) await window.voidPlayer.removeTrack(track.slot); });
   let releaseLookup, lookupStarted, lookupFinished;
   const held = new Promise(resolve => { releaseLookup = resolve; });
@@ -54,6 +74,9 @@ try {
   await pathPage.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.equal(await pathPage.locator('#library-location').inputValue(), 'nested');
   assert.equal(await pathPage.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'late file lookups cannot open media after newer navigation');
+  await chooseView('columns');
+  await pathPage.reload(); await pathPage.waitForFunction(() => window.voidPlayer);
+  assert.equal(await pathPage.locator('#sources-panel').getAttribute('data-library-view'), 'columns', 'player view preference survives reload');
   await pathContext.close();
   console.log(`PASS ${engine}: file expressions open root/nested files, reveal pagination, avoid duplicates and reject late navigation`);
   const context = await browser.newContext({locale:'zh-CN', viewport: { width: 1280, height: 800 }, colorScheme: 'light' });

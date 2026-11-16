@@ -142,8 +142,8 @@
 .source-scrollbar.library-horizontal-scrollbar > span { height: 100%; }
 .library-horizontal-scrollbar:focus-visible { opacity: 1; }
 .library-pane[data-library-view=columns] > .source-scrollbar:not(.library-horizontal-scrollbar) { display: none; }
-#admin-library-view-menu button { justify-content: flex-start; gap: 8px; }
-#admin-library-view-menu .icon { width: 18px; height: 18px; flex: none; }
+.library-view-menu button { justify-content: flex-start; gap: 8px; }
+.library-view-menu .icon { width: 18px; height: 18px; flex: none; }
 
 .library-list-view[hidden], .library-columns[hidden] { display: none; }
 

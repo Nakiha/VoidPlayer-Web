@@ -1,10 +1,11 @@
 import { createMiddleFilename } from './middle-filename.ts';
 import { localOnly } from '../services/build-profile.ts';
-import { formatRecentDate, t, msg } from '../i18n.ts';
+import { onLanguageChange, formatRecentDate, t, msg } from '../i18n.ts';
 import type { LibraryPage, LibraryRoot } from '../services/library.ts';
 import type { SourceItem } from './source-catalog.ts';
 import { icon } from './icons.ts';
 import { createIconButton } from './controls.ts';
+import { installMenu } from './menu.ts';
 
 /** Shared browser DOM for the player and administration library surfaces. */
 export type LibraryFileView = {
@@ -262,4 +263,52 @@ export function patchLibraryRow(row: HTMLElement, fresh: HTMLElement) {
       else if (node.textContent !== copy.textContent) node.textContent = copy.textContent;
     });
   }
+}
+
+/** Both hosts keep their existing default and preference while sharing the view control. */
+export function installLibraryViews(host: HTMLElement, list: HTMLElement, signal: AbortSignal, options: {
+  id: string; preferenceKey: string; defaultMode: 'list' | 'columns'; changed(): void;
+}) {
+  type Mode = 'list' | 'columns';
+  let mode = options.defaultMode;
+  try {
+    const saved = localStorage.getItem(options.preferenceKey);
+    if (saved === 'list' || saved === 'columns') mode = saved;
+  } catch {}
+  const listBody = document.createElement('div'); listBody.className = 'library-list-view'; listBody.dataset.libraryViewSurface = 'list';
+  const columnsHost = document.createElement('div'); columnsHost.className = 'library-columns'; columnsHost.dataset.libraryViewSurface = 'columns';
+  list.append(listBody, columnsHost);
+  const button = createIconButton({glyph:'columns',label:t(msg('adminLibrary.viewMode','浏览视图')),className:'library-view-choice',
+    attributes:{id:options.id,'data-tooltip-suppressed':''}});
+  const menu = document.createElement('div'); menu.id = `${options.id}-menu`; menu.className = 'choice-menu library-view-menu';
+  document.body.append(menu);
+  const choices = (['list','columns'] as const).map(value => {
+    const item = document.createElement('button'); item.type = 'button'; item.dataset.value = value; item.setAttribute('role','menuitemradio');
+    item.onclick = () => {
+      if (value === mode) return;
+      mode = value;
+      list.scrollTop = 0; list.scrollLeft = 0;
+      try {localStorage.setItem(options.preferenceKey,mode);} catch {}
+      sync(); options.changed();
+    };
+    menu.append(item); return {value,button:item};
+  });
+  const control = installMenu(button,menu,{selected:() => choices.find(choice => choice.value === mode)?.button});
+  const label = (value: Mode) => value === 'list' ? t(msg('adminLibrary.listView','列表视图')) : t(msg('adminLibrary.columnView','分栏视图'));
+  function sync() {
+    host.dataset.libraryView = mode;
+    listBody.hidden = mode !== 'list'; columnsHost.hidden = mode !== 'columns';
+    button.innerHTML = icon(mode === 'list' ? 'listBullets' : 'columns') + icon('caretUpDown');
+    button.setAttribute('aria-label',`${t(msg('adminLibrary.viewMode','浏览视图'))} · ${label(mode)}`);
+    menu.setAttribute('aria-label',t(msg('adminLibrary.viewMode','浏览视图')));
+    for (const choice of choices) {
+      choice.button.setAttribute('aria-checked',String(choice.value === mode)); choice.button.setAttribute('aria-label',label(choice.value));
+      choice.button.innerHTML = icon(choice.value === 'list' ? 'listBullets' : 'columns');
+      const text = document.createElement('span'); text.textContent = label(choice.value); choice.button.append(text);
+    }
+  }
+  sync();
+  onLanguageChange(sync,signal);
+  signal.addEventListener('abort',() => {control.dispose(); menu.remove();},{once:true});
+  return {button,listBody,columnsHost,mode:() => mode};
 }

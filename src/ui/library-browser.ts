@@ -8,7 +8,7 @@ import { installContextMenu } from './context-menu.ts';
 import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';
 import { normalizeWheelDelta } from '../../shared/presentation/viewport.ts';
 
-export type LibraryBrowserElements = { list: HTMLElement; tools: HTMLElement; foot: HTMLElement; visible(): boolean; manage?: boolean; trailing?: HTMLElement; nearEnd?(): boolean; openFile?(entry: LibraryEntry): void };
+export type LibraryBrowserElements = { list: HTMLElement; tools: HTMLElement; foot: HTMLElement; visible(): boolean; manage?: boolean; view?: HTMLElement; trailing?: HTMLElement; nearEnd?(): boolean; openFile?(entry: LibraryEntry): void };
 
 /** One directory owner for mounted libraries, scoped search and path navigation. */
 export function installLibraryBrowser(elements: LibraryBrowserElements, change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (home: boolean) => void,
@@ -62,6 +62,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   const forward = createIconButton({ glyph: 'caretRight', label: t(msg('libraryBrowser.goForward', '前进')), className: 'crumbs-forward', attributes:{'data-tooltip-suppressed':''} });
   const historyControls = document.createElement('div'); historyControls.className = 'library-history';
   historyControls.append(back, forward); tools.replaceChildren(historyControls, nav, compactButton);
+  if (elements.view) tools.append(elements.view);
   if (elements.manage) tools.append(manage);
   if (elements.trailing) tools.append(elements.trailing);
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';

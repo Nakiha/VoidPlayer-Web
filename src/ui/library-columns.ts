@@ -21,6 +21,7 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
   registerMount(row:HTMLElement,root:string): void;
   collapsible?: boolean; recent?: boolean;
   pathClass?:string;
+  fingerprint?(item:SourceItem,home:boolean): string;
   more(): void;
   localizeRow(row:HTMLElement,item:SourceItem,home:boolean): void;
 }) {
@@ -44,7 +45,9 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
     const home = !record.scope.root;
     const page = home ? current.page : record.page;
     column.frame.setAttribute('aria-busy',String(!!record.pending));
-    const signature = JSON.stringify([page,home?current.recent:[],column.branch,current.page.roots.map(root => [root.id,root.name,root.state])]);
+    const state = options.fingerprint ? (home ? current.recent : page?.entries.map(entry => ({...entry,key:sourceKey(entry,entry.id),library:entry})) ?? [])
+      .map(item => options.fingerprint!(item,home)) : null;
+    const signature = JSON.stringify([state,page,home?current.recent:[],column.branch,current.page.roots.map(root => [root.id,root.name,root.state])]);
     if (signature === column.signature) return;
     column.signature = signature;
     if (!page) {
@@ -54,7 +57,7 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
     }
     const query = home ? (!current.location.root ? current.location.search.toLocaleLowerCase() : '') : record.scope.search.toLocaleLowerCase();
     const items = home ? current.recent.filter(item => item.name.toLocaleLowerCase().includes(query)) : page.entries.map(entry => ({...entry,key:sourceKey(entry,entry.id),library:entry}));
-    column.listing.render({home,query,page,items,fingerprint:item => JSON.stringify([home,item.key,item.name,item.size,item.lastModified,item.openedAt,item.library?.version,item.library?.state,current!.page.roots.map(root => [root.id,root.name,root.state])])});
+    column.listing.render({home,query,page,items,fingerprint:item => options.fingerprint?.(item,home) ?? JSON.stringify([home,item.key,item.name,item.size,item.lastModified,item.openedAt,item.library?.version,item.library?.state,current!.page.roots.map(root => [root.id,root.name,root.state])])});
     for (const row of column.body.querySelectorAll<HTMLElement>('.library-folder')) {
       const selected = row.dataset.sourceKey === column.branch;
       row.classList.toggle(options.pathClass??'library-column-selected',selected);

@@ -1,7 +1,7 @@
 import { selectVideoInputs } from '../video-input.ts';
 import { localOnly } from '../../services/build-profile.ts';
 import { installLocalSourceBrowser } from '../local-source-browser.ts';
-import { createLibraryFileRow, installLibraryListing, storageText, patchLibraryRow, preserveLibraryThumbnail } from '../library-view.ts';
+import { createLibraryFileRow, installLibraryListing, installLibraryViews, storageText, patchLibraryRow, preserveLibraryThumbnail } from '../library-view.ts';
 import { installLibraryThumbnails } from '../library-thumbnails.ts';
 import { loadStageLabel } from '../media-progress.ts';
 import type { MediaLoadStage } from '../media-progress.ts';
@@ -16,6 +16,7 @@ import { prefetchThumbnailStatus, prefetchThumbnailStatuses } from '../../thumbn
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { openMedia } from '../../media/source.ts';
 import { installLibraryBrowser } from '../library-browser.ts';
+import { installLibraryColumns } from '../library-columns.ts';
 import { installLibraryFileMenu } from '../library-file-menu.ts';
 import { installLocalSourcesResize } from '../local-sources-resize.ts';
 import { installSourceScrollbar } from '../source-scrollbar.ts';
@@ -70,9 +71,18 @@ export function createSourcesPane(shared: WorkbenchShared) {
     }
   }
 
+  let columns: ReturnType<typeof installLibraryColumns> | undefined;
+  const views = localOnly ? undefined : installLibraryViews($('sources-panel'),$('source-list'),lifecyle.signal,{
+    id:'library-view',preferenceKey:'voidplayer.library-view',defaultMode:'list',changed() {
+      columns!.setEnabled(views!.mode() === 'columns');
+      sourceSignature = ''; renderSources();
+    },
+  });
   const libraryElements = {list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),visible:() => !$('sources-panel').hidden,manage:true,trailing:$('local-add')};
-  const libraryBrowser = localOnly ? installLocalSourceBrowser(libraryElements, () => renderSources(), lifecyle.signal) : installLibraryBrowser({list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),
-    visible:() => !$('sources-panel').hidden, manage:true, openFile: entry => addToView({ ...entry, key: sourceKey(entry, entry.id, entry.version), libraryId: entry.id, libraryRootId: entry.rootId, library: entry })}, page => {
+  const remoteBrowser = localOnly ? undefined : installLibraryBrowser({list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),
+    visible:() => !$('sources-panel').hidden, manage:true, view:views!.button,
+    nearEnd:() => views!.mode() === 'columns' ? !!columns?.nearEnd() : $('source-list').scrollHeight-$('source-list').scrollTop-$('source-list').clientHeight<180,
+    openFile: entry => addToView({ ...entry, key: sourceKey(entry, entry.id, entry.version), libraryId: entry.id, libraryRootId: entry.rootId, library: entry })}, page => {
     const rootsChanged = page ? catalog.setLibraryRoots(page.roots.map(root => root.id)) : false;
     catalog.setLibrary(page?.entries ?? []);
     // Warm thumbnail presence/epochs beside listing; never blocks opening.
@@ -87,16 +97,24 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (home) void refreshRecent();
     renderSources();
   }, shared.notify, () => !document.getElementById('empty-A')!.hidden && catalog.referencesToResolve().length > 0);
+  const libraryBrowser = remoteBrowser ?? installLocalSourceBrowser(libraryElements, () => renderSources(), lifecyle.signal);
   const localResize = installLocalSourcesResize($('sources-panel'), $('local-sources'), lifecyle.signal);
   const syncStartDensity = () => {
     for (const id of ['start-library-list', 'local-list']) $(id).dataset.libraryDensity = $('source-list').dataset.libraryDensity;
   };
   $('source-list').addEventListener('library-density-change', syncStartDensity, {signal:lifecyle.signal});
   syncStartDensity();
-  const listing = installLibraryListing($('source-list'), {fileRow:sourceRow, navigate:libraryBrowser.navigate, registerMount:fileMenu.registerMount});
+  const listing = installLibraryListing(views?.listBody ?? $('source-list'), {fileRow:sourceRow, navigate:libraryBrowser.navigate, registerMount:fileMenu.registerMount});
   const recentGroup = {section:listing.recentGroup};
   const thumbnails = installLibraryThumbnails(['source-list','local-list','start-library-list'].map(id => $(id)), lifecyle.signal);
   const attachThumb = thumbnails.attach;
+  if (views) {
+    columns = installLibraryColumns($('source-list'),views.columnsHost,lifecyle.signal,{
+      fileRow:(item,home) => sourceRow(item,false,home),navigate:libraryBrowser.navigate,registerMount:fileMenu.registerMount,more:remoteBrowser!.more,
+      fingerprint:sourceFingerprint,localizeRow:(row,item,home) => patchLibraryRow(row,sourceRow(item,true,home)),
+    });
+    columns.setEnabled(views.mode() === 'columns');
+  }
   const recentLookups = new Map<string, { at: number; value: Promise<LibraryEntry | null> }>();
   async function refreshRecent() {
     if (localOnly) return;
@@ -197,13 +215,23 @@ export function createSourcesPane(shared: WorkbenchShared) {
       disabled: () => session.getState().busy || !!loadingSource });
   }
 
-  function sourceRow(item: SourceItem, copyOnly = false) {
+  function sourceFingerprint(item: SourceItem, home: boolean) {
+    const tracks = session.getState().tracks;
+    return JSON.stringify([home,!!item.file,item.library?.id ?? item.libraryId,item.library?.version ?? item.version,item.library?.state,
+      item.library?.root,item.library?.rootId,item.name,item.size,item.lastModified,item.openedAt,
+      loadingSource?.key === item.key && loadingConfirmed ? loadingSource.stage ?? 'loading' : null,
+      sourceLoadError?.key === item.key ? sourceLoadError.message : null,
+      tracks.filter(track => sourceInUse(item,[track])).map(track => track.slot),session.getState().busy || !!loadingSource,
+      libraryBrowser.page()?.roots.map(root => [root.id,root.name,root.state])]);
+  }
+
+  function sourceRow(item: SourceItem, copyOnly = false, home = libraryBrowser.isRoot()) {
     const slots = session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
     const tooltip = item.library ? t(msg('sources.tooltipLibrary', '{name}（{root}）'), {name:item.name,root:item.library.root}) : item.libraryId ? item.name
       : item.file ? t(msg('sources.tooltipLocalOnly', '{name}（本地文件，仅本机预览）'), {name:item.name})
       : localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported');
     const row = createLibraryFileRow(item, {
-      slots, tooltip, home:libraryBrowser.isRoot(),
+      slots, tooltip, home,
       loading:loadingSource?.key === item.key && loadingConfirmed ? loadingSource.status() : null,
       failed:sourceLoadError?.key === item.key ? sourceLoadError.message : null,
       offline:libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline'),
@@ -371,13 +399,14 @@ export function createSourcesPane(shared: WorkbenchShared) {
     // Only source and navigation state affect the list. A seek must not
     // disable every row or rebuild any of their action controls.
     const sourceSlots = (item: SourceItem) => session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
-    const signature = JSON.stringify([home, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, mounts.map(mount => [mount.id, mount.name, mount.state, storageText(mount)]), page?.roots.map(root => [root.id, root.name, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceSlots(item)]), local.map(item => [item.key, item.openedAt ?? null, sourceSlots(item)])]);
+    const columnState = views?.mode() === 'columns' ? [page?.revision,page?.thumbnailEpoch,catalog.recent(),
+      session.getState().tracks.map(track => [track.slot,track.id,track.source]),session.getState().busy] : null;
+    const signature = JSON.stringify([columnState, home, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, mounts.map(mount => [mount.id, mount.name, mount.state, storageText(mount)]), page?.roots.map(root => [root.id, root.name, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceSlots(item)]), local.map(item => [item.key, item.openedAt ?? null, sourceSlots(item)])]);
     const list = $('source-list');
     // Stable per-row identity: thumbnail presence/URLs must NOT rebuild rows.
     // Volatile fields (scannedAt, thumbnail flag, full roots objects) are
     // excluded; completion patches the placeholder <img> via notify.
-    const stableRoots = page?.roots.map(root => [root.id, root.name, root.state]);
-    const fingerprintOf = (item: SourceItem) => JSON.stringify([home, !!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey === item.key ? sourceLoadError?.message : null, sourceSlots(item), stableRoots]);
+    const fingerprintOf = (item: SourceItem) => sourceFingerprint(item,home);
     const syncRowAvailability = (container: HTMLElement, pool: SourceItem[]) => {
       const byKey = new Map(pool.map(entry => [entry.key, entry]));
       for (const row of container.querySelectorAll<HTMLElement>('.source-row')) {
@@ -394,7 +423,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     };
     if (signature !== sourceSignature) {
       sourceSignature = signature;
-      listing.render({home,query,page,items,fingerprint:fingerprintOf});
+      if (views?.mode() === 'columns') {
+        if (page) columns!.render({location:remoteBrowser!.appliedLocation(),page,recent:home ? items : catalog.recent()});
+      } else listing.render({home,query,page,items,fingerprint:fingerprintOf});
       syncRowAvailability(list, items);
       const localList = $('local-list');
       $('local-sources').hidden = local.length === 0;
@@ -481,7 +512,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     } else {
       libraryBrowser.clearSearch(); recentGroup.section.open = true; renderSources(); key = sourceKey(track);
     }
-    const row = [...document.querySelectorAll<HTMLElement>('#source-list .source-row, #local-list .source-row')].find(row => row.dataset.sourceKey === key);
+    const row = [...document.querySelectorAll<HTMLElement>('#source-list .source-row, #local-list .source-row')].find(row => row.dataset.sourceKey === key && row.getClientRects().length > 0);
     if (!row || signal.aborted) return;
     clearTimeout(locateHighlight);
     for (const existing of document.querySelectorAll<HTMLElement>('.source-row.is-located')) {
@@ -491,7 +522,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     row.classList.remove('is-located');
     void row.offsetWidth;
     row.classList.add('is-located');
-    const list = row.closest<HTMLElement>('#source-list, .local-sources')!;
+    const list = row.closest<HTMLElement>('.library-column, #source-list, .local-sources')!;
     const box = row.getBoundingClientRect(), bounds = list.getBoundingClientRect();
     const top = bounds.top + parseFloat(getComputedStyle(list).paddingTop || '0');
     const bottom = list.id === 'source-list' ? $('source-foot').getBoundingClientRect().top : bounds.bottom;
@@ -554,9 +585,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
   function localize() {
     const items = new Map([...catalog.recent(), ...catalog.available()].map(item=>[item.key,item]));
     for(const row of document.querySelectorAll<HTMLElement>('.source-row[data-source-key]')) {
-      const item=items.get(row.dataset.sourceKey!); if(item)patchLibraryRow(row,row.classList.contains('start-recent-row')?startRow(item,true):sourceRow(item,true));
+      const item=items.get(row.dataset.sourceKey!); if(item && !row.closest('.library-column'))patchLibraryRow(row,row.classList.contains('start-recent-row')?startRow(item,true):sourceRow(item,true));
     }
     listing.localize(libraryBrowser.page(), libraryBrowser.isRoot(), libraryBrowser.filter());
+    columns?.localize();
     const startEmpty=document.querySelector('.start-library-empty > span:last-child');
     if(startEmpty)startEmpty.textContent=t(msg("sources.noRecentVideos", "还没有最近打开的视频"));
     sourceSignature = ''; // Reuses unchanged rows and updates source heading/count/status controls.
