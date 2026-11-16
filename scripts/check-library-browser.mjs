@@ -74,6 +74,14 @@ try {
   await pathPage.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.equal(await pathPage.locator('#library-location').inputValue(), 'nested');
   assert.equal(await pathPage.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'late file lookups cannot open media after newer navigation');
+  await enterPath('library:/');
+  const pathManagement = pathPage.locator('#library-manage');
+  for (const mode of ['columns','list','columns','list']) {
+    await chooseView(mode);
+    await pathManagement.waitFor({state:'visible'});
+    assert.equal(await pathManagement.count(), 1, 'view switching retains a single management link');
+    assert.equal(await pathManagement.evaluate(link => link.closest('[data-library-view-surface]').dataset.libraryViewSurface), mode);
+  }
   await chooseView('columns');
   await pathPage.reload(); await pathPage.waitForFunction(() => window.voidPlayer);
   assert.equal(await pathPage.locator('#sources-panel').getAttribute('data-library-view'), 'columns', 'player view preference survives reload');
@@ -99,6 +107,12 @@ try {
   await page.locator('#toggle-sources').click();
   await page.getByRole('button', {name:'打开媒体库：项目归档', exact:true}).waitFor();
   assert.match(await page.locator('#library-mounts .source-meta').innerText(), /可用\s*\/\s*共/);
+  assert.equal(await page.locator('#source-tools #library-manage').count(), 0, 'management stays out of the header');
+  const management = page.locator('#library-manage');
+  assert.equal(await management.innerText(), '媒体库管理');
+  assert.equal(await management.getAttribute('target'), '_blank');
+  assert.equal(await management.getAttribute('href'), '/admin#library');
+  assert.equal(await management.evaluate(link => link.parentElement.nextElementSibling?.id), 'library-mounts', 'button row precedes the home groups');
   assert.equal(await page.locator('#source-tools').evaluate(el => getComputedStyle(el).gap), '4px');
   assert.equal(await page.locator('#sources-search-toggle, #source-search, #source-search-field, #library-root, #library-root-menu').count(), 0);
   assert.equal(await page.locator('#library-location').inputValue(), '媒体库');
@@ -135,6 +149,7 @@ try {
   assert.equal((await fetch(`${base}/api/library/roots/%ZZ/location`)).status,400);
 
   await page.locator('#library-mounts > summary').click();
+  assert.equal(await management.isVisible(), true, 'collapsing the mount list keeps the action row visible');
   assert.equal(await page.getByRole('button', {name:'打开媒体库：项目归档', exact:true}).isVisible(), false);
   await page.locator('#library-mounts > summary').click();
   await page.getByRole('button', {name:'打开媒体库：项目归档', exact:true}).click();

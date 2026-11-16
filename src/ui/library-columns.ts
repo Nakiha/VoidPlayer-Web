@@ -21,6 +21,7 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
   registerMount(row:HTMLElement,root:string): void;
   collapsible?: boolean; recent?: boolean;
   pathClass?:string;
+  homeActions?: HTMLElement;
   fingerprint?(item:SourceItem,home:boolean): string;
   more(): void;
   localizeRow(row:HTMLElement,item:SourceItem,home:boolean): void;
@@ -48,7 +49,7 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
     const state = options.fingerprint ? (home ? current.recent : page?.entries.map(entry => ({...entry,key:sourceKey(entry,entry.id),library:entry})) ?? [])
       .map(item => options.fingerprint!(item,home)) : null;
     const signature = JSON.stringify([state,page,home?current.recent:[],column.branch,current.page.roots.map(root => [root.id,root.name,root.state])]);
-    if (signature === column.signature) return;
+    if (signature === column.signature && (!home || !options.homeActions || options.homeActions.parentElement === column.body)) return;
     column.signature = signature;
     if (!page) {
       const message = document.createElement('p'); message.className = 'panel-empty';
@@ -141,7 +142,7 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
       if (!column) {
         const element = document.createElement('section'); element.className = 'library-column'; element.dataset.directory = scope.directory; element.dataset.root = scope.root;
         const body = document.createElement('div'); element.append(body);
-        const listing = installLibraryListing(body,{fileRow:item => options.fileRow(item,!scope.root),navigate:options.navigate,registerMount:options.registerMount,idPrefix:`column-${index}-`,collapsible:options.collapsible,recent:options.recent});
+        const listing = installLibraryListing(body,{fileRow:item => options.fileRow(item,!scope.root),navigate:options.navigate,registerMount:options.registerMount,idPrefix:`column-${index}-`,collapsible:options.collapsible,recent:options.recent,homeActions:!scope.root ? options.homeActions : undefined});
         column = {key,frame:element,body,listing,signature:'',primary:false}; columns.set(key,column);
         element.addEventListener('scroll', () => {if (enabled && columns.get(key)?.primary) options.more(); ensureVisible();}, {signal,passive:true});
       }

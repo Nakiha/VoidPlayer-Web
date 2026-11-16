@@ -144,6 +144,7 @@ export function installLibraryListing(list: HTMLElement, options: {
   navigate(root: string, directory: string): void;
   registerMount(row: HTMLElement, root: string): void;
   idPrefix?: string;
+  homeActions?: HTMLElement;
   collapsible?: boolean;
   recent?: boolean;
 }) {
@@ -193,6 +194,7 @@ export function installLibraryListing(list: HTMLElement, options: {
       while (container.children.length > children.length) container.lastElementChild!.remove();
     };
     if (home) {
+      if (options.homeActions) rows.push(options.homeActions);
       const mountsRows: HTMLElement[] = [], recentRows: HTMLElement[] = [];
       for (const mount of mounts) reuse(`mount:${mount.id}`, JSON.stringify([mount.id, mount.name, mount.state, storageText(mount)]), () => {
         const row = document.createElement('button'); row.type = 'button'; row.className = 'source-row library-folder library-mount';

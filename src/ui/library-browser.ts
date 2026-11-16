@@ -50,9 +50,12 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   const nav = document.createElement('div'); nav.className = 'library-navigation'; nav.id = 'library-navigation';
   const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location';
   address.type = 'search'; address.autocomplete = 'off'; address.spellcheck = false;
-  const manage = document.createElement('a'); manage.id = 'library-manage'; manage.className = 'icon-button library-manage';
+  const manage = document.createElement('a'); manage.id = 'library-manage'; manage.className = 'library-manage';
   manage.href = '/admin#library'; manage.target = '_blank'; manage.rel = 'opener'; manage.innerHTML = icon('externalLink');
+  const manageLabel = document.createElement('span'); manage.append(manageLabel);
+  const homeActions = document.createElement('div'); homeActions.className = 'library-actions'; homeActions.append(manage);
   function localizeManage() {
+    manageLabel.textContent = t(msg('libraryBrowser.manage', '媒体库管理'));
     manage.setAttribute('aria-label', t(msg('libraryBrowser.manage', '媒体库管理')));
     manage.dataset.tooltip = t(msg('libraryBrowser.openManagement', '在新标签页打开媒体库管理'));
   }
@@ -63,7 +66,6 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   const historyControls = document.createElement('div'); historyControls.className = 'library-history';
   historyControls.append(back, forward); tools.replaceChildren(historyControls, nav, compactButton);
   if (elements.view) tools.append(elements.view);
-  if (elements.manage) tools.append(manage);
   if (elements.trailing) tools.append(elements.trailing);
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
   foot.prepend(pathbar);
@@ -308,6 +310,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   }
 
   return {
+    homeActions: elements.manage ? homeActions : undefined,
     snapshot: () => ({ root, directory, search, all: false }),
     async restore(state: { root: string; directory: string; search: string; all: boolean; recent?: boolean; query?: string }) {
       clearTimeout(searchTimer); request?.abort(); sequence++;

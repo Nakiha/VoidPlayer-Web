@@ -23,7 +23,7 @@
 .source-row.source-striped { background: var(--library-row-striped, var(--surface-stripe)); }
 .source-row:hover { background: var(--surface-hover); }
 .source-row, .source-row button, .source-row > .source-thumb, .library-root-group > summary,
-.source-tools button, .source-tools .library-manage, .source-tools .library-navigation, .library-path-item { transition: none !important; }
+.source-tools button, .source-tools .library-navigation, .library-path-item { transition: none !important; }
 .source-row[aria-disabled=true], .source-open[aria-disabled=true] { cursor: default; }
 .source-open { display: flex; flex: 1; min-width: 0; min-height: 40px; justify-content: flex-start; padding: 0; border: 0; border-radius: 0; font-weight: inherit; text-align: left; }
 .source-row .source-open, .source-row .source-open:hover, .source-row .source-open:active { background: transparent !important; box-shadow: none !important; }
@@ -108,7 +108,8 @@
 .library-path-separator .icon { width: 12px; height: 12px; flex: none; color: var(--text-secondary); }
 .library-path-item[aria-current] { color: var(--text); }
 
-.library-manage { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-control); text-decoration: none; color: inherit; }
+.library-actions { display: flex; align-items: center; gap: 4px; padding: 4px; }
+.library-manage { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--control-small-height); padding: 4px 8px; background: var(--surface-control); box-shadow: var(--control-shadow); font-size: var(--text-sm); border-radius: var(--radius-control); text-decoration: none; color: inherit; }
 .library-manage:hover { background: var(--glass-control-hover); }
 
 .source-tools .library-view-choice { width: 44px; flex: 0 0 44px; gap: 2px; }

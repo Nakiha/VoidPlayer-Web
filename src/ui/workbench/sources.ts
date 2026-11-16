@@ -104,14 +104,14 @@ export function createSourcesPane(shared: WorkbenchShared) {
   };
   $('source-list').addEventListener('library-density-change', syncStartDensity, {signal:lifecyle.signal});
   syncStartDensity();
-  const listing = installLibraryListing(views?.listBody ?? $('source-list'), {fileRow:sourceRow, navigate:libraryBrowser.navigate, registerMount:fileMenu.registerMount});
+  const listing = installLibraryListing(views?.listBody ?? $('source-list'), {fileRow:sourceRow, navigate:libraryBrowser.navigate, registerMount:fileMenu.registerMount, homeActions:remoteBrowser?.homeActions});
   const recentGroup = {section:listing.recentGroup};
   const thumbnails = installLibraryThumbnails(['source-list','local-list','start-library-list'].map(id => $(id)), lifecyle.signal);
   const attachThumb = thumbnails.attach;
   if (views) {
     columns = installLibraryColumns($('source-list'),views.columnsHost,lifecyle.signal,{
       fileRow:(item,home) => sourceRow(item,false,home),navigate:libraryBrowser.navigate,registerMount:fileMenu.registerMount,more:remoteBrowser!.more,
-      fingerprint:sourceFingerprint,localizeRow:(row,item,home) => patchLibraryRow(row,sourceRow(item,true,home)),
+      homeActions:remoteBrowser!.homeActions,fingerprint:sourceFingerprint,localizeRow:(row,item,home) => patchLibraryRow(row,sourceRow(item,true,home)),
     });
     columns.setEnabled(views.mode() === 'columns');
   }
