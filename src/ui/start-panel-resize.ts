@@ -1,5 +1,6 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
 import { installResizeGesture } from './resize-gesture.ts';
+import { createFrameTask } from './frame-task.ts';
 
 const WIDTH_KEY = 'voidplayer.start-panel-width.v1';
 const DEFAULT_WIDTH = 680, MIN_WIDTH = 320, HANDLE_GUTTERS = 48;
@@ -53,9 +54,11 @@ export function installStartPanelResize(panel: HTMLElement, signal: AbortSignal)
       dragging(active) { panel.classList.toggle('resizing', active); }, preview() {}, collapse() {},
     }, signal);
   }
-  const observer = new ResizeObserver(refresh); observer.observe(host);
+  // Changing panel width also resizes the observed recent list inside it.
+  const layout = createFrameTask(refresh);
+  const observer = new ResizeObserver(layout.schedule); observer.observe(host);
   window.addEventListener('resize', refresh, { signal });
   onLanguageChange(refresh, signal);
-  signal.addEventListener('abort', () => { observer.disconnect(); panel.classList.remove('resizing'); }, { once: true });
+  signal.addEventListener('abort', () => { observer.disconnect(); layout.dispose(); panel.classList.remove('resizing'); }, { once: true });
   refresh();
 }

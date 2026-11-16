@@ -2768,7 +2768,12 @@ try {
       {...original, libraryId:original.id, libraryRootId:original.rootId},
       {...original, libraryId:offlineId, libraryRootId:original.rootId, name:'offline-reference.mp4'},
     ];
-    await page.evaluate(history => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(history)), history);
+    // Seed once in the new document, after pending writes from the old page have ended.
+    await page.addInitScript(history => {
+      if (sessionStorage.getItem('history-seeded')) return;
+      localStorage.setItem('voidplayer.sources.v1', JSON.stringify(history));
+      sessionStorage.setItem('history-seeded','1');
+    }, history);
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('voidplayer.sources.v1')).length === 2);
     assert.deepEqual(await page.locator('.start-recent-row .filename').allTextContents(), ['ci_h264_smoke.mp4']);
