@@ -1,9 +1,3 @@
-// Server-side first-frame thumbnail cache. Small JPEG BLOBs in library.sqlite,
-// keyed by (media_id, media_version, stream_selector, recipe_version) with a
-// unique constraint: the first valid submission wins, later ones dedupe.
-// An independent thumbnailEpoch rejects uploads accepted before a clear.
-// Reads never decode, scan or schedule work: GET is strictly read-only.
-
 import type { IndexDatabase } from './sqlite.ts';
 import { AdminError } from './admin-error.ts';
 import {
@@ -71,8 +65,9 @@ export class MediaThumbnailStore {
     ).get(id, version, STREAM_SELECTOR, recipe) as
       { data: Buffer; mime: string; width: number; height: number; bytes: number; sourcePtsUs: number; createdAt: number } | undefined;
     if (!row) return null;
-    this.db.prepare('UPDATE media_thumbnails SET accessed_at=? WHERE media_id=? AND media_version=? AND stream_selector=? AND recipe_version=?')
-      .run(Date.now(), id, version, STREAM_SELECTOR, recipe);
+    const now=Date.now();
+    this.db.prepare('UPDATE media_thumbnails SET accessed_at=? WHERE media_id=? AND media_version=? AND stream_selector=? AND recipe_version=? AND accessed_at<?')
+      .run(now,id,version,STREAM_SELECTOR,recipe,now-60000);
     return { ...row, width: Number(row.width), height: Number(row.height), bytes: Number(row.bytes), sourcePtsUs: Number(row.sourcePtsUs), createdAt: Number(row.createdAt) };
   }
 
@@ -110,7 +105,7 @@ export class MediaThumbnailStore {
    */
   put(id: string, version: string, recipe: string, epoch: unknown, bytes: Uint8Array, meta: { width: unknown; height: unknown; sourcePtsUs: unknown }) {
     checkId(id); checkVersion(version); checkRecipe(recipe);
-    if (!Number.isSafeInteger(epoch)) throw new AdminError(400, '缩略图上传需要缓存 epoch。');
+    if (!Number.isSafeInteger(epoch)) throw new AdminError(400, '缩略图需要缓存代次。');
     const width = meta.width, height = meta.height, sourcePtsUs = meta.sourcePtsUs;
     if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || !Number.isSafeInteger(sourcePtsUs) ||
       (width as number) < 1 || (height as number) < 1 || (sourcePtsUs as number) < 0) {
@@ -121,7 +116,7 @@ export class MediaThumbnailStore {
     if ('error' in checked) throw new AdminError(400, checked.error);
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      if (epoch !== this.epoch) throw new AdminError(409, '缩略图缓存已被清理，请在下次载入时重新提交。');
+      if (epoch !== this.epoch) throw new AdminError(409, '缩略图缓存已被清理。');
       const media = this.db.prepare(
         "SELECT 1 FROM media JOIN roots ON media.root_id=roots.id WHERE media.id=? AND version=? AND media.state='ready' AND roots.active=1",
       ).get(id, version);

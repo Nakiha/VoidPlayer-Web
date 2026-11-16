@@ -1,22 +1,5 @@
 import { ThumbnailUrlCache } from './url-cache.ts';
-// Thumbnail network + display client. Queries and uploads run beside media
-// opening, never ahead of it: prefetch is fire-and-forget, uploads use the
-// epoch frozen at accept time and are never retried with a fresh epoch.
-
-import {
-  THUMB_RECIPE_VERSION, THUMB_MAX_PENDING_UPLOADS, THUMB_MAX_PENDING_UPLOAD_BYTES,
-  THUMB_STATUS_TIMEOUT_MS, serverCacheKey, thumbnailImageUrl, thumbnailStatusUrl,
-} from '../../shared/thumbnails/contract.ts';
-import { thumbnailState } from './state.ts';
 import { getLocalThumbnail } from './local-store.ts';
-
-export interface ThumbnailStatus {
-  state: 'ready' | 'missing';
-  epoch?: number;
-  url?: string;
-  width?: number;
-  height?: number;
-}
 
 export type ThumbnailImageOptions = { visibilityTarget?: Element; retainWhileHidden?: boolean };
 
@@ -38,7 +21,7 @@ function prepareImage(img: HTMLImageElement) {
     if (!source) return;
     void img.decode().then(() => {
       if (!images.has(img) || img.getAttribute('src') !== source || !img.naturalWidth) return;
-      img.dataset.thumbDecoded = 'true'; img.style.visibility = '';
+      img.parentElement?.removeAttribute('data-thumb-pending'); img.dataset.thumbDecoded = 'true'; img.style.visibility = '';
     }).catch(() => { if (img.getAttribute('src') === source) concealImage(img); });
   });
 }
@@ -58,7 +41,7 @@ function observeImage(img: HTMLImageElement, key: string, serverUrl?: string, op
     imageObserver?.unobserve(previous.target);
     imageTargets.delete(previous.target);
   }
-  images.set(img, { key, serverUrl, visible: true, target, retainWhileHidden });
+  images.set(img, { key, serverUrl, visible: !serverUrl || typeof IntersectionObserver === 'undefined', target, retainWhileHidden });
   imageTargets.set(target, img);
   imageObserver ??= typeof IntersectionObserver === 'undefined' ? undefined : new IntersectionObserver(entries => {
     for (const entry of entries) {
@@ -101,7 +84,6 @@ function showObjectUrl(img: HTMLImageElement, url: string) {
 }
 
 const listeners = new Set<(key: string) => void>();
-const statusInFlight = new Map<string, Promise<void>>();
 
 /** Subscribe to per-key completion; only the matching row patches, no rerender. */
 export function onThumbnailReady(listener: (key: string) => void): () => void {
@@ -144,128 +126,6 @@ export function releaseThumbnailUrls() {
   objectUrls.clear();
 }
 
-async function readStatus(libraryId: string, mediaVersion: string): Promise<ThumbnailStatus | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new DOMException('缩略图状态查询超时。', 'AbortError')), THUMB_STATUS_TIMEOUT_MS);
-  try {
-    const response = await fetch(thumbnailStatusUrl(libraryId, mediaVersion), { cache: 'no-store', signal: controller.signal });
-    if (!response.ok) return null;
-    const value = (await response.json()) as ThumbnailStatus;
-    if (value?.state !== 'ready' && value?.state !== 'missing') return null;
-    return value;
-  } catch { return null; }
-  finally { clearTimeout(timer); }
-}
-
-/** Parallel, bounded, never throws; warms the frozen-epoch cache. */
-export function prefetchThumbnailStatus(libraryId: string, mediaVersion: string | undefined): void {
-  if (!libraryId || !mediaVersion) return;
-  const key = serverCacheKey({ mediaId: libraryId, mediaVersion });
-  const cached = thumbnailState.statusCache.get(key);
-  if (cached && Date.now() - cached.at < 5 * 60 * 1000) return;
-  if (statusInFlight.has(key)) return;
-  const work = readStatus(libraryId, mediaVersion)
-    .then(status => {
-      if (status) {
-        const current = thumbnailState.statusCache.get(key);
-        if (current?.epoch !== undefined && status.epoch !== undefined && current.epoch > status.epoch) return;
-        const wasReady = thumbnailState.statusCache.get(key)?.ready;
-        thumbnailState.rememberStatus(key, { ready: status.state === 'ready', epoch: status.epoch, width: status.width, height: status.height });
-        // Server readiness arrives after rows render imageless. Notify so the
-        // placeholder <img> patches in place instead of waiting for an
-        // unrelated full-list rebuild (which would flash).
-        if (status.state === 'ready' && !wasReady) notifyThumbnailReady(key);
-      }
-    })
-    .catch(() => {})
-    .finally(() => { statusInFlight.delete(key); });
-  statusInFlight.set(key, work);
-}
-
-/** Warm a visible page of entries; bounded count, each request bounded. */
-export function prefetchThumbnailStatuses(entries: { id: string; version?: string; thumbnail?: boolean }[], limit = 60, epoch?: number): void {
-  let started = 0;
-  for (const entry of entries) {
-    if (started >= limit) break;
-    if (!entry.version) continue;
-    // Skip keys with a fresh status to avoid refetching on every repaint.
-    const key = serverCacheKey({ mediaId: entry.id, mediaVersion: entry.version });
-    const cached = thumbnailState.statusCache.get(key);
-    if (typeof entry.thumbnail === 'boolean' && Number.isSafeInteger(epoch) && epoch! >= 0) {
-      if (cached?.epoch !== undefined && cached.epoch > epoch!) continue;
-      thumbnailState.rememberStatus(key, { ready: entry.thumbnail, epoch,
-        ...(cached && cached.epoch === epoch && entry.thumbnail ? { width: cached.width, height: cached.height } : {}) });
-      if (entry.thumbnail && !cached?.ready) notifyThumbnailReady(key);
-      started++;
-      continue;
-    }
-    if (cached && Date.now() - cached.at < 5 * 60 * 1000) continue;
-    started++;
-    prefetchThumbnailStatus(entry.id, entry.version);
-  }
-}
-
-export interface ThumbnailUpload {
-  libraryId: string;
-  mediaVersion: string;
-  recipe?: string;
-  /** Frozen at accept; the server rejects stale epochs, no refresh+retry. */
-  epoch: number;
-  blob: Blob;
-  width: number;
-  height: number;
-  sourcePtsUs: number;
-}
-
-export type UploadOutcome = 'ok' | 'deduped' | 'conflict' | 'skipped' | 'error';
-
-/** Upload one small JPEG. Never throws; conflicts are terminal for this image. */
-export async function uploadThumbnail(upload: ThumbnailUpload): Promise<UploadOutcome> {
-  const { libraryId, mediaVersion, epoch, blob, width, height, sourcePtsUs } = upload;
-  const recipe = upload.recipe ?? THUMB_RECIPE_VERSION;
-  if (thumbnailState.pendingUploads >= THUMB_MAX_PENDING_UPLOADS ||
-    thumbnailState.pendingUploadBytes + blob.size > THUMB_MAX_PENDING_UPLOAD_BYTES) {
-    thumbnailState.skip('budget:upload-queue');
-    return 'skipped';
-  }
-  thumbnailState.pendingUploads++;
-  thumbnailState.pendingUploadBytes += blob.size;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new DOMException('缩略图上传超时。', 'AbortError')), THUMB_STATUS_TIMEOUT_MS * 2);
-  try {
-    const url = `/api/media/${encodeURIComponent(libraryId)}/thumbnail` +
-      `?v=${encodeURIComponent(mediaVersion)}&recipe=${encodeURIComponent(recipe)}` +
-      `&epoch=${encodeURIComponent(String(epoch))}&w=${width}&h=${height}&pts=${sourcePtsUs}`;
-    const response = await fetch(url, {
-      method: 'POST', body: blob, cache: 'no-store', signal: controller.signal,
-      headers: { 'content-type': 'image/jpeg', 'x-voidplayer-action': 'thumbnail' },
-    });
-    if (response.status === 201) { thumbnailState.uploaded++; return 'ok'; }
-    if (response.status === 200) return 'deduped';
-    if (response.status === 409) { thumbnailState.skip('conflict:epoch-version'); return 'conflict'; }
-    thumbnailState.skip(`upload:http-${response.status}`);
-    return 'error';
-  } catch {
-    thumbnailState.skip('upload:network');
-    return 'error';
-  } finally {
-    clearTimeout(timer);
-    thumbnailState.pendingUploads--;
-    thumbnailState.pendingUploadBytes -= blob.size;
-  }
-}
-
-/**
- * Fill an <img> for a cache key: live object URL first, stored Blob second,
- * optional server URL when the entry is known ready. Callers keep a fixed-size
- * placeholder so late fills never shift layout. Patches only when the element
- * still shows the same key. Single-write: server and local never both assign,
- * so the image does not flash server -> local on every first render.
- * A per-image fixed-size visibility target survives Chromium dropping the
- * layout box of a lazy, src-less image after a details group is closed.
- * retainWhileHidden keeps loaded pixels/URLs for the mounted row lifetime,
- * trading memory for fold/scroll continuity; removal still releases the image.
- */
 export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl?: string, options?: ThumbnailImageOptions): void {
   observeImage(img, key, serverUrl, options);
   if (!images.get(img)?.visible) return;
@@ -282,26 +142,16 @@ export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl
     return;
   }
   if (serverUrl) {
-    // Known-ready server image: direct load, async decode, no extra probing.
-    // Local fallback happens only if the server image fails.
     img.dataset.thumbSrc = serverUrl;
-    img.decoding = 'async';
     img.onerror = () => {
-      if (img.dataset.thumbKey !== key || !img.isConnected || !images.get(img)?.visible) return;
-      void getLocalThumbnail(key).then(stored => {
-        if (img.dataset.thumbKey !== key || !img.isConnected || !images.get(img)?.visible) return;
-        if (!stored) {
-          // Both server and local failed: keep the fixed-size empty slot
-          // instead of a broken-image icon.
-          img.removeAttribute('src');
-          img.dataset.thumbSrc = '';
-          return;
-        }
-        const currentLive = objectUrls.get(key);
-        const url = currentLive ?? trackObjectUrl(key, stored.blob);
-        if (img.dataset.thumbSrc === url) return;
-        img.onerror = null; showObjectUrl(img, url);
-      });
+      // Retry on re-entry, with one delayed retry for a busy server while still visible.
+      img.dataset.thumbSrc = '';
+      img.removeAttribute('src');
+      if (img.dataset.thumbRetry) return;
+      img.dataset.thumbRetry = 'true';
+      setTimeout(() => {
+        if (images.get(img)?.visible && img.isConnected && !img.hasAttribute('src')) fillThumbnailImage(img,key,serverUrl);
+      },3000);
     };
     assignImageUrl(img, serverUrl);
     return;
@@ -318,9 +168,4 @@ export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl
     if (img.dataset.thumbSrc === url) return;
     showObjectUrl(img, url);
   });
-}
-
-/** Direct server image URL for a ready library entry. */
-export function serverThumbnailImageUrl(libraryId: string, mediaVersion: string): string {
-  return thumbnailImageUrl(libraryId, mediaVersion);
 }

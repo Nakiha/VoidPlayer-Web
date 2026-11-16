@@ -2,7 +2,7 @@
   "name": "voidplayer-web",
   "private": true,
   "license": "LGPL-2.1-or-later",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.ts",
@@ -98,6 +98,7 @@
     "@messageformat/runtime": "3.0.3",
     "@peculiar/x509": "3.1.0",
     "@phosphor-icons/core": "2.1.1",
+    "jpeg-js": "0.4.4",
     "mediabunny": "1.65.1",
     "reflect-metadata": "0.2.2"
   },

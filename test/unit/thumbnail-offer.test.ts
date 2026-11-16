@@ -10,7 +10,7 @@ import { THUMB_FRAME_BUDGET_BYTES } from '../../shared/thumbnails/contract.ts';
 function context(overrides: Partial<FirstFrameContext> = {}): FirstFrameContext {
   return {
     cacheKey: `test|${Math.random().toString(36).slice(2)}`,
-    kind: 'local', sourceGen: 1, sourcePtsUs: 1000, isFileFirst: true, byteSize: 400,
+    sourceGen: 1, sourcePtsUs: 1000, isFileFirst: true, byteSize: 400,
     ...overrides,
   };
 }
@@ -88,12 +88,10 @@ test('accepted video-sample clones without touching the original', () => {
   let originalClosed = false;
   const { frame, closes } = sampleFrame();
   (frame as { close: () => void }).close = () => { originalClosed = true; };
-  const offered = offerFirstFrameCandidate(context({ epoch: 7 }), frame);
+  const offered = offerFirstFrameCandidate(context(), frame);
   assert.equal(typeof offered, 'object');
   assert.equal((offered as { result: string }).result, 'accepted');
   assert.equal(originalClosed, false);
-  // Epoch is frozen at accept.
-  assert.equal(thumbnailState.cachedEpoch((offered as { context: FirstFrameContext }).context.cacheKey), 7);
   (offered as import('../../src/thumbnails/offer.ts').AcceptedOffer).release();
   assert.equal(closes(), 1);
   assert.equal(originalClosed, false);

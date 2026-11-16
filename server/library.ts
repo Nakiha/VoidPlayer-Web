@@ -7,6 +7,7 @@ import {FrameIndexJobs} from './frame-index-jobs.ts';
 import type {LibraryScanStatus} from '../shared/service/admin.ts';
 import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
+import { ThumbnailJobs } from './thumbnail-jobs.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
@@ -40,6 +41,7 @@ export class MediaLibraryIndex {
   private stopping?:Promise<void>;
   private coreDirectory:string;
   readonly frameIndexes: FrameIndexStore;
+  readonly thumbnailJobs: ThumbnailJobs;
   readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
   private abort: AbortController | null = null;
@@ -75,6 +77,7 @@ export class MediaLibraryIndex {
     this.indexJobs = new FrameIndexJobs(this.store.file, this.coreDirectory);
     this.frameIndexes = new FrameIndexStore(this.store.db);
     this.thumbnails = new MediaThumbnailStore(this.store.db);
+    this.thumbnailJobs = new ThumbnailJobs(this.coreDirectory,this.thumbnails);
     try { this.store.configure(this.definitions); } catch (error) { this.store.close(); throw error; }
     this.scheduler = new LibraryScanScheduler(this.store.db, () => this.now(), options.ttlMs ?? LIBRARY_RECHECK_MS, options.settleMs ?? 0);
     this.initialized = !!this.store.db.prepare('SELECT 1 FROM roots WHERE active=1 AND scanned_at IS NOT NULL LIMIT 1').get();
@@ -577,6 +580,7 @@ export class MediaLibraryIndex {
     this.closed=true;
     await closeResources('Media execution shutdown incomplete',[
       ['library file operations',()=>this.fileMutation?.catch(()=>{})],
+      ['cover generation',()=>this.thumbnailJobs.close()],
       ['scan scheduling',()=>this.stop()],['library scan',()=>this.pending?.catch(()=>{})],
       ['storage reads',async()=>{await Promise.allSettled([...this.storageReads]);}],
       ['index readers',()=>closeResources('Index readers failed to stop',[...this.indexReaders].map((stop,i)=>[String(i),stop] as const))],['index executors',()=>this.indexJobs.close()],

@@ -22,18 +22,10 @@ class ThumbnailState {
   holdOwner?: symbol;
   holdStartedAt = 0;
   holdPeakBytes = 0;
-  /** Small-image uploads awaiting fetch. */
-  pendingUploads = 0;
-  pendingUploadBytes = 0;
-  /** Frozen upload epochs captured at accept time, keyed by cache key. */
-  readonly epochs = new Map<string, number | undefined>();
-  /** Last known server status per cache key (ready flag + epoch). */
-  readonly statusCache = new Map<string, { ready: boolean; epoch?: number; width?: number; height?: number; at: number }>();
   skipped: SkipCounter = {};
   syncHookLastMs = 0;
   syncHookMaxMs = 0;
   rendered = 0;
-  uploaded = 0;
   accepted = 0;
 
   skip(reason: string) {
@@ -45,21 +37,12 @@ class ThumbnailState {
     if (ms > this.syncHookMaxMs) this.syncHookMaxMs = ms;
   }
 
-  rememberStatus(key: string, status: { ready: boolean; epoch?: number; width?: number; height?: number }) {
-    this.statusCache.set(key, { ...status, at: Date.now() });
-    if (status.epoch !== undefined) this.epochs.set(key, status.epoch);
-  }
-
-  cachedEpoch(key: string): number | undefined {
-    return this.epochs.get(key);
-  }
-
   snapshot() {
     return {
       completed: this.completed.size, inFlight: this.inFlight.size, holdingFull: this.holdingFull,
-      holdPeakBytes: this.holdPeakBytes, pendingUploads: this.pendingUploads,
+      holdPeakBytes: this.holdPeakBytes,
       skipped: { ...this.skipped }, syncHookLastMs: this.syncHookLastMs, syncHookMaxMs: this.syncHookMaxMs,
-      rendered: this.rendered, uploaded: this.uploaded, accepted: this.accepted,
+      rendered: this.rendered, accepted: this.accepted,
     };
   }
 
@@ -67,10 +50,9 @@ class ThumbnailState {
   reset() {
     this.completed.clear(); this.inFlight.clear();
     this.holdingFull = false; this.holdOwner = undefined; this.holdStartedAt = 0; this.holdPeakBytes = 0;
-    this.pendingUploads = 0; this.pendingUploadBytes = 0;
-    this.epochs.clear(); this.statusCache.clear(); this.skipped = {};
+    this.skipped = {};
     this.syncHookLastMs = 0; this.syncHookMaxMs = 0;
-    this.rendered = 0; this.uploaded = 0; this.accepted = 0;
+    this.rendered = 0; this.accepted = 0;
   }
 }
 

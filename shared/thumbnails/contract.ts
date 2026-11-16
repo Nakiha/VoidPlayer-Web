@@ -18,21 +18,11 @@ export const THUMB_MAX_BYTES = 128 * 1024;
 export const THUMB_FRAME_BUDGET_BYTES = 64 * 1024 * 1024;
 /** Full-frame lifetime deadline, enforced when the event loop can run timers. */
 export const THUMB_HOLD_MS = 500;
-/** Small-image upload queue caps (full frames are never queued). */
-export const THUMB_MAX_PENDING_UPLOADS = 8;
-export const THUMB_MAX_PENDING_UPLOAD_BYTES = 1024 * 1024;
 /** Server-side logical capacity with accessed_at eviction. */
 export const THUMB_CACHE_LIMIT_BYTES = 256 * 1024 * 1024;
-/** Bounded network waits for status/upload; playback never waits on these. */
-export const THUMB_STATUS_TIMEOUT_MS = 3000;
 /** Server acceptance tolerance for decoded dimensions (recipe emits <=384). */
 export const THUMB_MAX_DIM = 512;
 export const THUMB_MIN_DIM = 1;
-/** Hard cap for a POST body before JPEG parsing. */
-export const THUMB_POST_BODY_MAX = 256 * 1024;
-
-export type ThumbnailKind = 'library' | 'local';
-
 export interface ServerThumbnailKey {
   mediaId: string;
   mediaVersion: string;

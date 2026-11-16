@@ -5,7 +5,6 @@ import { sourceKey } from './source-catalog.ts';
 import type { SourceItem } from './source-catalog.ts';
 import { installLibraryListing } from './library-view.ts';
 import { installLibraryColumnLayout } from './library-column-layout.ts';
-import { prefetchThumbnailStatuses } from '../thumbnails/client.ts';
 
 type Scope = {root:string; directory:string; search:string};
 type Record = {scope:Scope; page?:LibraryPage; stale:boolean; pending?:AbortController; sequence:number; error?:boolean; retryAt:number};
@@ -84,7 +83,6 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
         offset:append?previous?.nextOffset??0:0,revision:append?previous?.revision:undefined},AbortSignal.any([signal,controller.signal,AbortSignal.timeout(10000)]));
       if (record.sequence !== ticket || controller.signal.aborted || signal.aborted) return;
       record.page = append && previous ? {...page,entries:[...previous.entries,...page.entries],directories:[...previous.directories,...page.directories]} : page;
-      prefetchThumbnailStatuses(page.entries,60,page.thumbnailEpoch);
       record.stale = false; record.error = false; record.retryAt = 0;
     } catch (error) {
       if (controller.signal.aborted || signal.aborted || record.sequence !== ticket) return;

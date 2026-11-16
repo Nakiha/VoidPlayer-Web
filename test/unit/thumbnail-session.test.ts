@@ -4,32 +4,7 @@ import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { ReviewSession } from '../../src/session.ts';
 import type { DecodedFrame, MediaSource } from '../../src/media/contract.ts';
 import { thumbnailState } from '../../src/thumbnails/state.ts';
-import { prefetchThumbnailStatus, prefetchThumbnailStatuses } from '../../src/thumbnails/client.ts';
-import { serverCacheKey } from '../../shared/thumbnails/contract.ts';
 import { Viewport } from '../../shared/presentation/viewport.ts';
-
-test('browse thumbnail facts replace per-item probes and a late old epoch cannot overwrite them', async () => {
-  const originalFetch = globalThis.fetch;
-  const entries = Array.from({ length: 15 }, (_, i) => ({ id: i.toString(16).padStart(24, '0'), version: 'a'.repeat(24), thumbnail: true }));
-  let reads = 0, release!: (response: Response) => void;
-  thumbnailState.reset();
-  try {
-    globalThis.fetch = async () => { reads++; return new Promise<Response>(resolve => { release = resolve; }); };
-    prefetchThumbnailStatus(entries[0].id, entries[0].version);
-    assert.equal(reads, 1);
-    prefetchThumbnailStatuses(entries, 60, 2);
-    for (const entry of entries) prefetchThumbnailStatus(entry.id, entry.version);
-    assert.equal(reads, 1, 'known browse readiness and epoch avoid fifteen status requests');
-    release(new Response(JSON.stringify({ state: 'missing', epoch: 1 })));
-    await new Promise(resolve => setImmediate(resolve));
-    const key = serverCacheKey({ mediaId: entries[0].id, mediaVersion: entries[0].version });
-    assert.equal(thumbnailState.statusCache.get(key)?.ready, true);
-    assert.equal(thumbnailState.cachedEpoch(key), 2);
-    prefetchThumbnailStatuses(entries.map(entry => ({ ...entry, thumbnail: false })), 60, 3);
-    assert.equal(thumbnailState.statusCache.get(key)?.ready, false);
-    assert.equal(thumbnailState.cachedEpoch(key), 3);
-  } finally { globalThis.fetch = originalFetch; thumbnailState.reset(); }
-});
 
 function sampleMedia(name = 'A', starts = [0, 40000], end = 80000) {
   let frameAts = 0;
@@ -107,19 +82,15 @@ test('URI scene restoration offers only committed origin frames without addition
   }
 });
 
-test('a foreign URI source cannot populate this service thumbnail cache', async () => {
-  const previous = Object.getOwnPropertyDescriptor(globalThis, 'location');
-  Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'http://local.test/', origin: 'http://local.test' } });
-  thumbnailState.reset();
-  const session = new ReviewSession(() => {}), media = sampleMedia('foreign');
-  media.source.info.source = { kind: 'library', id: 'a'.repeat(24), url: `http://foreign.test/api/media/${'a'.repeat(24)}/content?v=${'b'.repeat(24)}` };
-  try {
-    await session.load('A', async () => media.source);
-    assert.equal(thumbnailState.accepted, 0);
-    assert.equal(thumbnailState.skipped['unsupported:foreign-library'], 1);
-    assert.equal(media.frameAts(), 1);
-  } finally {
-    await session.dispose();
-    if (previous) Object.defineProperty(globalThis, 'location', previous); else Reflect.deleteProperty(globalThis, 'location');
+test('library opens leave thumbnail generation to the server', async () => {
+  for (const origin of ['http://local.test','http://foreign.test']) {
+    thumbnailState.reset();
+    const session = new ReviewSession(() => {}), media = sampleMedia('library');
+    media.source.info.source = {kind:'library',id:'a'.repeat(24),url:origin+'/content'};
+    try {
+      await session.load('A',async () => media.source);
+      assert.equal(thumbnailState.accepted,0);
+      assert.equal(media.frameAts(),1);
+    } finally {await session.dispose();}
   }
 });

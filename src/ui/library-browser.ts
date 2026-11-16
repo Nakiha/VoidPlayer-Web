@@ -4,6 +4,8 @@ import type { LibraryPage, LibraryEntry, LibraryRoot } from '../services/library
 import { onLanguageChange, t, msg } from '../i18n.ts';
 import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
+import { libraryAbsolutePath, writeClipboardText } from './library-file-menu.ts';
+import type { ContextMenuAction } from './context-menu.ts';
 import { installContextMenu } from './context-menu.ts';
 import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';
 import { normalizeWheelDelta } from '../../shared/presentation/viewport.ts';
@@ -84,12 +86,17 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   installContextMenu(pathbar, {
     id: 'library-path-menu', selector: '.library-path-item', signal, popover: 'manual',
     actions(target) {
-      return [{ id: 'copy-library-path', label: t(msg('libraryFileMenu.copyLibraryPath', '拷贝媒体库路径')), glyph: 'copy', run() {
-        try {
-          const value = libraryLocationExpression({ root: target.dataset.root ?? '', directory: target.dataset.directory ?? '', all: false });
-          void navigator.clipboard.writeText(value).then(() => notify(t(msg('libraryFileMenu.copied', '已拷贝'))), error => notify(String(error.message ?? error)));
-        } catch (error) { notify((error as Error).message); }
-      } }];
+      const id=target.dataset.root??'', path=target.dataset.directory??'', kind=target.dataset.kind;
+      const copy=(value:string|Promise<string>)=>void writeClipboardText(value)
+        .then(()=>notify(t(msg('libraryFileMenu.copied','已拷贝'))),error=>notify(String(error.message??error)));
+      const actions:ContextMenuAction[]=[{id:'copy-library-path',label:t(msg('libraryFileMenu.copyLibraryPath','拷贝媒体库路径')),glyph:'copy',
+        run:()=>copy(libraryLocationExpression({root:id,directory:path,all:false}))}];
+      if (id) actions.push({id:'copy-path',label:t(msg('sourceActions.copyAbsolutePath','拷贝绝对路径')),glyph:'copy',
+        run:()=>copy(libraryAbsolutePath(signal,id,path))});
+      actions.push({id:'copy-name',glyph:'copy',label:t(kind==='file'?msg('libraryFileMenu.copyName','拷贝文件名'):
+        kind==='folder'?msg('libraryFileMenu.copyFolderName','拷贝文件夹名'):msg('libraryFileMenu.copyLibraryName','拷贝库名')),
+        run:()=>copy(target.querySelector('.library-path-label')!.textContent??'')});
+      return actions;
     },
   });
   const locationInput = () => /^(library:|https?:\/\/)/i.test(address.value.trim());
@@ -149,6 +156,13 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   function displayName() {
     return directory.split('/').at(-1) || roots.find(item => item.id === root)?.name || t(msg('libraryBrowser.library', '媒体库'));
   }
+  let selectedFile:LibraryEntry|undefined;
+  function selectFile(entry?:LibraryEntry) {
+    if (!entry) {if (selectedFile) {selectedFile=undefined;renderPathbar();}return;}
+    const parent=entry.name.includes('/')?entry.name.slice(0,entry.name.lastIndexOf('/')):'';
+    if (root!==entry.rootId || directory!==parent || search) {selectFile();return;}
+    selectedFile=entry;renderPathbar();
+  }
   function renderPathbar() {
     pathbar.setAttribute('aria-label', t(msg('libraryBrowser.pathLabel', '媒体库路径')));
     const crumbs: { label: string; glyph: Parameters<typeof icon>[0]; root: string; directory: string }[] = [
@@ -159,6 +173,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
       const parts = directory.split('/').filter(Boolean);
       for (const [index, label] of parts.entries()) crumbs.push({ label, glyph: 'open', root, directory: parts.slice(0, index + 1).join('/') });
     }
+    if (selectedFile) crumbs.push({label:selectedFile.name.split('/').at(-1)!,glyph:'fileText',root,directory:selectedFile.name});
     const signature = JSON.stringify(crumbs);
     if (signature === pathSignature) return;
     pathSignature = signature;
@@ -166,7 +181,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
     for (const [index, crumb] of crumbs.entries()) {
       const entry = document.createElement('li');
       const part = document.createElement('button'); part.type = 'button'; part.className = 'library-path-item';
-      part.dataset.root = crumb.root; part.dataset.directory = crumb.directory; part.dataset.kind = crumb.glyph === 'open' ? 'folder' : 'library';
+      part.dataset.root = crumb.root; part.dataset.directory = crumb.directory; part.dataset.kind = crumb.glyph === 'fileText' ? 'file' : crumb.glyph === 'open' ? 'folder' : 'library';
       part.dataset.tooltipSuppressed = ''; part.innerHTML = icon(crumb.glyph); part.setAttribute('aria-haspopup', 'menu');
       if (index) {
         const separator = document.createElement('span'); separator.className = 'library-path-separator';
@@ -188,6 +203,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   function traverse(delta: number) {
     const next = historyIndex + delta;
     if (next < 0 || next >= history.length) return;
+    selectedFile=undefined;
     history[historyIndex] = currentLocation(); historyIndex = next;
     ({root,directory,search} = history[historyIndex]); address.value = search; reset();
   }
@@ -231,6 +247,8 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
       }
       if (ticket !== sequence || signal.aborted) return;
       page = value; roots = value.roots; appliedSearch = search; appliedScope = scope; publishedRoot = root; publishedDirectory = directory; published = true;
+      if (selectedFile && !value.entries.some(item=>item.id===selectedFile!.id && item.name===selectedFile!.name && item.version===selectedFile!.version))
+        selectedFile=undefined;
       cadence.observe([scope, page.revision, page.thumbnailEpoch, page.thumbnailRevision, page.entries.length, page.roots.map(r => [r.id, r.state, r.error])],
         page.scanning || page.entries.some(entry => entry.state === 'pending'));
     } catch (error) {
@@ -251,12 +269,14 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   }
   function reset() { void load(false, true); }
   function navigate(id: string, path: string) {
+    selectedFile=undefined;
     rememberNavigation({root:id,directory:path,search:''});
     root = id; directory = path; search = ''; address.value = ''; reset();
   }
   function searchFor(value: string) {
     value = value.trim();
     if (value === search) { controls(); return; }
+    selectedFile=undefined;
     search = value; history[historyIndex] = currentLocation(); clearTimeout(searchTimer); request?.abort(); sequence++; loading = false;
     if (!root) { appliedSearch = search; pendingSearch = false; render(); return; }
     pendingSearch = true; controls(); searchTimer = setTimeout(reset, 200);
@@ -286,10 +306,11 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
     const targetRoot = entry.rootId ?? '';
     const targetDir = entry.name.includes('/') ? entry.name.slice(0, entry.name.lastIndexOf('/')) : '';
     // Fast path: already visible — highlight only, no list rebuild (avoids full flicker).
-    if (!!root && search === '' && appliedSearch === '' && page?.entries.some(item => item.id === entry.id)) return true;
+    if (!!root && search === '' && appliedSearch === '' && page?.entries.some(item => item.id === entry.id)) {selectFile(entry);return true;}
     const sameScope = root === targetRoot && directory === targetDir && search === '' && appliedSearch === '' && !!page;
     clearTimeout(searchTimer); request?.abort(); sequence++;
     rememberNavigation({root:targetRoot,directory:targetDir,search:''});
+    selectedFile=undefined;
     root = targetRoot; directory = targetDir;
     search = ''; address.value = ''; pendingSearch = false;
     // Keep the current page visible until the new one publishes: no
@@ -302,7 +323,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
       // A newer navigation wins over this locate request.
       if (signal.aborted || sequence !== ticket) return false;
       const current = page as LibraryPage | null; // load publishes asynchronously.
-      if (current?.entries.some(item => item.id === entry.id)) return true;
+      if (current?.entries.some(item => item.id === entry.id)) {selectFile(entry);return true;}
       if (append && current?.nextOffset === previousOffset) return false;
       append = true;
     } while ((page as LibraryPage | null)?.nextOffset != null);
@@ -314,6 +335,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
     snapshot: () => ({ root, directory, search, all: false }),
     async restore(state: { root: string; directory: string; search: string; all: boolean; recent?: boolean; query?: string }) {
       clearTimeout(searchTimer); request?.abort(); sequence++;
+      selectedFile=undefined;
       root = state.all || state.recent ? '' : state.root;
       directory = root ? state.directory : '';
       search = state.recent ? state.query ?? state.search : state.search;
@@ -321,7 +343,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
       history = [currentLocation()]; historyIndex = 0;
       address.value = search; await load(false, true);
     },
-    reveal: revealFile,
+    selectFile, reveal: revealFile,
     appliedLocation: () => ({root:publishedRoot,directory:publishedDirectory,search:appliedSearch}),
     more, navigate, page: () => page, filter: () => appliedSearch, isRoot: () => !publishedRoot,
     load: () => load(),

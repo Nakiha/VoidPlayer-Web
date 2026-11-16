@@ -6,7 +6,6 @@ import type { MediaOpenProgress } from '../media/progress.ts';
 import { openMediaFromUrl } from '../media/source.ts';
 import { contextLog } from '../logging/log.ts';
 import {ownLibraryIndexReference} from '../media/indexing/library-index-reference.ts';
-import { prefetchThumbnailStatuses } from '../thumbnails/client.ts';
 
 // Client side of the optional media-library service (browser/server/). The app
 // works without it: when no service answers, the library is simply unavailable.
@@ -70,11 +69,7 @@ export async function fetchLibraryItem(id: string, signal?: AbortSignal): Promis
   const response = await fetch(`/api/media/${encodeURIComponent(id)}`, { cache: 'no-store', signal });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`无法读取媒体库引用（HTTP ${response.status}）。`);
-  const entry: LibraryEntry = await response.json();
-  // Metadata is already version-pinned and carries the upload epoch. Warm it
-  // before any URI/Agent open can present its first frame, without another IO.
-  if (typeof entry.thumbnail === 'boolean' && Number.isSafeInteger(entry.thumbnailEpoch)) prefetchThumbnailStatuses([entry], 1, entry.thumbnailEpoch);
-  return entry;
+  return response.json();
 }
 export async function requestLibraryScan(action: 'refresh' | 'cancel') {
   const response = await fetch('/api/library/scan', { method: 'POST', headers: { 'x-voidplayer-action': 'scan','content-type':'application/json' }, body:JSON.stringify({action}), signal: AbortSignal.timeout(5000) });

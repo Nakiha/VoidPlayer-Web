@@ -78,7 +78,7 @@ const ticks = (b: Uint8Array, at: number, prefix: number): number => {
 
 /** Raw-clock supplement only. Mediabunny still owns PSI, PES payload reassembly,
  * AU demux and packet seeking. This first admission is finite 188-byte TS. */
-export async function readTsPesClocks(reader: TsPacketReader, pid: number, signal: AbortSignal, scanned?: (bytes: number) => void) {
+export async function readTsPesClocks(reader: TsPacketReader, pid: number, signal: AbortSignal, scanned?: (bytes: number) => void, stopAfter?:number) {
   if (reader.size % 188) fail('truncated or non-188-byte transport');
   const clocks = new Map<number, { pts: number | null; dts: number | null }>();
   let previousCounter: number | undefined;
@@ -112,6 +112,7 @@ export async function readTsPesClocks(reader: TsPacketReader, pid: number, signa
       if (flags === 1 || b[8] < expected || 9 + expected > b.length) fail('invalid PES clock header');
       if (clocks.size >= 250000) throw new MediaOpenError('resource', 'JS TS: PES clock budget exceeded');
       clocks.set(start + at, { pts: flags === 2 || flags === 3 ? ticks(b, 9, flags) : null, dts: flags === 3 ? ticks(b, 14, 1) : null });
+      if (clocks.size===stopAfter) return clocks;
     }
     scanned?.(start + block.length);
   }

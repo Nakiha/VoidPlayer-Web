@@ -359,7 +359,7 @@ try {
       }
     }
     const materials = await page.locator('#source-tools').evaluate(tools =>
-      ['.library-history', '.library-navigation', '.library-manage'].map(selector => {
+      ['.library-history', '.library-navigation', '#library-compact'].map(selector => {
         const s = getComputedStyle(tools.querySelector(selector));
         return { background: s.backgroundColor, filter: s.backdropFilter || s.webkitBackdropFilter };
       }));
@@ -387,10 +387,10 @@ try {
     assert.notEqual(managementFeedback.held.background,managementFeedback.hover.background,'the standalone management control uses shared press feedback');
     await management.focus();
     assert.equal(await page.locator('#library-navigation').evaluate(el => el.matches(':focus-within')),false,'management focus does not activate the search field');
-    const manageBox=await management.boundingBox(), fieldBox=await page.locator('#library-navigation').boundingBox();
+    const fieldBox=await page.locator('#library-navigation').boundingBox();
     const densityBox=await page.locator('#library-compact').boundingBox();
     assert.equal(Math.round(densityBox.x-fieldBox.x-fieldBox.width),4,'compact density follows the address with a four-pixel gap');
-    assert.equal(Math.round(manageBox.x-densityBox.x-densityBox.width),4,'management follows compact density with a four-pixel gap');
+    assert.equal(await management.evaluate(el => Boolean(el.closest('#source-list .library-actions'))),true,'management is available with the library home actions');
     await page.locator('#source-tools').screenshot({path:path.join(screenshots,`${browserName}-library-management-control.png`)});
     const navigation = await page.locator('#library-navigation').boundingBox();
     const tools = await page.locator('#source-tools').boundingBox();

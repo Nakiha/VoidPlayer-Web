@@ -2883,6 +2883,14 @@
     "source": "已拷贝",
     "translation": "Copied"
   },
+  "libraryFileMenu.copyFolderName": {
+    "source": "拷贝文件夹名",
+    "translation": "Copy folder name"
+  },
+  "libraryFileMenu.copyLibraryName": {
+    "source": "拷贝库名",
+    "translation": "Copy library name"
+  },
   "libraryFileMenu.copyLibraryPath": {
     "source": "拷贝媒体库路径",
     "translation": "Copy library path"

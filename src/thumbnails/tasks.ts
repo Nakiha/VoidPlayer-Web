@@ -1,6 +1,6 @@
 // Async thumbnail pipeline. Detached from playback: failures only skip the
 // thumbnail, never the load. Full frames are never queued — at most one extra
-// candidate is held, with its own deadline independent of encode/store/upload.
+// candidate is held, with its own deadline independent of encode/store.
 
 import { THUMB_HOLD_MS, THUMB_MAX_BYTES, THUMB_MAX_EDGE } from '../../shared/thumbnails/contract.ts';
 import { thumbnailState } from './state.ts';
@@ -8,7 +8,7 @@ import { settleOffer } from './offer.ts';
 import type { AcceptedOffer } from './offer.ts';
 import { renderThumbnailCanvas } from '../presentation/presenter.ts';
 import { putLocalThumbnail } from './local-store.ts';
-import { publishLocalThumbnail, uploadThumbnail } from './client.ts';
+import { publishLocalThumbnail } from './client.ts';
 import { log } from '../logging/log.ts';
 import { encodeThumbnailCanvas } from './encode.ts';
 
@@ -24,7 +24,7 @@ export function runThumbnailTask(accepted: AcceptedOffer): void {
     return;
   }
   queueDepth++;
-  // Independent bounded jobs: a stalled upload cannot retain the next frame.
+  // Independent bounded jobs: a stalled write cannot retain the next frame.
   setTimeout(() => { void execute(accepted).catch(() => {}).finally(() => { queueDepth--; }); }, 0);
 }
 
@@ -82,17 +82,6 @@ async function execute(accepted: AcceptedOffer): Promise<void> {
     const blob=encodedBlob??new Blob([bytes!],{type:'image/jpeg'});
     publishLocalThumbnail(key, blob);
     settle(true);
-    if (context.kind === 'library' && context.libraryId && context.mediaVersion && context.epoch !== undefined) {
-      // The epoch was frozen at accept; a 409 conflict ends this image.
-      // Never fetch a fresh epoch to re-upload the same bytes.
-      await uploadThumbnail({
-        libraryId: context.libraryId, mediaVersion: context.mediaVersion,
-        epoch: context.epoch, blob,
-        width: rendered.width, height: rendered.height, sourcePtsUs: context.sourcePtsUs,
-      });
-    } else if (context.kind === 'library') {
-      thumbnailState.skip('upload:no-epoch-or-version');
-    }
   } catch (error) {
     log.debug('media', '缩略图任务跳过', { key: key.slice(0, 48), error: error instanceof Error ? error.message : String(error) });
     settle(false);

@@ -74,7 +74,7 @@ test('owned moves retain ready thumbnails; pending, changed and cache-cleared fi
   } finally {await library.close();await rm(root,{recursive:true,force:true});}
 });
 
-test('media thumbnails: status, upload, first-wins, epoch races and version binding', async () => {
+test('media thumbnails: read-only probes, retired upload, cache validators, epoch races and version binding', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-thumbs-'));
   const media = path.join(root, 'media'); await mkdir(media); await mkdir(path.join(root, 'data'));
   await writeFile(path.join(media, 'one.mp4'), Buffer.alloc(2048, 7));
@@ -90,21 +90,12 @@ test('media thumbnails: status, upload, first-wins, epoch races and version bind
   const image = jpeg320x240();
   const statusUrl = `${base}/api/media/${entry.id}/thumbnail-status?v=${entry.version}&recipe=${encodeURIComponent(THUMB_RECIPE_VERSION)}`;
   const imageUrl = `${base}/api/media/${entry.id}/thumbnail?v=${entry.version}&recipe=${encodeURIComponent(THUMB_RECIPE_VERSION)}`;
-  const uploadUrl = (epoch: number | string, extra = '') =>
-    `${base}/api/media/${entry.id}/thumbnail?v=${entry.version}&recipe=${encodeURIComponent(THUMB_RECIPE_VERSION)}&epoch=${epoch}&w=320&h=240&pts=1000${extra}`;
-  const uploadHeaders = (origin = base) => ({ origin, 'x-voidplayer-action': 'thumbnail', 'content-type': 'image/jpeg' });
   try {
-    // Missing at first; reads never create work.
     assert.deepEqual(await (await fetch(statusUrl)).json(), { state: 'missing', epoch: 0 });
-    assert.equal((await fetch(imageUrl)).status, 404);
-    // Validation, not trust.
-    assert.equal((await fetch(uploadUrl('x'), { method: 'POST', headers: uploadHeaders(), body: new Blob([image]) })).status, 400);
-    assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: { ...uploadHeaders(), 'content-type': 'text/plain' }, body: new Blob([image]) })).status, 400);
-    assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: uploadHeaders(), body: new Blob([Uint8Array.from([1, 2, 3])]) })).status, 400);
-    assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: uploadHeaders('https://evil.invalid'), body: new Blob([image]) })).status, 403);
-    // First valid submission wins.
-    const missingRevision = library.browse().thumbnailRevision;
-    assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: uploadHeaders(), body: new Blob([image]) })).status, 201);
+    assert.equal((await fetch(imageUrl,{method:'HEAD'})).status,404);
+    assert.equal((await fetch(imageUrl,{method:'POST',body:new Blob([image])})).status,405);
+    const missingRevision=library.browse().thumbnailRevision;
+    library.thumbnails.put(entry.id,entry.version,THUMB_RECIPE_VERSION,0,image,{width:320,height:240,sourcePtsUs:1000});
     const readyRevision = library.browse().thumbnailRevision;
     assert.notEqual(readyRevision, missingRevision, 'new shared covers invalidate presence independently of media changes');
     assert.equal(library.browse().thumbnailEpoch, 0, 'new uploads do not invalidate other in-flight uploads');
@@ -122,13 +113,8 @@ test('media thumbnails: status, upload, first-wins, epoch races and version bind
     const unchanged = await fetch(imageUrl, { headers: { 'if-none-match': `"different", W/${imageTag}` } });
     assert.equal(unchanged.status, 304); assert.equal(await unchanged.text(), '');
     assert.equal((await fetch(imageUrl, { method: 'HEAD' })).status, 200);
-    // Repeat upload dedupes without overwrite.
-    const other = Buffer.concat([image, Buffer.from([0x00])]);
-    const dupe = await fetch(uploadUrl(0, '&w=320'), { method: 'POST', headers: uploadHeaders(), body: new Blob([other]) });
-    assert.equal(dupe.status, 200);
-    assert.deepEqual((await dupe.json()).deduped, true);
-    assert.deepEqual([...Buffer.from(await (await fetch(imageUrl)).arrayBuffer())], [...image]);
-    assert.equal(library.browse().thumbnailRevision, readyRevision, 'image reads and duplicate uploads do not cause presence churn');
+    assert.equal(library.thumbnails.put(entry.id,entry.version,THUMB_RECIPE_VERSION,0,image,{width:320,height:240,sourcePtsUs:1000}).deduped,true);
+    assert.equal(library.browse().thumbnailRevision,readyRevision);
     // Admin overview/list and single-item clear with epoch advance.
     const overview = await (await fetch(`${base}/api/admin/caches`)).json();
     const thumbs = overview.types.find((t: { kind: string }) => t.kind === 'media-thumbnails');
@@ -140,11 +126,9 @@ test('media thumbnails: status, upload, first-wins, epoch races and version bind
     const cleared = await fetch(`${base}/api/admin/caches/media-thumbnails`, { method: 'DELETE', headers: adminHeaders, body: JSON.stringify({ id: entry.id, version: entry.version }) });
     assert.deepEqual(await cleared.json(), { removed: 1 });
     assert.notEqual(library.browse().thumbnailRevision, readyRevision);
-    assert.equal((await fetch(imageUrl)).status, 404);
-    assert.equal((await fetch(imageUrl, { headers: { 'if-none-match': imageTag } })).status, 404, 'cleared data cannot be validated from an old tag');
-    // The in-flight upload accepted before the clear cannot backfill.
-    assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: uploadHeaders(), body: new Blob([image]) })).status, 409);
-    assert.equal((await fetch(uploadUrl(1), { method: 'POST', headers: uploadHeaders(), body: new Blob([image]) })).status, 201);
+    assert.equal((await fetch(imageUrl,{method:'HEAD',headers:{'if-none-match':imageTag}})).status,404);
+    assert.throws(()=>library.thumbnails.put(entry.id,entry.version!,THUMB_RECIPE_VERSION,0,image,{width:320,height:240,sourcePtsUs:1000}),/清理/);
+    library.thumbnails.put(entry.id,entry.version,THUMB_RECIPE_VERSION,1,image,{width:320,height:240,sourcePtsUs:1000});
     assert.equal((await fetch(imageUrl, { headers: { 'if-none-match': imageTag } })).status, 304, 'identical restored bytes may reuse their content validator');
     // Replaced files never inherit the old cover.
     await writeFile(path.join(media, 'one.mp4'), Buffer.alloc(4096, 9)); await library.refresh();

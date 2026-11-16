@@ -11,6 +11,7 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
   navigate(root:string,directory:string):void;
   location():{root:string;directory:string};
   refresh():Promise<unknown>;
+  selectFile(row?:HTMLElement):void;
   closeMenu():void;
   notify(message:string):void;
 }) {
@@ -36,6 +37,8 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
       row.setAttribute('role','option'); row.setAttribute('aria-selected',String(yes)); row.tabIndex=0;
       const column=columnOf(row); column.setAttribute('role','listbox'); column.setAttribute('aria-multiselectable','true');
     }
+    const file=selected.size===1 ? visible.find(row=>scopeOf(row)===scope && selected.has(keyOf(row)) && row.dataset.libraryKind==='file') : undefined;
+    options.selectFile(file);
   }
   function select(row:HTMLElement, shift=false, toggle=false) {
     const nextScope=scopeOf(row),key=keyOf(row);
@@ -98,7 +101,7 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
     const folder=element.closest<HTMLElement>('.library-folder[data-library-kind]');
     if (folder) return {target:{rootId:folder.dataset.rootId!,directory:folder.dataset.libraryPath!},highlight:folder};
     const crumb=element.closest<HTMLElement>('.library-path-item[data-root]');
-    if (crumb?.dataset.root) return {target:{rootId:crumb.dataset.root,directory:crumb.dataset.directory??''},highlight:crumb};
+    if (crumb?.dataset.root && crumb.dataset.kind!=='file') return {target:{rootId:crumb.dataset.root,directory:crumb.dataset.directory??''},highlight:crumb};
     const column=element.closest<HTMLElement>('.library-column');
     if (column?.dataset.root) return {target:{rootId:column.dataset.root,directory:column.dataset.directory??''},highlight:column};
     if (!column&&host.dataset.libraryView==='list'&&list.contains(element)) {

@@ -39,7 +39,7 @@ const out = path.join(root, 'artifacts', name);
 await mkdir(path.dirname(out), { recursive: true });
 await mkdir(out); // Never silently mix a previous package with a new build.
 const executable = target.includes('windows') ? 'voidplayer.exe' : 'voidplayer';
-execFileSync(bun, ['build', '--root', 'server', 'server/standalone.ts', 'server/frame-index-worker.ts', 'server/frame-index-build-worker.ts', 'server/analysis/bitstream/worker.ts', '--compile', `--target=${target}`, '--minify', '--sourcemap', '--no-compile-autoload-dotenv', '--no-compile-autoload-bunfig', '--define', 'VOIDPLAYER_COMPILED=true', '--define', `VOIDPLAYER_VERSION=${JSON.stringify(version)}`, '--define', `VOIDPLAYER_REVISION=${JSON.stringify(revision + (dirty ? '-dirty' : ''))}`, '--outfile', path.join(out, executable)], { cwd: root, stdio: 'inherit' });
+execFileSync(bun, ['build', '--root', 'server', 'server/standalone.ts', 'server/frame-index-worker.ts', 'server/frame-index-build-worker.ts', 'server/thumbnail-worker.ts', 'server/analysis/bitstream/worker.ts', '--compile', `--target=${target}`, '--minify', '--sourcemap', '--no-compile-autoload-dotenv', '--no-compile-autoload-bunfig', '--define', 'VOIDPLAYER_COMPILED=true', '--define', `VOIDPLAYER_VERSION=${JSON.stringify(version)}`, '--define', `VOIDPLAYER_REVISION=${JSON.stringify(revision + (dirty ? '-dirty' : ''))}`, '--outfile', path.join(out, executable)], { cwd: root, stdio: 'inherit' });
 await cp(path.join(root, 'dist'), path.join(out, 'dist'), { recursive: true });
 await verifyFrontendBuild(path.join(out, 'dist'));
 const packagedFrontend = JSON.parse(await readFile(path.join(out, 'dist/build-info.json'), 'utf8'));

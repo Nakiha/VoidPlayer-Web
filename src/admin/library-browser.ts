@@ -1,5 +1,4 @@
 import { onLanguageChange, t, msg } from '../i18n.ts';
-import { prefetchThumbnailStatuses } from '../thumbnails/client.ts';
 import { installLibraryColumns } from '../ui/library-columns.ts';
 import { installLibraryBrowser } from '../ui/library-browser.ts';
 import { createLibraryFileRow, installLibraryListing, installLibraryViews, librarySurfaceShell, patchLibraryRow } from '../ui/library-view.ts';
@@ -23,6 +22,7 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   const {listBody,columnsHost} = views;
   let selection:ReturnType<typeof installLibrarySelection>|undefined;
 
+  const rowEntries=new WeakMap<HTMLElement,SourceItem>();
   let active = false;
   const act = async (action: () => unknown | Promise<unknown>) => {
     try {await action();} catch (error) {if (!signal.aborted) notify((error as Error).message);}
@@ -31,14 +31,14 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   const thumbnails = installLibraryThumbnails([list], signal);
   const browser = installLibraryBrowser({list,tools:find('source-tools'),foot,visible:() => active,view:views.button,
     nearEnd:() => views.mode()==='columns' ? !!columns?.nearEnd() : list.scrollHeight-list.scrollTop-list.clientHeight<180}, page => {
-    if (page) prefetchThumbnailStatuses(page.entries,60,page.thumbnailEpoch);
     render();
   }, signal, undefined, notify);
   const listing = installLibraryListing(listBody, {fileRow,navigate:browser.navigate,registerMount:menu.registerMount,collapsible:false,recent:false});
   columns = installLibraryColumns(list,columnsHost,signal,{fileRow:(item,home) => fileRow(item,false,home),navigate:browser.navigate,registerMount:menu.registerMount,more:browser.more,collapsible:false,recent:false,pathClass:'library-column-path',
     localizeRow:(row,item,home) => patchLibraryRow(row,fileRow(item,true,home))});
   columns.setEnabled(views.mode()==='columns');
-  selection=installLibrarySelection(host,list,signal,{navigate:browser.navigate,location:browser.appliedLocation,refresh:browser.load,closeMenu:menu.close,notify});
+  selection=installLibrarySelection(host,list,signal,{navigate:browser.navigate,location:browser.appliedLocation,refresh:browser.load,closeMenu:menu.close,notify,
+    selectFile:row=>browser.selectFile(row && rowEntries.get(row)?.library)});
   const scrollbar = installSourceScrollbar(list, find('source-scrollbar'), find('source-scrollbar-thumb'), signal);
   let footFrame = 0, footHeight = -1;
   const footSize = new ResizeObserver(() => {
@@ -59,6 +59,7 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
     const row = createLibraryFileRow(item, {home,offline,tooltip:item.name,readOnly:true,
       label:item.name, open:() => {}});
     if (!copyOnly) {
+      rowEntries.set(row,item);
       thumbnails.attach(row,item);
       menu.register(row,item.library,() => ({id:'browse-in-player',label:t(msg('adminLibrary.openInPlayer', '在播放器中浏览')),glyph:'play',disabled,run:() => openInPlayer(item)}));
       row.tabIndex = 0;

@@ -2,7 +2,7 @@ import type { SessionResources } from '../session/resources.ts';
 // Synchronous first-frame offer. Runs inside the session load commit while the
 // playback frame is still open, so it must stay allocation-light: validation,
 // dedupe, budget checks and one independent resource reference. Heavy work
-// (render, encode, store, upload) continues in tasks.ts off the hot path.
+// (render, encode, store) continues in tasks.ts off the hot path.
 
 import { THUMB_FRAME_BUDGET_BYTES, THUMB_HOLD_MS } from '../../shared/thumbnails/contract.ts';
 import { thumbnailState } from './state.ts';
@@ -14,19 +14,14 @@ export type { OfferResult };
 
 export interface FirstFrameContext {
   resources?: SessionResources;
-  /** Versioned cache identity (server key or local key). */
+  /** Versioned local history key. */
   cacheKey: string;
-  kind: 'library' | 'local';
-  libraryId?: string;
-  mediaVersion?: string;
   /** Session source generation isolating rebuilt instances. */
   sourceGen: number;
   /** Real decoded identity, never a seek argument. */
   sourcePtsUs: number;
   /** Caller-verified file-first condition (localTarget===0 && frame.ptsUs===0). */
   isFileFirst: boolean;
-  /** Upload epoch frozen at accept; undefined means local-only this time. */
-  epoch?: number;
   byteSize: number;
   /** False when the offering track is already superseded. */
   isLive?: () => boolean;
@@ -115,7 +110,6 @@ export function offerFirstFrameCandidate(
   thumbnailState.holdStartedAt = acceptedAt;
   thumbnailState.holdPeakBytes = Math.max(thumbnailState.holdPeakBytes, byteSize);
   thumbnailState.accepted++;
-  if (context.epoch !== undefined) thumbnailState.epochs.set(context.cacheKey, context.epoch);
   const offer: AcceptedOffer = { result: 'accepted', owned, context, acceptedAt, expired: false, release };
   const token = Symbol(context.cacheKey);
   thumbnailState.holdOwner = token;

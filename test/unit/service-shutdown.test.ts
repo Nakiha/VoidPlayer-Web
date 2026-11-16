@@ -13,7 +13,7 @@ import {startService} from '../../server/runtime.ts';
 import {Worker} from 'node:worker_threads';
 import {once} from 'node:events';
 
-const owners=['indexJobs','indexReader'];
+const owners=['indexJobs','indexReader','thumbnailJobs'];
 for(const kind of ['database','build'] as const)test(`index ${kind} stop failure retains the real SQLite worker and library ownership`,async()=>{
   const directory=await mkdtemp(path.join(tmpdir(),'vp-index-stop-')),database=path.join(directory,'library.sqlite');
   let index:MediaLibraryIndex|undefined,worker:Worker|undefined,healthy:Worker|undefined,stop:(()=>Promise<number>)|undefined;
@@ -34,7 +34,7 @@ for(const kind of ['database','build'] as const)test(`index ${kind} stop failure
 function library(failed='') {
   const calls:string[]=[],failure=Error('physical exit unconfirmed');
   const value=Object.assign(Object.create(MediaLibraryIndex.prototype),{
-    storageReads:new Set(),
+    storageReads:new Set(),thumbnailJobs:{close(){calls.push('thumbnailJobs');if(failed==='thumbnailJobs')throw failure;}},
     stop(){calls.push('stop');if(failed==='stop')throw failure;},store:{close(){calls.push('database');}},indexJobs:{close(){calls.push('indexJobs');if(failed==='indexJobs')throw failure;}}
   }) as MediaLibraryIndex;
   Object.assign(value,{indexReaders:new Set()});

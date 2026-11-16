@@ -717,6 +717,8 @@ export default {
   "libraryColumns.scroll": () => "Scroll columns horizontally",
   "libraryColumns.unavailable": () => "Unable to read directory. Try again shortly.",
   "libraryFileMenu.copied": () => "Copied",
+  "libraryFileMenu.copyFolderName": () => "Copy folder name",
+  "libraryFileMenu.copyLibraryName": () => "Copy library name",
   "libraryFileMenu.copyLibraryPath": () => "Copy library path",
   "libraryFileMenu.copyMountPath": () => "Copy mount path",
   "libraryFileMenu.copyName": () => "Copy filename",

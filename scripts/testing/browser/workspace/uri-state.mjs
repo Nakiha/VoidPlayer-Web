@@ -165,14 +165,27 @@ await withBrowserFixture({ caseName: 'uri-state', engine, pageOptions: { viewpor
   const resized = await page.locator('#local-sources').evaluate(section => section.offsetHeight);
   assert.equal((await call(page, 'get_uri_state')).layout.localSourcesHeight, resized);
   await localRow.click({ button: 'right' });
-  assert.deepEqual(await page.locator('#library-file-menu button').allTextContents(), ['上屏', '拷贝文件名', '移除文件']);
+  assert.deepEqual(await page.locator('#library-file-menu button').allTextContents(), ['上屏', '拷贝文件名', '拷贝绝对路径', '移除文件']);
+  assert.equal(await page.locator('#library-file-menu [data-action=copy-path]').isDisabled(),true,'web File objects expose no absolute path');
+  const localName=await localRow.locator('.filename').textContent();
+  await page.evaluate(()=>{
+    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.localFileCopy=value;}}});
+    Object.defineProperty(File.prototype,'path',{configurable:true,get(){return '/Mounts/视频/'+this.name;}});
+  });
+  await page.locator('#library-file-menu [data-action=copy-name]').click();
+  await page.waitForFunction(name=>window.localFileCopy===name,localName);
+  await localRow.click({button:'right'});
+  await page.locator('#library-file-menu [data-action=copy-path]').click();
+  await page.waitForFunction(name=>window.localFileCopy==='/Mounts/视频/'+name,localName);
+  await page.evaluate(()=>{delete File.prototype.path;delete navigator.clipboard;});
+  await localRow.click({button:'right'});
   await page.locator('#library-file-menu [data-action=add-to-view]').click();
   await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(track => !track.source) && !window.voidPlayer.getState().busy);
   for (const id of ['workspace-share']) assert.equal(await page.locator('#' + id).isDisabled(), true);
   await page.locator('#workspace-share').hover();
   await page.waitForFunction(() => !document.querySelector('#control-tooltip').hidden && document.querySelector('#control-tooltip').textContent.includes('本地文件不能分享'));
   await localRow.click({ button: 'right' });
-  assert.deepEqual(await page.locator('#library-file-menu button').allTextContents(), ['下屏', '拷贝文件名', '移除文件']);
+  assert.deepEqual(await page.locator('#library-file-menu button').allTextContents(), ['下屏', '拷贝文件名', '拷贝绝对路径', '移除文件']);
   await page.locator('#library-file-menu [data-action=remove-file]').click();
   await page.waitForFunction(() => !window.voidPlayer.getState().tracks.some(track => !track.source)
     && document.querySelectorAll('#local-list .source-row').length === 1);

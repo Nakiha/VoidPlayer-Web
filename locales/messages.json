@@ -3114,6 +3114,14 @@
     "source": "已拷贝",
     "params": {}
   },
+  "libraryFileMenu.copyFolderName": {
+    "source": "拷贝文件夹名",
+    "params": {}
+  },
+  "libraryFileMenu.copyLibraryName": {
+    "source": "拷贝库名",
+    "params": {}
+  },
   "libraryFileMenu.copyLibraryPath": {
     "source": "拷贝媒体库路径",
     "params": {}

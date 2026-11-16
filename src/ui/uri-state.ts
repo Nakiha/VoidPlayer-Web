@@ -1,5 +1,4 @@
 import { localOnly } from '../services/build-profile.ts';
-import { prefetchThumbnailStatuses } from '../thumbnails/client.ts';
 import { currentActor } from '../services/identity.ts';
 import { prepareOfflineUpdate } from './offline-app.ts';
 import { parseWorkspace } from '../../shared/review/workspace-file.ts';
@@ -150,8 +149,6 @@ export function installUriState(session: ReviewSession, options: {
         if (!response.ok) throw new Error(t(msg('uriState.sourceReadFailed', '无法读取片源 {id}（HTTP {status}）。'), { id: track.id, status: response.status }));
         const entry = await response.json();
         if (entry.id !== track.id || entry.version !== track.version || entry.state !== 'ready') throw new Error(t(msg('uriState.sourceChanged', '片源已不可用或内容版本发生变化。')));
-        if (origin === location.origin && typeof entry.thumbnail === 'boolean' && Number.isSafeInteger(entry.thumbnailEpoch))
-          prefetchThumbnailStatuses([entry], 1, entry.thumbnailEpoch);
         media.push({ id: `${track.slot}-${track.id}`, name: entry.name, size: entry.size, lastModified: entry.lastModified,
           codec: '', decoder: 'webcodecs', width: 0, height: 0, durationUs: 1e12, firstPtsUs: 0,
           source: { kind: 'library', id: track.id, url: `${origin}/api/media/${track.id}/content?v=${track.version}` } });

@@ -717,6 +717,8 @@ export default {
   "libraryColumns.scroll": () => "［S~c~r~o~l~l~ c~o~l~u~m~n~s~ h~o~r~i~z~o~n~t~a~l~l~y~ ········］",
   "libraryColumns.unavailable": () => "［U~n~a~b~l~e~ t~o~ r~e~a~d~ d~i~r~e~c~t~o~r~y~. T~r~y~ a~g~a~i~n~ s~h~o~r~t~l~y~. ········］",
   "libraryFileMenu.copied": () => "［C~o~p~i~e~d~ ········］",
+  "libraryFileMenu.copyFolderName": () => "［C~o~p~y~ f~o~l~d~e~r~ n~a~m~e~ ········］",
+  "libraryFileMenu.copyLibraryName": () => "［C~o~p~y~ l~i~b~r~a~r~y~ n~a~m~e~ ········］",
   "libraryFileMenu.copyLibraryPath": () => "［C~o~p~y~ l~i~b~r~a~r~y~ p~a~t~h~ ········］",
   "libraryFileMenu.copyMountPath": () => "［C~o~p~y~ m~o~u~n~t~ p~a~t~h~ ········］",
   "libraryFileMenu.copyName": () => "［C~o~p~y~ f~i~l~e~n~a~m~e~ ········］",

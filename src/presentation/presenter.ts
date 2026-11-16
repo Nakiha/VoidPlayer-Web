@@ -1,7 +1,7 @@
 import type { SessionResources } from '../session/resources.ts';
 import { gpuPaint, gpuCapture, gpuRendererName, gpuGeometry, gpuRedrawChannel, disposeGpuPresentation, observeGpuRecovery } from './webgpu-presenter.ts';
 import { retainPresentationFrame } from './retained-frame.ts';
-import { yuvPixelRgb, resolveYuvColor } from '../../shared/color/yuv-color.ts';
+import { thumbnailPixels, thumbnailSize } from '../../shared/thumbnails/pixels.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
 import { validateDescription } from '../../shared/media/frame-description.ts';
 import { presentationColor } from './presentation-color.ts';
@@ -11,7 +11,6 @@ import type { DecodedFrame } from '../media/contract.ts';
 import { log } from '../logging/log.ts';
 import { getColorOutput } from '../../shared/color/color-output.ts';
 import {hdrDisplayAvailable} from './display-capabilities.ts';
-import { HDR_PREVIEW_POLICY } from '../../shared/color/hdr-policy.ts';
 
 // Presentation is the only place that decides HOW a decoded frame reaches the
 // canvas. Backends deliver timestamps plus a resource (WebCodecs sample or
@@ -111,15 +110,7 @@ export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_E
   } catch { return null; }
   if (policy.unsupportedHdr) return null;
   const rotation = frame.rotation ?? frame.sample?.rotation ?? 0;
-  const baseW = frame.description.displayWidth ?? frame.width;
-  const baseH = frame.description.displayHeight ?? frame.height;
-  if (!Number.isFinite(baseW) || !Number.isFinite(baseH) || baseW <= 0 || baseH <= 0) return null;
-  const swapped = rotation === 90 || rotation === 270;
-  const dispW = swapped ? baseH : baseW;
-  const dispH = swapped ? baseW : baseH;
-  const scale = Math.min(1, maxEdge / Math.max(dispW, dispH));
-  const width = Math.max(1, Math.round(dispW * scale));
-  const height = Math.max(1, Math.round(dispH * scale));
+  const {width,height} = thumbnailSize(frame.description, rotation, maxEdge);
   const makeCanvas = (w: number, h: number): OffscreenCanvas | HTMLCanvasElement => {
     if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
     const fallback = document.createElement('canvas');
@@ -141,46 +132,8 @@ export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_E
       return { canvas, width, height };
     }
     if (!frame.pixels) return null;
-    // Sample only the small target; never expand a full-resolution RGBA image.
-    const smallW = swapped ? height : width, smallH = swapped ? width : height;
-    const view = new Uint8ClampedArray(smallW * smallH * 4);
-    const d = frame.description;
-    const plan = frame.kind === 'yuv' ? resolveYuvColor(d) : undefined;
-    if(plan?.hdr)plan.hdrPolicy=HDR_PREVIEW_POLICY;
-    const rgbAt = (x: number, y: number) => {
-      if (frame.kind === 'yuv') return [...yuvPixelRgb(d, frame.pixels!, x, y, plan), 255];
-      const offset = (y * d.width + x) * 4;
-      return frame.pixels!.subarray(offset, offset + 4);
-    };
-    // Bilinear source sampling matches the presentation downscale rule.
-    for (let y = 0; y < smallH; y++) for (let x = 0; x < smallW; x++) {
-      const sx = Math.max(0, Math.min(d.width - 1, (x + .5) * d.width / smallW - .5));
-      const sy = Math.max(0, Math.min(d.height - 1, (y + .5) * d.height / smallH - .5));
-      const x0 = Math.floor(sx), y0 = Math.floor(sy), wx = sx - x0, wy = sy - y0;
-      const x1 = Math.min(d.width - 1, x0 + 1), y1 = Math.min(d.height - 1, y0 + 1);
-      const a = rgbAt(x0, y0), b = rgbAt(x1, y0), c = rgbAt(x0, y1), e = rgbAt(x1, y1);
-      const i = (y * smallW + x) * 4;
-      for (let channel = 0; channel < 4; channel++) {
-        view[i + channel] = (a[channel] * (1 - wx) + b[channel] * wx) * (1 - wy)
-          + (c[channel] * (1 - wx) + e[channel] * wx) * wy;
-      }
-    }
-    const image = new ImageData(view, smallW, smallH);
-    const scratch = makeCanvas(image.width, image.height);
-    const scratchCtx = scratch.getContext('2d');
-    if (!scratchCtx) return null;
-    scratchCtx.putImageData(image, 0, 0);
-    if (!rotation) {
-      ctx.drawImage(scratch, 0, 0, width, height);
-    } else {
-      ctx.save();
-      ctx.translate(width / 2, height / 2);
-      ctx.rotate(rotation * Math.PI / 180);
-      const alongX = swapped ? height : width;
-      const alongY = swapped ? width : height;
-      ctx.drawImage(scratch, -alongX / 2, -alongY / 2, alongX, alongY);
-      ctx.restore();
-    }
+    const pixels = thumbnailPixels(frame.description, frame.pixels, rotation, width, height);
+    ctx.putImageData(new ImageData(pixels,width,height),0,0);
     return { canvas, width, height };
   } catch { return null; }
 }

@@ -715,6 +715,8 @@ export interface Sources {
   "libraryColumns.scroll": "横向滚动分栏";
   "libraryColumns.unavailable": "无法读取目录，请稍后重试";
   "libraryFileMenu.copied": "已拷贝";
+  "libraryFileMenu.copyFolderName": "拷贝文件夹名";
+  "libraryFileMenu.copyLibraryName": "拷贝库名";
   "libraryFileMenu.copyLibraryPath": "拷贝媒体库路径";
   "libraryFileMenu.copyMountPath": "拷贝挂载路径";
   "libraryFileMenu.copyName": "拷贝文件名";
@@ -1973,6 +1975,8 @@ export interface MessageParameters {
   "libraryColumns.scroll": {  };
   "libraryColumns.unavailable": {  };
   "libraryFileMenu.copied": {  };
+  "libraryFileMenu.copyFolderName": {  };
+  "libraryFileMenu.copyLibraryName": {  };
   "libraryFileMenu.copyLibraryPath": {  };
   "libraryFileMenu.copyMountPath": {  };
   "libraryFileMenu.copyName": {  };

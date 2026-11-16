@@ -1,7 +1,6 @@
 import { log } from '../logging/log.ts';
 import type { DecodedFrame, MediaSource } from '../media/contract.ts';
-import { referenceVersion } from '../../shared/media/io/media-reference.ts';
-import { localCacheKey, serverCacheKey } from '../../shared/thumbnails/contract.ts';
+import { localCacheKey } from '../../shared/thumbnails/contract.ts';
 import { offerFirstFrameCandidate, settleOffer } from '../thumbnails/offer.ts';
 import { thumbnailState } from '../thumbnails/state.ts';
 import type { SessionResources } from './resources.ts';
@@ -24,40 +23,14 @@ export function offerSessionThumbnail(
   resources: SessionResources,
   isLive: () => boolean,
 ) {
+  if (source.info.source?.kind === 'library') return;
   const started = performance.now();
   try {
     const isFileFirst = localTarget === 0 && frame.ptsUs === 0;
-    const libraryId = source.info.source?.id;
-    const mediaVersion = referenceVersion(source.info.source?.url);
-    let cacheKey: string;
-    let kind: 'library' | 'local';
-    let epoch: number | undefined;
-    if (libraryId) {
-      // A URI can reference another service. Its identity is not a cache key
-      // on this service, even when the asset/version strings happen to match.
-      if (typeof location !== 'undefined' && new URL(source.info.source!.url, location.href).origin !== location.origin) {
-        thumbnailState.skip('unsupported:foreign-library');
-        return;
-      }
-      // Without a reliable media version, a replaced same-name file would
-      // inherit the old cover: stay missing instead of uploading a cache.
-      if (!mediaVersion) {
-        thumbnailState.skip('upload:no-epoch-or-version');
-        log.debug('media', '首帧缩图候选未接受', { reason: 'upload:no-epoch-or-version', sourcePtsUs: frame.sourcePtsUs, decoder: source.info.decoder });
-        return;
-      }
-      kind = 'library';
-      cacheKey = serverCacheKey({ mediaId: libraryId, mediaVersion });
-      // Frozen at accept; a missing epoch means local-only this time, with
-      // no network wait while the full frame is held.
-      epoch = thumbnailState.cachedEpoch(cacheKey);
-    } else {
-      kind = 'local';
-      cacheKey = localCacheKey(source.info.name, source.info.size, source.info.lastModified);
-    }
+    const cacheKey = localCacheKey(source.info.name, source.info.size, source.info.lastModified);
     const offered = offerFirstFrameCandidate({
-      resources, cacheKey, kind, libraryId, mediaVersion, sourceGen,
-      sourcePtsUs: frame.sourcePtsUs, isFileFirst, epoch,
+      resources, cacheKey, sourceGen,
+      sourcePtsUs: frame.sourcePtsUs, isFileFirst,
       byteSize: frame.byteSize, isLive,
     }, frame);
     const offerResult = typeof offered === 'string' ? offered : offered.result;

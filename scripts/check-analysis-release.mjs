@@ -181,6 +181,11 @@ try {
   ]) {
     const entry = entries.find((e) => e.name === name);
     assert.ok(entry, name);
+    const cover=await fetch(base+'/api/media/'+entry.id+'/thumbnail?v='+entry.version);
+    assert.equal(cover.status,200,cover.ok?'':await cover.text());
+    assert.equal(cover.headers.get('content-type'),'image/jpeg');
+    const bytes=new Uint8Array(await cover.arrayBuffer());
+    assert.deepEqual([...bytes.subarray(0,2)],[255,216]);
     const {products, predictionProducts, encodings, limits} = await (
       await fetch(`${base}/api/media/${entry.id}/bitstream-analysis/capabilities?v=${entry.version}`)
     ).json();

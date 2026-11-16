@@ -1,8 +1,3 @@
-import { encodeUriState } from '../server/uri-state.ts';
-import { emptyUriState } from '../shared/review/uri-state.ts';
-// Phase-1 thumbnail proof: opening an SDR library video from its origin
-// produces a row cover and a shared server cache; a fresh profile reuses the
-// server image without regenerating; a non-zero join stays imageless.
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, copyFile, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -41,49 +36,21 @@ async function openSamples(page) {
 }
 
 try {
-  // A direct/Agent open has never browsed the media directory. It must still
-  // publish the first frame for B, who is already viewing a missing cover.
-  const readerContext = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
-  const writerContext = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
-  const reader = await readerContext.newPage(), writer = await writerContext.newPage();
-  await openSamples(reader);
-  const direct = library.browse().entries.find(entry => entry.name === 'sample-late.mp4');
-  const recentReader = await readerContext.newPage();
-  await recentReader.addInitScript(entry => localStorage.setItem('voidplayer.sources.v1', JSON.stringify([{
-    name: entry.name, size: entry.size, lastModified: entry.lastModified, version: entry.version,
-    libraryId: entry.id, libraryRootId: entry.rootId, openedAt: Date.now(),
-  }])), direct);
-  await recentReader.goto(base); await recentReader.waitForFunction(() => window.voidPlayer);
-  await recentReader.locator('#toggle-sources').click();
-  await recentReader.waitForFunction(() => document.querySelector('#library-recents')?.textContent.includes('sample-late.mp4'));
-  assert.equal(await recentReader.evaluate(() => !!document.querySelector('#library-recents .source-thumb img[src]')), false);
-  await writer.goto(base); await writer.waitForFunction(() => window.voidPlayer);
-  const uploaded = writer.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/thumbnail'), { timeout: 20000 });
-  await writer.evaluate(id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ slot: 'A', id }), direct.id);
-  assert.equal((await uploaded).status(), 201, 'direct opens warm the upload epoch from their existing metadata request');
-  await reader.bringToFront();
-  await reader.waitForFunction(thumbReady, 'sample-late.mp4', { timeout: 20000 });
-  await recentReader.bringToFront();
-  await recentReader.waitForFunction(thumbReady, 'sample-late.mp4', { timeout: 20000 });
-  assert.equal(await recentReader.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'recent entries discover remote uploads without loading media');
-  assert.equal(await reader.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'reader receives a shared cover without opening media');
-  assert.equal(library.thumbnails.status(direct.id, direct.version, THUMB_RECIPE_VERSION).ready, true);
-  await readerContext.close(); await writerContext.close();
-  library.thumbnails.remove(); // Original generation and cache-clear cases start empty.
-  const uriContext = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
-  const uriPage = await uriContext.newPage();
-  const uriUpload = uriPage.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/thumbnail'), { timeout: 20000 });
-  await uriPage.goto(`${base}/?s=${encodeUriState({ ...emptyUriState(), tracks: [{ slot: 'A', id: direct.id, version: direct.version, offsetUs: 0, visible: true }] })}`);
-  assert.equal((await uriUpload).status(), 201, 'cold URI restoration offers its committed origin frame to the shared cache');
-  await uriContext.close(); library.thumbnails.remove();
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
+  const writes=[], sourceReads=[];
+  page.on('request',req=>{
+    const {pathname}=new URL(req.url());
+    if (req.method()==='POST' && pathname.endsWith('/thumbnail')) writes.push(pathname);
+    if (pathname.endsWith('/content') || req.headers().range) sourceReads.push(pathname);
+  });
   await openSamples(page);
-  // No cover and no empty slot before anything is opened.
-  assert.equal(await page.evaluate(() => !!document.querySelector('.source-thumb img[src]')), false);
-  assert.equal(await page.evaluate(() => !!document.querySelector('.source-file .source-thumb')), false);
+  await page.waitForFunction(thumbReady,'sample.mp4');
+  await page.waitForFunction(thumbReady,'sample-late.mp4');
+  assert.equal(await page.evaluate(()=>window.voidPlayer.getState().tracks.length),0);
+  assert.deepEqual(sourceReads,[],'browsing gets server JPEGs without downloading video');
   await page.locator('#source-list').getByRole('button', { name: '添加到视图：sample.mp4', exact: true }).click();
   await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
   // The first frame is up before the cover pipeline finishes.
@@ -95,18 +62,14 @@ try {
     return img ? { src: img.currentSrc || img.src, naturalWidth: img.naturalWidth, complete: img.complete } : null;
   }, 'sample.mp4');
   assert.ok(cover && cover.complete && cover.naturalWidth > 0, `cover decoded: ${JSON.stringify(cover)}`);
-  // Shared server cache arrives via the frozen-epoch upload.
+  // Presence and bytes are shared with other profiles.
   const entry = library.browse().entries.find(e => e.name === 'sample.mp4');
   const statusUrl = `${base}/api/media/${entry.id}/thumbnail-status?v=${entry.version}&recipe=${encodeURIComponent(THUMB_RECIPE_VERSION)}`;
-  let status = null;
-  for (let i = 0; i < 40 && (!status || status.state !== 'ready'); i++) {
-    await new Promise(r => setTimeout(r, 500));
-    status = await (await fetch(statusUrl)).json();
-  }
+  const status = await (await fetch(statusUrl)).json();
   assert.equal(status.state, 'ready');
   assert.ok(status.width > 0 && status.height > 0);
   // Track-state changes must keep the already decoded image through row refreshes.
-  const directoryCover=await page.locator('#source-list .source-file .source-thumb img').elementHandle();
+  const directoryCover=await page.locator('#source-list .source-file').filter({has:page.getByText('sample.mp4',{exact:true})}).locator('.source-thumb img').elementHandle();
   await directoryCover.evaluate(img => {
     window.stableCover=img; window.coverGaps=[]; window.coverWatch=true;
     const sample=() => {
@@ -175,14 +138,9 @@ try {
   // Playback still works after the bypass ran.
   await page.evaluate(() => window.voidPlayer.seek(3000000));
   await page.waitForFunction(() => !window.voidPlayer.getState().busy);
-  // Joining a second file at a non-zero position stays imageless: no cover
-  // seek, no sync-frame snapshot.
   await page.locator('#source-list').getByRole('button', { name: '添加到视图：sample-late.mp4', exact: true }).click();
   await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
-  await new Promise(r => setTimeout(r, 3000));
-  const late = await page.evaluate(() => [...document.querySelectorAll('#source-list .source-row')]
-    .find(r => r.textContent.includes('sample-late.mp4'))?.querySelector('.source-thumb img[src]') ?? null);
-  assert.equal(late, null, 'non-zero join must not snapshot the sync frame');
+  assert.deepEqual(writes,[],'opening library media never uploads an image');
   await context.close();
 
   // A fresh profile (empty local cache) reuses the server image directly.
@@ -200,7 +158,7 @@ try {
   // A real corrupt image must never paint the browser's broken-image icon.
   await page2.route('**/thumbnail?**', route => new URL(route.request().url()).searchParams.has('broken')
     ? route.fulfill({status:200, contentType:'image/jpeg', body:'invalid jpeg'}) : route.continue());
-  const cachedImage = page2.locator('#source-list .source-file .source-thumb img');
+  const cachedImage = page2.locator('#source-list .source-file .source-thumb img').first();
   const slotBefore = await cachedImage.locator('..').boundingBox();
   await cachedImage.evaluate(img => {
     img.addEventListener('error', () => {window.failedCoverPaint = getComputedStyle(img).visibility;}, {once:true});
@@ -212,7 +170,7 @@ try {
   assert.deepEqual(await cachedImage.locator('..').boundingBox(), slotBefore, 'failure preserves the cover slot and filename position');
   await fresh.close();
   assert.deepEqual(errors, []);
-  console.log(`PASS ${engine}: origin cover, continuous covers across add/remove actions, recent fold/reopen and rapid-click selection, shared cover reuse, invisible image errors, non-zero joins stay imageless`);
+  console.log(`PASS ${engine}: origin cover, continuous covers across add/remove actions, recent fold/reopen and rapid-click selection, shared cover reuse, invisible image errors, browse-only first frames and zero uploads`);
 } finally {
   await browser.close(); await new Promise(r => server.close(r)); await library.close(); await rm(directory, { recursive: true, force: true });
 }

@@ -37,6 +37,18 @@ try {
   await pathPage.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
   assert.equal(await pathPage.locator('#library-location').inputValue(), '项目归档', 'root-level file reveals the mount');
   assert.equal(await pathPage.locator('#library-compact').evaluate(button => button.nextElementSibling?.id), 'library-view', 'view choice immediately follows density');
+  await pathPage.evaluate(()=>{
+    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{
+      writeText:async value=>{window.fileCrumbCopy=value;},
+      write:async items=>{window.fileCrumbCopy=await (await items[0].getType('text/plain')).text();},
+    }});
+  });
+  const fileCrumb=pathPage.locator('#library-pathbar [data-kind=file]');
+  for (const [action,expected] of [['copy-name','sample.mp4'],['copy-path',sample]]) {
+    await fileCrumb.click({button:'right'});
+    await pathPage.locator('#library-path-menu [data-action='+action+']').click();
+    await pathPage.waitForFunction(value=>window.fileCrumbCopy===value,expected);
+  }
   const chooseView = async mode => {
     await pathPage.locator('#library-view').click();
     await pathPage.locator(`#library-view-menu [data-value=${mode}]`).click();
@@ -225,12 +237,24 @@ try {
   assert.equal(await pathbar.evaluate(bar => getComputedStyle(bar).borderTopWidth), '0px');
   await page.evaluate(() => {
     window.copiedLibraryPaths = [];
-    Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText:async value => window.copiedLibraryPaths.push(value)}});
+    Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{
+      writeText:async value => window.copiedLibraryPaths.push(value),
+      write:async items => window.copiedLibraryPaths.push(await (await items[0].getType('text/plain')).text()),
+    }});
   });
   for (const [name, expected] of [['媒体库', 'library:/'], ['项目归档', 'library:archive'], ['实验一', 'library:archive/实验一']]) {
     await pathbar.getByRole('button', {name, exact:true}).click({button:'right'});
     await page.locator('#library-path-menu [data-action=copy-library-path]').click();
     assert.equal(await page.evaluate(() => window.copiedLibraryPaths.at(-1)), expected);
+  }
+  for (const [name, label, expectedPath] of [['项目归档','拷贝库名',media], ['实验一','拷贝文件夹名',path.join(media,'实验一')]]) {
+    const crumb=pathbar.getByRole('button',{name,exact:true});
+    await crumb.click({button:'right'});
+    await page.getByRole('menuitem',{name:label,exact:true}).click();
+    assert.equal(await page.evaluate(()=>window.copiedLibraryPaths.at(-1)),name);
+    await crumb.click({button:'right'});
+    await page.locator('#library-path-menu [data-action=copy-path]').click();
+    await page.waitForFunction(expected=>window.copiedLibraryPaths.at(-1)===expected,path.resolve(expectedPath));
   }
   await pathbar.locator('[aria-current]').focus(); await page.keyboard.press('Shift+F10');
   await page.locator('#library-path-menu [data-action=copy-library-path]').click();

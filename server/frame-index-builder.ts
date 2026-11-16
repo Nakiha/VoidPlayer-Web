@@ -2,10 +2,8 @@ import {ffmpegAnalysisConfiguration} from '../shared/media/indexing/ffmpeg-analy
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import type { Stats } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { instantiateCore } from '../shared/wasm/core.ts';
+import { loadServerPlaybackCore } from './playback-core.ts';
 import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, FFMPEG_NO_TIMESTAMP } from '../shared/media/indexing/ffmpeg-index-cache.ts';
 import type { FfmpegIndexMetadata } from '../shared/media/indexing/ffmpeg-index-cache.ts';
 import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
@@ -108,11 +106,7 @@ export async function buildFfmpegIndexDocument(
     }
   };
   assertSameFile('建立索引前');
-  const gluePath = path.join(coreDir, 'voidplayer-core.js');
-  const wasmPath = path.join(coreDir, 'voidplayer-core.wasm');
-  const wasm = new Uint8Array(await readFile(wasmPath));
-  const glue = await import(pathToFileURL(gluePath).href);
-  const { core, heap } = await instantiateCore(glue.default, wasm);
+  const {core,heap} = await loadServerPlaybackCore(coreDir);
   const fd = openSync(filePath, 'r');
   let ctx = 0;
   try {

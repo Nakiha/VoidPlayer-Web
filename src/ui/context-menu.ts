@@ -7,6 +7,7 @@ export type ContextMenuAction = {
   label: string;
   glyph: Parameters<typeof icon>[0];
   disabled?: boolean;
+  hint?: string;
   run(): void;
 };
 
@@ -65,6 +66,7 @@ export function installContextMenu(host: HTMLElement, options: {
       const button = document.createElement('button');
       button.type = 'button'; button.setAttribute('role', 'menuitem');
       button.dataset.action = action.id; button.disabled = !!action.disabled;
+      if (action.hint) { button.title=action.hint;button.setAttribute('aria-description',action.hint); }
       button.innerHTML = icon(action.glyph);
       const label = document.createElement('span'); label.textContent = action.label; button.append(label);
       button.onclick = action.run;

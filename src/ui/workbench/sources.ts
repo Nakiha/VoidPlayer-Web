@@ -12,7 +12,6 @@ import { icon } from '../icons.ts';
 import { currentActor } from '../../services/identity.ts';
 import { fetchLibraryItem, openLibraryItem } from '../../services/library.ts';
 import type { LibraryEntry } from '../../services/library.ts';
-import { prefetchThumbnailStatus, prefetchThumbnailStatuses } from '../../thumbnails/client.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { openMedia } from '../../media/source.ts';
 import { installLibraryBrowser } from '../library-browser.ts';
@@ -45,7 +44,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
   let confirmTimer: ReturnType<typeof setTimeout> | undefined;
   let sourceLoadError: { key: string; message: string } | null = null;
   let recentRevision = -1;
-  let recentRootsState = '', recentThumbnails = '', recentRetry = false;
+  let recentRootsState = '', recentRetry = false;
   let recentRequest = 0;
   // History keeps local-file metadata only: after reload the live File is gone
   // and the row cannot load until the user re-picks the file. Remember which
@@ -85,12 +84,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     openFile: entry => addToView({ ...entry, key: sourceKey(entry, entry.id, entry.version), libraryId: entry.id, libraryRootId: entry.rootId, library: entry })}, page => {
     const rootsChanged = page ? catalog.setLibraryRoots(page.roots.map(root => root.id)) : false;
     catalog.setLibrary(page?.entries ?? []);
-    // Warm thumbnail presence/epochs beside listing; never blocks opening.
-    if (page) prefetchThumbnailStatuses(page.entries, 60, page.thumbnailEpoch);
     const rootsState = JSON.stringify(page?.roots.map(root => [root.id, root.state]));
-    const thumbnailRevision = `${page?.thumbnailEpoch}:${page?.thumbnailRevision}`;
-    if (page && (rootsChanged || recentRevision !== page.revision || rootsState !== recentRootsState || thumbnailRevision !== recentThumbnails || recentRetry)) {
-      recentRevision = page.revision; recentRootsState = rootsState; recentThumbnails = thumbnailRevision; void refreshRecent();
+    if (page && (rootsChanged || recentRevision !== page.revision || rootsState !== recentRootsState || recentRetry)) {
+      recentRevision = page.revision; recentRootsState = rootsState; void refreshRecent();
     }
     renderSources();
   }, lifecyle.signal, home => {
@@ -145,8 +141,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
 
   async function load(item: SourceItem, slot: Slot) {
     if (loadingSource?.key === item.key || (!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
-    // Parallel cache-status warm for the frozen upload epoch; never awaited.
-    if (item.library?.id) prefetchThumbnailStatus(item.library.id, item.library.version);
     const pendingLoad: NonNullable<typeof loadingSource> = { key: item.key, status: () => t(msg("sources.loading", "正在载入")) };
     loadingSource = pendingLoad; loadingConfirmed = false; sourceLoadError = null;
     clearTimeout(confirmTimer);
@@ -183,6 +177,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
     if (offline || item.library?.state && item.library.state !== 'ready') return;
     if (!item.file && !item.library) { if (!item.libraryId) void reselectLocal(item); return; }
+    if (item.library) remoteBrowser?.selectFile(item.library);
     const empty = SLOTS.find(slot => !session.getState().tracks.some(track => track.slot === slot));
     if (empty) void load(item, empty);
     else void act(() => { throw new Error(t(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频'))); }, 'ui.source-full');
@@ -211,7 +206,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       return { id: used ? 'remove-from-view' : 'add-to-view', label: used ? t(msg('sources.takeOff', '下屏')) : t(msg('sources.putOn', '上屏')),
         glyph: used ? 'close' : 'plus', disabled: state.busy || !!loadingSource || !!offline || item.library?.state === 'pending',
         run: () => { if (used) removeFromView(item); else addToView(item); } };
-    }, item.libraryId || item.library ? undefined : { name: item.name, remove: () => removeLocalFile(item),
+    }, item.libraryId || item.library ? undefined : { name: item.name, file:item.file, remove: () => removeLocalFile(item),
       disabled: () => session.getState().busy || !!loadingSource });
   }
 

@@ -33,12 +33,6 @@ try {
   // Preserve the detailed-row geometry setup; viewport-interactions covers the compact default.
   await context.addInitScript(() => { if (localStorage.getItem('voidplayer.library-compact') == null) localStorage.setItem('voidplayer.library-compact', 'false'); });
   const player = await context.newPage(); const errors = [],clockTrace=[];let clockPhase='real-ui';
-  // A cached cover exercises browser image dragging without decoding an extra video.
-  const cover=await player.evaluate(() => {
-    const canvas=document.createElement('canvas');canvas.width=40;canvas.height=24;
-    const context=canvas.getContext('2d');context.fillStyle='#d77e35';context.fillRect(0,0,40,24);
-    return canvas.toDataURL('image/jpeg').split(',')[1];
-  });
   context.on('requestfailed',request=>{let owner='unknown';try{owner=request.frame().page()===player?'player':'admin';}catch{}clockTrace.push({phase:clockPhase,event:'requestfailed',page:owner,url:request.url(),failure:request.failure(),at:Date.now()});});
   const observeErrors = (target, owner) => target.on('pageerror', error => {
     errors.push(error.message);
@@ -484,8 +478,6 @@ try {
   assert.equal(await active.locator('.library-item-selected').count(),0,'changing view does not retain a selection in a hidden column');
   await goLibrary('library:local/z-branch/leaf');
   const covered=service.library.browse({rootId:'local',directory:'z-branch/leaf'}).entries[0];
-  service.library.thumbnails.put(covered.id,covered.version,THUMB_RECIPE_VERSION,service.library.thumbnails.epoch,Buffer.from(cover,'base64'),{width:40,height:24,sourcePtsUs:0});
-  await goLibrary('library:local/z-branch/leaf');
   const nestedFile=active.locator('.source-file').filter({hasText:'nested.mp4'});
   await nestedFile.waitFor();
   const coveredColumn=active.locator('.library-column[data-directory="z-branch/leaf"]');
@@ -497,6 +489,8 @@ try {
     const img=document.querySelector('.source-file[data-library-path="z-branch/leaf/nested.mp4"] .source-thumb img');
     return img?.naturalWidth>0&&img.dataset.thumbDecoded==='true';
   });
+  const cover=service.library.thumbnails.get(covered.id,covered.version,THUMB_RECIPE_VERSION);
+  assert.ok(cover,'browsing the nested file generated its cover');
   await thumbnail.scrollIntoViewIfNeeded();
   const imageBox=await thumbnail.boundingBox();
   const targetFolder=coveredColumn.locator('[data-library-path="z-branch/leaf/target"]');
@@ -524,7 +518,8 @@ try {
   assert.equal(movedEntry.state,'ready','a completed move does not return to the writing/settling state');
   assert.equal(movedEntry.thumbnail,true,'the moved file retains its already-generated cover');
   const movedImage=service.library.thumbnails.get(movedEntry.id,movedEntry.version,THUMB_RECIPE_VERSION);
-  assert.deepEqual(Buffer.from(movedImage.data),Buffer.from(cover,'base64'),'moving preserves the exact JPEG, without decoding the video again');
+  assert.deepEqual(Buffer.from(movedImage.data),Buffer.from(cover.data),'moving preserves the exact JPEG, without decoding the video again');
+  assert.equal(movedImage.createdAt,cover.createdAt,'move keeps the original stored cover');
   const restored=await managed.evaluate(async source => {
     const response=await fetch('/api/library/files',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'library-files'},body:JSON.stringify({operation:'move',sources:[source],target:{rootId:'local',directory:'z-branch/leaf'}})});
     return response.json();
