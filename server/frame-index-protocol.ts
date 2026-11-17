@@ -1,3 +1,4 @@
+import type { MediaInput } from './versioned-input.ts';
 import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 
 export type FrameIndexManifest = {
@@ -11,6 +12,8 @@ export type FrameIndexManifest = {
 export type FrameIndexBatch = { seq: number; payload: string; bytes: number; frames: number };
 
 type Target = { id: string; version: string; identity: MediaIndexIdentity };
+export type FrameIndexBuildInput = Target & { size:number; fingerprint?:string; epoch:number } & ({source:MediaInput} | {filePath:string});
+export type FrameIndexBuildRequest = FrameIndexBuildInput & {buildId:string};
 type Command<Request, Response> = { request: Request; response: Response };
 export interface FrameIndexCommands {
   epoch: Command<Record<string, never>, number>;

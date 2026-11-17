@@ -123,7 +123,9 @@ function rootRow(root: Root) {
   const row = document.createElement('div'); row.className = 'admin-root-row'; row.dataset.id = root.id;
   localizedFragment(row, () => `<label><input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label><input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-root-scan">${icon('refreshRegular')}</button><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button>`);
   row.querySelector<HTMLInputElement>('[data-field=name]')!.value = root.name;
-  row.querySelector<HTMLInputElement>('[data-field=path]')!.value = root.path;
+  const pathInput = row.querySelector<HTMLInputElement>('[data-field=path]')!;
+  pathInput.value = root.path;
+  pathInput.readOnly = root.path.startsWith('provider:');
   for (const input of row.querySelectorAll('input')) { input.disabled = !rootConfig?.writable; input.addEventListener('input', () => { rootDirty = true; updateRootActions(); renderRootStates(); }); }
   row.querySelector<HTMLButtonElement>('.admin-danger')!.disabled = !rootConfig?.writable;
   row.querySelector<HTMLButtonElement>('.admin-danger')!.onclick = () => { row.remove(); rootDirty = true; updateRootActions(); };

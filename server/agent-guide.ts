@@ -1,4 +1,5 @@
 import { AGENT_OPERATIONS } from '../shared/service/agent-operations.ts';
+import providerSchema from '../examples/media-provider/openapi.json' with {type:'json'};
 import { AGENT_TASKS } from '../shared/service/agent.ts';
 
 /** Embedded so standalone deployments serve guides without frontend assets. */
@@ -14,6 +15,7 @@ serve the APIs. The remote player requires HTTPS for browser decoding.
 - [Runtime capabilities](/api/agent): implemented, enabled and ready are separate.
 - [Task catalog](/api/agent/tasks): fetch one task, then one operation at a time.
 - [Find media, inspect cached metadata and query indexes](${AGENT_TASKS.library})
+- [Implement a read-only storage provider](/agent/media-provider.md)
 - [Identity and ABI URI state](${AGENT_TASKS.state})
 - [Write annotations and follow operations](${AGENT_TASKS.annotations})
 - [Live browser session](${AGENT_TASKS.liveSession})
@@ -310,6 +312,14 @@ logs. Names/client labels remain attribution, not access credentials.
 `;
 
 export const AGENT_DOCUMENTS: Readonly<Record<string, string>> = {
+  '/agent/media-provider.openapi.json': JSON.stringify(providerSchema),
+  '/agent/media-provider.md': `# Implementing a read-only media root
+Read the [OpenAPI v1 contract](/agent/media-provider.openapi.json). Implement GET /v1/list, /v1/stat and /v1/content on a separate server.
+Start from examples/media-provider/server.mjs in the matching VoidPlayer source or release. The directory includes README.md and a standalone check.mjs.
+Run node check.mjs prepare DIRECTORY. Point the adapter at that directory, run node check.mjs verify ENDPOINT, replace the fixture and run verify-replaced with its previous revision.
+Add {"id":"private","provider":{"endpoint":"http://127.0.0.1:5191"}} to mediaRoots and restart. Optional provider.tokenEnv names the server-side bearer token environment variable.
+Open a real MP4 and seek after indexing. Incomplete directory traversals retain prior entries. Every byte request must enforce the indexed revision and stop upstream I/O on disconnect.
+`,
   '/llms.txt': AGENT_GUIDE, '/agent.md': introduction,
   [AGENT_TASKS.library]: library, [AGENT_TASKS.state]: state,
   [AGENT_TASKS.annotations]: annotations,

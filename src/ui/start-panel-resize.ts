@@ -14,6 +14,9 @@ export function installStartPanelResize(panel: HTMLElement, signal: AbortSignal)
     const saved = Number(localStorage.getItem(WIDTH_KEY));
     if (Number.isFinite(saved) && saved > 0 && saved <= 10000) preferred = saved;
   } catch { /* Resizing remains available when storage is disabled. */ }
+  // CSS clamps this preference against the available width in the same layout pass as the sidebar animation.
+  const applyWidth = () => panel.style.setProperty('--start-panel-width', `${Math.max(MIN_WIDTH,preferred)}px`);
+  applyWidth();
   const bounds = () => {
     const style = getComputedStyle(host);
     const max = Math.max(0, Math.floor(host.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight) - HANDLE_GUTTERS));
@@ -23,7 +26,6 @@ export function installStartPanelResize(panel: HTMLElement, signal: AbortSignal)
     const { min, max } = bounds();
     if (!max) return; // The start panel is hidden while a source occupies A.
     const width = Math.max(min, Math.min(max, preferred));
-    panel.style.setProperty('--start-panel-width', `${width}px`);
     for (const handle of handles) {
       handle.setAttribute('aria-valuemin', String(min)); handle.setAttribute('aria-valuemax', String(max));
       handle.setAttribute('aria-valuenow', String(Math.round(width))); handle.setAttribute('aria-valuetext', t(msg('ui.pixelWidth','{width} 像素'),{width:Math.round(width)}));
@@ -47,6 +49,7 @@ export function installStartPanelResize(panel: HTMLElement, signal: AbortSignal)
       bounds() { const { min, max } = bounds(); return { min: min / 2, max: max / 2 }; },
       resize(halfWidth) {
         const { min, max } = bounds(); preferred = Math.round(Math.max(min, Math.min(max, halfWidth * 2)));
+        applyWidth();
         refresh();
         try { localStorage.setItem(WIDTH_KEY, String(preferred)); } catch { /* Width persistence is optional. */ }
       },

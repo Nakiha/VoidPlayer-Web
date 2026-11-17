@@ -44,6 +44,10 @@ await cp(path.join(root, 'dist'), path.join(out, 'dist'), { recursive: true });
 await verifyFrontendBuild(path.join(out, 'dist'));
 const packagedFrontend = JSON.parse(await readFile(path.join(out, 'dist/build-info.json'), 'utf8'));
 if (packagedFrontend.buildId !== frontend.buildId) throw new Error('Frontend build changed during packaging');
+const providerExample = 'examples/media-provider';
+await mkdir(path.join(out,providerExample),{recursive:true});
+for (const file of ['README.md','openapi.json','server.mjs','check.mjs'])
+  await cp(path.join(root,providerExample,file),path.join(out,providerExample,file));
 await cp(path.join(root, 'LICENSE'), path.join(out, 'LICENSE'));
 await writeFile(path.join(out, 'README.md'), (await readFile(path.join(root, 'deploy/standalone.md'), 'utf8')).replace('(operations.md)', '(deploy/operations.md)').replace('(admin.md)', '(deploy/admin.md)'));
 await mkdir(path.join(out, 'deploy/licenses'), { recursive: true });

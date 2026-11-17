@@ -22,6 +22,11 @@ export async function handleThumbnailRoute(library: RouteContext['library'], req
         const entry = library.metadata(thumbId);
         if (!entry) throw new AdminError(404, 'unknown media id');
         if (entry.version !== version) throw new AdminError(409, '媒体内容已改变，请重新载入。');
+        if (entry.storage === 'provider') {
+          res.setHeader('cache-control','no-store');
+          sendJson(res,200,{state:'unsupported',epoch:library.thumbnails.epoch});
+          return true;
+        }
         const status = library.thumbnails.status(entry.id, version, recipe);
         res.setHeader('cache-control', 'no-store');
         sendJson(res, 200, status.ready
@@ -33,9 +38,11 @@ export async function handleThumbnailRoute(library: RouteContext['library'], req
         // Same availability boundary as the source bytes: version-pinned and
         // resolvable, otherwise no image.
         const epoch = library.thumbnails.epoch;
+        const entry = library.describe(thumbId);
+        if (entry?.storage === 'provider' && entry.version === version)
+          throw new AdminError(404,'此片源未提供缩略图。','provider-thumbnail-unsupported');
         const abs = await library.resolve(thumbId, version);
         if (!abs) { res.setHeader('cache-control', 'no-store'); sendJson(res, 404, { error: 'unknown media id' }); return true; }
-        const entry = library.describe(thumbId);
         if (!entry || entry.version!==version) throw new AdminError(404,'unknown media id');
         const cached = library.thumbnails.get(entry.id,version,recipe);
         let bytes:Uint8Array;

@@ -6,19 +6,9 @@ import { AdminError } from './admin-error.ts';
 import { closeResources } from './shutdown.ts';
 import { mediaIndexIdentityKey } from '../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
-import type { FrameIndexOperation, FrameIndexCallArgs, FrameIndexResult, FrameIndexResponse } from './frame-index-protocol.ts';
+import type { FrameIndexOperation, FrameIndexCallArgs, FrameIndexResult, FrameIndexResponse, FrameIndexBuildRequest, FrameIndexBuildInput } from './frame-index-protocol.ts';
 
 type PendingRequest = { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> };
-type BuildRequest = {
-  id: string;
-  version: string;
-  fingerprint?: string;
-  size: number;
-  filePath: string;
-  epoch: number;
-  identity: MediaIndexIdentity;
-  buildId: string;
-};
 export interface FrameIndexBuildPolicy {
   idleTimeoutMs: number;
   absoluteTimeoutMs: number;
@@ -52,7 +42,7 @@ type ProgressListener = (progress: IndexBuildProgress) => void;
 type BuildUpdateListener = () => void;
 type QueuedBuild = {
   key: string;
-  request: BuildRequest;
+  request: FrameIndexBuildRequest;
   promise: Promise<any>;
   resolve(value: any): void;
   reject(error: Error): void;
@@ -195,7 +185,7 @@ export class FrameIndexJobs {
     });
   }
 
-  buildIndex(request: Omit<BuildRequest, 'buildId'>, options: FrameIndexBuildOptions = {}): Promise<any> {
+  buildIndex(request: FrameIndexBuildInput, options: FrameIndexBuildOptions = {}): Promise<any> {
     const handle = this.startBuild(request, options);
     return handle.promise;
   }
@@ -217,7 +207,7 @@ export class FrameIndexJobs {
     }};
   }
 
-  startBuild(request: Omit<BuildRequest, 'buildId'>, options: FrameIndexBuildOptions = {}) {
+  startBuild(request: FrameIndexBuildInput, options: FrameIndexBuildOptions = {}) {
     this.available();
     const policy = { ...(options.policy ?? this.defaultBuildPolicy) };
     if (!Number.isSafeInteger(policy.idleTimeoutMs) || policy.idleTimeoutMs < 1000
@@ -286,7 +276,7 @@ export class FrameIndexJobs {
     }
   }
 
-  private runBuild(request: BuildRequest, policy: FrameIndexBuildPolicy, onProgress: ProgressListener, onUpdate: () => void): Promise<any> {
+  private runBuild(request: FrameIndexBuildRequest, policy: FrameIndexBuildPolicy, onProgress: ProgressListener, onUpdate: () => void): Promise<any> {
     let worker: Worker;
     try {
       worker = this.createBuildWorker({database:this.database,coreDir:this.coreDir});

@@ -45,7 +45,7 @@ export async function handleConnectionRoutes(ctx: RouteContext, req: IncomingMes
     const value=operation!==null?agentOperation(operation,manifest().capabilities):task!==null?agentTask(task):url.pathname===AGENT_TASK_CATALOG?agentTaskCatalog():json?manifest():null;
     if(json&&!value){sendJson(res,404,agentErrorBody(new AdminError(404,'Task or operation not found.','agent-operation-not-found'),ctx.requestId));return true;}
     const body = json ? JSON.stringify(value) : document!;
-    const type = json ? 'application/json' : url.pathname === '/llms.txt' ? 'text/plain' : 'text/markdown';
+    const type = json || url.pathname.endsWith('.json') ? 'application/json' : url.pathname === '/llms.txt' ? 'text/plain' : 'text/markdown';
     res.writeHead(200, { 'content-type': `${type}; charset=utf-8`, 'content-length': Buffer.byteLength(body), 'cache-control': json ? 'no-store' : 'no-cache' });
     if (req.method === 'HEAD') res.end(); else res.end(body);
     return true;

@@ -54,8 +54,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   address.type = 'search'; address.autocomplete = 'off'; address.spellcheck = false;
   const manage = document.createElement('a'); manage.id = 'library-manage'; manage.className = 'library-manage';
   manage.href = '/admin#library'; manage.target = '_blank'; manage.rel = 'opener'; manage.innerHTML = icon('externalLink');
-  const manageLabel = document.createElement('span'); manage.append(manageLabel);
-  const homeActions = document.createElement('div'); homeActions.className = 'library-actions'; homeActions.append(manage);
+  const manageLabel = document.createElement('span'); manageLabel.className = 'library-manage-label'; manage.append(manageLabel);
   function localizeManage() {
     manageLabel.textContent = t(msg('libraryBrowser.manage', '媒体库管理'));
     manage.setAttribute('aria-label', t(msg('libraryBrowser.manage', '媒体库管理')));
@@ -91,7 +90,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
         .then(()=>notify(t(msg('libraryFileMenu.copied','已拷贝'))),error=>notify(String(error.message??error)));
       const actions:ContextMenuAction[]=[{id:'copy-library-path',label:t(msg('libraryFileMenu.copyLibraryPath','拷贝媒体库路径')),glyph:'copy',
         run:()=>copy(libraryLocationExpression({root:id,directory:path,all:false}))}];
-      if (id) actions.push({id:'copy-path',label:t(msg('sourceActions.copyAbsolutePath','拷贝绝对路径')),glyph:'copy',
+      if (id && !roots.some(r => r.id === id && r.storage === 'provider')) actions.push({id:'copy-path',label:t(msg('sourceActions.copyAbsolutePath','拷贝绝对路径')),glyph:'copy',
         run:()=>copy(libraryAbsolutePath(signal,id,path))});
       actions.push({id:'copy-name',glyph:'copy',label:t(kind==='file'?msg('libraryFileMenu.copyName','拷贝文件名'):
         kind==='folder'?msg('libraryFileMenu.copyFolderName','拷贝文件夹名'):msg('libraryFileMenu.copyLibraryName','拷贝库名')),
@@ -331,7 +330,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   }
 
   return {
-    homeActions: elements.manage ? homeActions : undefined,
+    manageLink: elements.manage ? manage : undefined,
     snapshot: () => ({ root, directory, search, all: false }),
     async restore(state: { root: string; directory: string; search: string; all: boolean; recent?: boolean; query?: string }) {
       clearTimeout(searchTimer); request?.abort(); sequence++;

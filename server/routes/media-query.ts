@@ -35,7 +35,8 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
   if (!match && url.pathname !== MEDIA_QUERY_DICTIONARY) return false;
   const links = { describedBy: MEDIA_QUERY_DICTIONARY, help: '/agent/library.md', browse: '/api/library/browse?recursive=1' };
   const cancellation = new SharedArrayBuffer(4);
-  const cancel = () => Atomics.store(new Int32Array(cancellation), 0, 1);
+  const controller = new AbortController();
+  const cancel = () => { controller.abort(); Atomics.store(new Int32Array(cancellation),0,1); };
   res.once('close', cancel);
   let completeHandling: (() => void) | undefined;
   try {
@@ -58,7 +59,7 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
     if (res.destroyed) return true;
     completeHandling = admit(library, res);
     // Stat/realpath only; same active-root, symlink and source-version boundary as byte serving.
-    if (!await library.resolve(id, version)) throw new AdminError(409, 'Media is offline, changed or outside the configured roots.', 'media-unavailable');
+    if (!await library.source(id,version,controller.signal)) throw new AdminError(409, 'Media is offline, changed or outside the configured roots.', 'media-unavailable');
     if (res.destroyed) return true;
     let body: unknown;
     if (!match[2]) {
@@ -66,7 +67,7 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
       if (!/^(?:0|[1-9][0-9]{0,6})$/.test(rawOffset)) throw new AdminError(400, 'Invalid inventory offset.', 'invalid-index-query');
       const cached = await library.indexJobs.call('cached-indexes', { id, version, offset: Number(rawOffset) });
       const {schema:cacheSchema,version:cacheVersion,...inventory}=cached;
-      body = {schema:'voidplayer-media',schemaVersion:1,...inventory,...entry,path:entry.name,cacheQuery:{schema:cacheSchema,version:cacheVersion},source: { id, version }, file: { name: entry.name, size: entry.size, lastModified: entry.lastModified, status: 'known', provenance: 'file-stat' },
+      body = {schema:'voidplayer-media',schemaVersion:1,...inventory,...entry,path:entry.name,cacheQuery:{schema:cacheSchema,version:cacheVersion},source: { id, version }, file: { name: entry.name, size: entry.size, lastModified: entry.lastModified, status: 'known', provenance: entry.storage === 'provider' ? 'provider-stat' : 'file-stat' },
         technicalState: cached.indexes.length ? 'cached-streams-only' : Number(rawOffset) ? 'end-of-inventory' : 'not-probed',
         streamInventoryComplete: false, links };
     } else {
@@ -82,7 +83,7 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
       if (query && Buffer.byteLength(JSON.stringify(body)) > query.byteBudget) throw new AdminError(413, 'Response context exceeds byteBudget.', 'response-budget-too-small');
     }
     if (res.destroyed) return true;
-    if (!await library.resolve(id, version)) throw new AdminError(409, 'Media changed while reading the cache.', 'media-unavailable');
+    if (!await library.source(id,version,controller.signal)) throw new AdminError(409, 'Media changed while reading the cache.', 'media-unavailable');
     json(req, res, 200, body);
   } catch (error) {
     // Never expose raw filesystem/database errors, root paths or core locations.

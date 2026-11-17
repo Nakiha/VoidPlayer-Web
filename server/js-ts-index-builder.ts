@@ -1,22 +1,16 @@
 import {TsContainerPacketSource} from '../shared/media/containers/mpeg2-ts-packet-source.ts';
-import { open, stat } from 'node:fs/promises';
+import { openVersionedInput, type MediaInput } from './versioned-input.ts';
 import {MatroskaPacketSource} from '../shared/media/containers/matroska-packet-source.ts';
 import { TsPacketSource } from '../shared/media/containers/ts-packet-source.ts';
 import type { TsPacketReader } from '../shared/media/containers/ts-packet-source.ts';
-import { fileVersion } from './library.ts';
 import { AdminError } from './admin-error.ts';
 import type { MediaIndexScanProgress } from '../shared/media/indexing/media-index-types.ts';
 
 /** Disk indexing owns no decoder/core; the client and server use the same parser. */
-export async function buildJsTsIndexDocument(filePath: string, size: number, version: string, sourceVersion: string,
+export async function buildJsTsIndexDocument(input: MediaInput, size: number, version: string, sourceVersion: string,
   onProgress?: (data: MediaIndexScanProgress) => void, signal = new AbortController().signal, format:'ts'|'matroska'='ts') {
-  const started = performance.now(), cpu = process.cpuUsage(), handle = await open(filePath, 'r');
+  const started = performance.now(), cpu = process.cpuUsage(), handle = await openVersionedInput(input,size,version,false,signal);
   let readCalls = 0, readBytes = 0, closed = false;
-  const assertVersion = async () => {
-    const [opened, current] = await Promise.all([handle.stat(), stat(filePath)]);
-    if (opened.size !== size || current.size !== size || fileVersion(opened) !== version || fileVersion(current) !== version)
-      throw new AdminError(409, 'TS 文件在索引期间改变，未保存旧版本索引。');
-  };
   const blocks = new Map<number, Uint8Array>(), blockBytes = 1024 * 1024;
   const reader: TsPacketReader = { size,
     async read(offset, length) {
@@ -46,11 +40,11 @@ export async function buildJsTsIndexDocument(filePath: string, size: number, ver
   };
   let source: TsPacketSource | TsContainerPacketSource | MatroskaPacketSource | undefined;
   try {
-    await assertVersion();
+    await handle.verify();
     source=format==='ts'?new TsContainerPacketSource(reader,sourceVersion,signal):new MatroskaPacketSource(reader,sourceVersion,signal);
     onProgress?.({ packets: 0, scannedBytes: 0, totalBytes: size });
     const document = await source.open(undefined,onProgress);
-    await assertVersion();
+    await handle.verify();
     onProgress?.({ packets: document.packets.length, scannedBytes: size, totalBytes: size });
     const used = process.cpuUsage(cpu);
     return { document, profile: { scanMode: format==='ts'?'js-ts-packets':'js-matroska-packets', totalBuildWallMs: performance.now() - started,

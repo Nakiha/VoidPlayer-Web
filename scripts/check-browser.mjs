@@ -390,7 +390,7 @@ try {
     const fieldBox=await page.locator('#library-navigation').boundingBox();
     const densityBox=await page.locator('#library-compact').boundingBox();
     assert.equal(Math.round(densityBox.x-fieldBox.x-fieldBox.width),4,'compact density follows the address with a four-pixel gap');
-    assert.equal(await management.evaluate(el => Boolean(el.closest('#source-list .library-actions'))),true,'management is available with the library home actions');
+    assert.equal(await management.evaluate(el => el.parentElement.matches('#library-mounts > summary')),true,'management is in the mounts disclosure header');
     await page.locator('#source-tools').screenshot({path:path.join(screenshots,`${browserName}-library-management-control.png`)});
     const navigation = await page.locator('#library-navigation').boundingBox();
     const tools = await page.locator('#source-tools').boundingBox();
@@ -623,6 +623,28 @@ try {
     await page.mouse.move(center, initial.y + 10);
     assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'reduced motion hides the glow immediately');
   }, { reducedMotion: 'no-preference' });
+
+  await check('empty recent panel stays centered during source panel collapse', async page => {
+    await page.waitForFunction(() => !document.querySelector('#app').hasAttribute('data-workspace-opening'));
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.locator('#toggle-sources').click();
+    await page.waitForFunction(() => document.querySelector('#toggle-sources').getAttribute('aria-expanded') === 'true'
+      && document.querySelector('#empty-A').clientWidth < 600 && !document.querySelector('#workspace').classList.contains('panel-motion'));
+    const samples = await page.evaluate(async () => {
+      const panel = document.querySelector('#start-panel'), host = document.querySelector('#empty-A');
+      const before = panel.getBoundingClientRect().left, offsets = [], start = performance.now();
+      document.querySelector('#toggle-sources').click();
+      do {
+        await new Promise(requestAnimationFrame);
+        offsets.push(panel.getBoundingClientRect().left - before);
+      } while (performance.now() - start < 350);
+      return {offsets,width:host.clientWidth};
+    });
+    assert.ok(samples.width >= 698, 'closing the source panel releases its space');
+    // At this viewport the preferred 680px exceeds the space even after close.
+    // The panel can grow every frame while both gutters remain stationary.
+    assert.ok(samples.offsets.every(delta => Math.abs(delta) <= 1), JSON.stringify(samples));
+  }, {viewport:{width:700,height:800},reducedMotion:'no-preference'});
 
   await check('brand cinema waits for a stationary hover and restores quickly', async page => {
     const brand = page.locator('#brand-about'), cinema = page.locator('body > .brand-cinema');

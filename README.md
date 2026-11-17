@@ -105,6 +105,7 @@ npm run dev
 
 - [文档导航](docs/README.md)：功能契约、部署与专项说明。
 - [架构](docs/architecture.md) · [色彩链路](docs/color-pipeline.md) · [URI 状态与 ABI 分享](docs/uri-state.md)。
+- [私有云媒体库适配器](examples/media-provider/README.md)提供只读 HTTP 协议、参考服务与验收工具。
 - [HTTP Agent 接口](docs/agent-http.md) · [本机页面桥](docs/local-mcp-page-bridge.md)。
 - [主题开发](src/themes/README.md) · [本地化](docs/localization.md) · [图标资源](design/README.md)。
 

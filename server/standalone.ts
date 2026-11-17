@@ -94,7 +94,7 @@ async function main() {
     await mkdir(dataDir, { recursive: true });
     // Keep application assets and default mutable paths relocatable with the folder.
     const { staticDir: _static, devPort: _dev, dataDir: _data, origin: _origin, ...rest } = config;
-    const stored = { ...rest, mediaRoots: normalizeRoots(config.mediaRoots).map(({ id, path, name }) => ({ id, path, name })), ...(args.some(a => a === '--static' || a.startsWith('--static=')) ? { staticDir: config.staticDir } : {}) };
+    const stored = { ...rest, mediaRoots: normalizeRoots(config.mediaRoots).map(({ id, path, name, provider }) => provider ? {id,name,provider} : {id,path,name}), ...(args.some(a => a === '--static' || a.startsWith('--static=')) ? { staticDir: config.staticDir } : {}) };
     if (stored.logsDir === path.join(dataDir, 'logs')) stored.logsDir = 'logs';
     const text = JSON.stringify(stored, null, 2) + '\n';
     try {

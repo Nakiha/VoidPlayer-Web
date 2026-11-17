@@ -9,6 +9,7 @@ type Drag = {id:number; row:HTMLElement; scope:string; key:string; x:number; y:n
 /** Administration owns selection and explicit moves; browsing stays session-free. */
 export function installLibrarySelection(host:HTMLElement, list:HTMLElement, signal:AbortSignal, options:{
   navigate(root:string,directory:string):void;
+  writable(root:string):boolean;
   location():{root:string;directory:string};
   refresh():Promise<unknown>;
   selectFile(row?:HTMLElement):void;
@@ -109,7 +110,7 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
       if (location.root) return {target:{rootId:location.root,directory:location.directory},highlight:list};
     }
   }
-  const validTarget=(target:LibraryFileTarget) => !!drag?.refs?.every(source => source.rootId!==target.rootId
+  const validTarget=(target:LibraryFileTarget) => options.writable(target.rootId) && !!drag?.refs?.every(source => source.rootId!==target.rootId
     || target.directory!==source.path&&!(source.kind==='directory'&&target.directory.startsWith(source.path+'/'))
     && target.directory!==source.path.split('/').slice(0,-1).join('/'));
   function track() {
@@ -141,7 +142,7 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
     drag.row=liveRow;
     if (!drag.row.classList.contains('library-item-selected')) select(drag.row,event.shiftKey,event.metaKey||event.ctrlKey);
     const picked=chosen();
-    if (!picked.length||picked.some(row => row.dataset.libraryKind==='mount'||row.getAttribute('aria-disabled')==='true')) {drag=undefined;return;}
+    if (!picked.length||picked.some(row => !options.writable(row.dataset.rootId!) || row.dataset.libraryKind==='mount'||row.getAttribute('aria-disabled')==='true')) {drag=undefined;return;}
     if (picked.length>LIBRARY_FILE_BATCH_LIMIT) {options.notify(t(msg('adminLibrary.moveLimit','每次最多移动 100 个项目')));drag=undefined;return;}
     drag.refs=picked.map(ref);
     const ghost=document.createElement('div');ghost.className='library-drag-preview';ghost.setAttribute('aria-hidden','true');

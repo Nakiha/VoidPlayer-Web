@@ -109,7 +109,12 @@
 .library-path-separator .icon { width: 12px; height: 12px; flex: none; color: var(--text-secondary); }
 .library-path-item[aria-current] { color: var(--text); }
 
-.library-actions { display: flex; align-items: center; gap: 4px; padding: 4px; }
+.library-root-group > summary:has(.library-manage) { container: library-heading / inline-size; padding-block: 2px; }
+.library-root-group .library-manage { margin-inline-start: auto; flex: none; white-space: nowrap; }
+@container library-heading (max-width: 220px) {
+  .library-manage-label { display: none; }
+  .library-root-group .library-manage { width: var(--control-small-height); padding-inline: 0; }
+}
 .library-manage { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--control-small-height); padding: 4px 8px; background: var(--surface-control); box-shadow: var(--control-shadow); font-size: var(--text-sm); border-radius: var(--radius-control); text-decoration: none; color: inherit; }
 .library-manage:hover { background: var(--glass-control-hover); }
 

@@ -3,7 +3,7 @@ import type { AnalysisDecoderSettings } from './analysis/bitstream/limits.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import type { MediaRoot } from './library-store.ts';
+import { isProviderRoot, normalizeRoots, type MediaRoot } from './library-store.ts';
 import { parseTls } from './tls.ts';
 import type { TlsConfig } from './tls.ts';
 import { logPolicy } from '../shared/service/logging.ts';
@@ -57,7 +57,14 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   config.tls = parseTls(config.tls, path.dirname(file));
   if (config.httpPort !== undefined && config.httpPort !== null && (!Number.isInteger(config.httpPort) || config.httpPort < 1 || config.httpPort > 65535 || config.httpPort === config.port)) throw new Error('httpPort 必须是与 HTTPS 端口不同的 1–65535 端口，或 null。');
   if (folders.length) config.mediaRoots = folders;
-  if (!Array.isArray(config.mediaRoots) || (!config.mediaRoots.length && !paths.allowEmptyRoots) || config.mediaRoots.some(r => typeof r === 'string' ? !r.trim() : !r || typeof r.path !== 'string' || !r.path.trim() || typeof r.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(r.id) || (r.name !== undefined && (typeof r.name !== 'string' || !r.name.trim())) || Object.keys(r).some(k => !['id','path','name'].includes(k)))) throw new Error('请在配置中设置 mediaRoots，或指定 --folder 白名单目录。');
+  if (!Array.isArray(config.mediaRoots) || (!config.mediaRoots.length && !paths.allowEmptyRoots) || config.mediaRoots.some(root => {
+    if (typeof root === 'string') return !root.trim();
+    if (!root || typeof root.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(root.id)
+      || (root.name !== undefined && (typeof root.name !== 'string' || !root.name.trim()))) return true;
+    const key = isProviderRoot(root) ? 'provider' : 'path';
+    return Object.keys(root).some(k => !['id',key,'name'].includes(k))
+      || (!isProviderRoot(root) && (typeof root.path !== 'string' || !root.path.trim()));
+  })) throw new Error('请在配置中设置 mediaRoots，或指定 --folder 白名单目录。');
   for (const name of ['port', 'devPort'] as const) if (!Number.isInteger(config[name]) || config[name] < 1 || config[name] > 65535) throw new Error(`${name} 端口无效。`);
   if (mode === 'dev' && config.port === config.devPort) throw new Error('网页端口与媒体端口不能相同。');
   if (typeof config.host !== 'string' || !config.host.trim()) throw new Error('host 无效。');
@@ -71,7 +78,8 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   if (typeof config.staticDir !== 'string' || !config.staticDir || (config.logsDir !== null && (typeof config.logsDir !== 'string' || !config.logsDir))) throw new Error('staticDir / logsDir 配置无效。');
   if (typeof config.dataDir !== 'string' || !config.dataDir.trim()) throw new Error('dataDir 无效。');
   config.dataDir = path.resolve(path.dirname(file), paths.dataDir ?? config.dataDir);
-  config.mediaRoots = config.mediaRoots.map(r => typeof r === 'string' ? path.resolve(path.dirname(file), r) : { ...r, path: path.resolve(path.dirname(file), r.path) });
+  config.mediaRoots = config.mediaRoots.map(r => typeof r === 'string' ? path.resolve(path.dirname(file), r) : isProviderRoot(r) ? r : { ...r, path: path.resolve(path.dirname(file), r.path) });
+  normalizeRoots(config.mediaRoots);
   config.staticDir = path.resolve(path.dirname(file), config.staticDir);
   if (config.logsDir) config.logsDir = path.resolve(path.dirname(file), config.logsDir);
   return Object.assign(config, { origin: { file, revision: configRevision(configText), rootsFromCli: folders.length > 0 } });

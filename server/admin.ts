@@ -111,8 +111,17 @@ export class AdminController {
   private async updateRoots(document: unknown) {
     const input = document as { revision?: unknown; roots?: unknown } | null;
     if (!input || typeof input.revision !== 'string' || !Array.isArray(input.roots) || !input.roots.length || input.roots.length > 64) throw new AdminError(400, '请提供配置版本，并保留 1–64 个媒体根目录。');
-    if (input.roots.some(r => !r || typeof r !== 'object' || typeof r.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(r.id) || typeof r.path !== 'string' || !path.isAbsolute(r.path) || r.path.length > 4096 || r.path.includes('\0') || typeof r.name !== 'string' || !r.name.trim() || r.name.length > 120 || Object.keys(r).some(k => !['id', 'path', 'name'].includes(k)))) throw new AdminError(400, '每个目录需要有效的 ID、名称和服务器上的绝对路径。');
-    const roots = input.roots as MediaRoot[];
+    const roots: MediaRoot[] = input.roots.map(r => {
+      if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(r.id)
+        || typeof r.name !== 'string' || !r.name.trim() || r.name.length > 120
+        || typeof r.path !== 'string' || r.path.length > 4096 || r.path.includes('\0')
+        || Object.keys(r).some(k => !['id','path','name'].includes(k)))
+        throw new AdminError(400, '每个目录需要有效的 ID、名称和服务器上的绝对路径。');
+      const existing = this.library.definitions.find(root => root.id === r.id && root.path === r.path);
+      if (existing?.provider) return {id:r.id, name:r.name, provider:existing.provider};
+      if (!path.isAbsolute(r.path)) throw new AdminError(400, '每个目录需要有效的 ID、名称和服务器上的绝对路径。');
+      return r;
+    });
     try { normalizeRoots(roots); } catch (error) { throw new AdminError(400, (error as Error).message); }
     const origin = this.config.origin;
     if (!origin || origin.rootsFromCli) throw new AdminError(409, '当前目录由启动参数提供，无法写回配置文件。');

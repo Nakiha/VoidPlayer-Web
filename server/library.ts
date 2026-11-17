@@ -22,10 +22,11 @@ import { LIBRARY_RECHECK_MS, LibraryScanScheduler } from './library-scheduler.ts
 export { mediaId } from './library-store.ts';
 export type { MediaRoot } from './library-store.ts';
 export { MEDIA_EXTENSIONS };
-export interface LibraryEntry { id: string; name: string; root: string; rootIndex: number; size: number; lastModified: number; rootId?: string; version?: string; state?: string }
+export interface LibraryEntry { id: string; name: string; root: string; rootIndex: number; size: number; lastModified: number; rootId?: string; version?: string; state?: string; storage?: 'provider' }
 export interface Library { roots: string[]; entries: LibraryEntry[]; truncated: boolean }
 interface IndexOptions { analysisCoreDir?:string; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scanDelayMs?: number; scanBatchDelayMs?: number; scan?: typeof scanLibrary; now?: () => number }
 export interface BrowseQuery { rootId?: string; directory?: string; search?: string; recursive?: boolean; limit?: number; offset?: number; revision?: number }
+import { listProvider, providerVersion, verifyProvider, type ProviderFile, type ProviderEntry, type ProviderSource } from './media-provider.ts';
 import {fileVersion} from './file-stat.ts';
 export {fileVersion} from './file-stat.ts';
 const parent = (name: string) => path.posix.dirname(name) === '.' ? '' : path.posix.dirname(name);
@@ -49,6 +50,8 @@ export class MediaLibraryIndex {
   private started = false;
   private resumeAt = 0;
   private scheduler: LibraryScanScheduler;
+  private providerLifetime = new AbortController();
+  private providerProbes = new Set<Promise<void>>();
   private storageReads = new Set<Promise<unknown>>();
   // Updated by existing storage checks; browse/status never touch the filesystem.
   private storageSpace = new Map<string, { path: string; availableBytes: number; totalBytes: number }>();
@@ -130,7 +133,8 @@ export class MediaLibraryIndex {
       const space = this.storageSpace.get(String(root.id));
       const available = space && space.path === this.definitions.find(item => item.id === root.id)?.path
         && (root.state === 'ready' || root.state === 'scanning');
-      return { ...root, scanRequested: this.rootScans.has(String(root.id)),
+      const definition = this.definitions.find(item => item.id === root.id);
+      return { ...root, ...(definition?.provider ? {storage:'provider'} : {}), scanRequested: this.rootScans.has(String(root.id)),
         availableBytes: available ? space.availableBytes : null, totalBytes: available ? space.totalBytes : null };
     });
     return { ready: this.ready, scanning: !!this.pending, scanMode:this.pending?(this.fullScan?'full':'incremental'):null,
@@ -141,7 +145,7 @@ export class MediaLibraryIndex {
   errors(limit = 100, offset = 0) { return this.store.db.prepare('SELECT * FROM scan_errors WHERE job_id=(SELECT MAX(id) FROM scan_jobs) ORDER BY root_id,path LIMIT ? OFFSET ?').all(Math.min(200, Math.max(1, limit)), Math.max(0, offset)); }
   private entry(row: StoredMedia): LibraryEntry {
     const root = this.definitions.find(r => r.id === row.root_id)!;
-    return { id: row.id, name: row.path, root: root.name, rootIndex: root.index, rootId: root.id, size: row.size, lastModified: row.modified, version: row.version, state: row.state };
+    return { ...(root.provider ? { storage:'provider' as const } : {}), id: row.id, name: row.path, root: root.name, rootIndex: root.index, rootId: root.id, size: row.size, lastModified: row.modified, version: row.version, state: row.state };
   }
   private browseContext(query: BrowseQuery) {
     const revision = Number(this.store.db.prepare('SELECT revision FROM library_revision WHERE id=1').get()!.revision);
@@ -309,6 +313,22 @@ export class MediaLibraryIndex {
     }
     return learn || bound;
   }
+  private async *directoryPages(root: RootRecord, rootReal: string, relative: string, signal: AbortSignal, checked: () => Promise<void>)
+    : AsyncGenerator<({kind:'file'|'directory'; name:string} | ProviderEntry)[]> {
+    if (root.provider) {
+      yield* listProvider(root.provider,relative,signal);
+      return;
+    }
+    const absolute = await this.io(fs.realpath(path.join(rootReal,relative)),signal);
+    if (absolute !== path.join(rootReal,relative)) throw Object.assign(new Error('目录离开白名单'),{code:'EPERM'});
+    if (this.watchers) {
+      const stat = await this.io(fs.stat(absolute),signal);
+      this.watchers.add({rootId:root.id,directory:relative},absolute,`${absolute}:${stat.dev}:${stat.ino}`);
+    }
+    const entries = await this.io(fs.readdir(absolute,{withFileTypes:true}),signal);
+    await checked();
+    yield entries.filter(e => e.isDirectory() || e.isFile()).map(e => ({kind:e.isDirectory() ? 'directory' : 'file',name:e.name}));
+  }
   private async scan(signal: AbortSignal, scopes?: DirectoryScope[], shallow = false) {
     const db = this.store.db;
     const job = Number(db.prepare("INSERT INTO scan_jobs(state,started_at) VALUES('running',?)").run(this.now()).lastInsertRowid);
@@ -326,10 +346,10 @@ export class MediaLibraryIndex {
       try { for (const write of writes) write(); db.exec('COMMIT'); writes.length = 0; }
       catch (error) { db.exec('ROLLBACK'); throw error; }
     };
-    const put = (root: RootRecord, relative: string, size: number, modified: number, version: string, state: string) => {
+    const put = (root: RootRecord, relative: string, size: number, modified: number, version: string, state: string, fingerprint = version) => {
       const observedAt = this.now();
       writes.push(() => {
-        upsert.run(randomBytes(12).toString('hex'), root.id, relative, parent(relative), size, modified, version, version, state, job, observedAt);
+        upsert.run(randomBytes(12).toString('hex'), root.id, relative, parent(relative), size, modified, version, fingerprint, state, job, observedAt);
       });
       if (writes.length >= 64) flush();
     };
@@ -364,7 +384,10 @@ export class MediaLibraryIndex {
         let storageVerified = false;
         const bound = db.prepare('SELECT path FROM root_storage WHERE root_id=?').get(root.id);
         const mayBindEmpty = !!bound && bound.path !== root.path || !db.prepare("SELECT 1 FROM media WHERE root_id=? AND state!='missing' LIMIT 1").get(root.id);
-        try { rootReal = await this.io(fs.realpath(root.path), signal); storageVerified = await this.checkStorage(root, signal); }
+        try {
+          if (root.provider) storageVerified = true;
+          else { rootReal = await this.io(fs.realpath(root.path), signal); storageVerified = await this.checkStorage(root, signal); }
+        }
         catch (error) { errorAt(root, '', error); offline = true; this.watchers?.resetRoot(root.id); }
         for (const directory of offline ? [] : directories) {
           const scopeErrorsBefore = errors;
@@ -375,67 +398,81 @@ export class MediaLibraryIndex {
           while (stack.length) {
             const relative = stack.pop()!;
             progress(root.id, relative);
-            let children;
-            try {
-              // readdir is async: slow/network storage does not occupy the HTTP loop.
-              const absolute = await this.io(fs.realpath(path.join(rootReal, relative)), signal);
-              if (absolute !== path.join(rootReal, relative)) throw Object.assign(new Error('目录离开白名单'), { code: 'EPERM' });
-              if (this.watchers) {
-                const stat = await this.io(fs.stat(absolute), signal);
-                this.watchers.add({ rootId: root.id, directory: relative }, absolute, `${absolute}:${stat.dev}:${stat.ino}`);
+            const pages = this.directoryPages(root,rootReal,relative,signal,async () => {
+              storageVerified = await this.checkStorage(root,signal,mayBindEmpty);
+            });
+            let inspected = false;
+            for (;;) {
+              let page;
+              try { page = await pages.next(); }
+              catch (error) {
+                errorAt(root,relative,error);
+                if (!relative || (error as NodeJS.ErrnoException).code === 'ESTORAGECHANGED') offline = true;
+                break;
               }
-              children = await this.io(fs.readdir(absolute, { withFileTypes: true }), signal);
-              storageVerified = await this.checkStorage(root, signal, mayBindEmpty);
-            } catch (error) { errorAt(root, relative, error); if (!relative || (error as NodeJS.ErrnoException).code === 'ESTORAGECHANGED') offline = true; continue; }
-            visited++;
-            db.prepare('INSERT INTO directories(root_id,path,parent,name,generation) VALUES(?,?,?,?,?) ON CONFLICT(root_id,path) DO UPDATE SET generation=excluded.generation').run(root.id, relative, parent(relative), path.posix.basename(relative), job);
-            this.scheduler.remember({ rootId: root.id, directory: relative });
-            for (const child of children) {
-              if (++entries % 64 === 0) {
-                flush(); progress(root.id, relative);
-                await new Promise<void>(resolve => setImmediate(resolve));
+              if (page.done) break;
+              if (!inspected) {
+                inspected = true;
+                visited++;
+                db.prepare('INSERT INTO directories(root_id,path,parent,name,generation) VALUES(?,?,?,?,?) ON CONFLICT(root_id,path) DO UPDATE SET generation=excluded.generation').run(root.id, relative, parent(relative), path.posix.basename(relative), job);
+                this.scheduler.remember({ rootId: root.id, directory: relative });
               }
-              if (signal.aborted) throw new DOMException('扫描已取消', 'AbortError');
-              if (child.name.startsWith('.') || child.isSymbolicLink()) continue;
-              const name = relative ? relative + '/' + child.name : child.name;
-              if (child.isDirectory()) {
-                if (shallow) {
-                  seenDirectories.add(name);
-                  writes.push(() => {
-                    insertDirectory.run(root.id, name, relative, child.name, job);
-                    this.scheduler.remember({ rootId: root.id, directory: name });
-                  });
-                  if (writes.length >= 64) flush();
-                } else stack.push(name);
-                continue;
+              for (const child of page.value) {
+                if (++entries % 64 === 0) {
+                  flush(); progress(root.id, relative);
+                  await new Promise<void>(resolve => setImmediate(resolve));
+                }
+                if (signal.aborted) throw new DOMException('扫描已取消', 'AbortError');
+                if (child.name.startsWith('.')) continue;
+                const name = relative ? relative + '/' + child.name : child.name;
+                if (child.kind === 'directory') {
+                  if (shallow) {
+                    seenDirectories.add(name);
+                    writes.push(() => {
+                      insertDirectory.run(root.id, name, relative, child.name, job);
+                      this.scheduler.remember({ rootId: root.id, directory: name });
+                    });
+                    if (writes.length >= 64) flush();
+                  } else stack.push(name);
+                  continue;
+                }
+                if (!MEDIA_EXTENSIONS.includes(path.extname(name).toLowerCase())) continue;
+                if ('objectId' in child && root.provider) {
+                  const version = providerVersion(root.provider,child);
+                  seenMedia.add(name);
+                  const prior = priorVersion.get(root.id,name);
+                  if (!shallow || prior?.version !== version || prior.state !== 'ready')
+                    put(root,name,child.size,child.lastModified,version,'ready',JSON.stringify([child.objectId,child.revision,version]));
+                  files++;
+                  continue;
+                }
+                if (shallow && reads++ % 8 === 0 && reads > 1) {
+                  await this.io(new Promise<void>(resolve => setTimeout(resolve, this.options.scanBatchDelayMs ?? 25)), signal);
+                }
+                let stat: Stats;
+                try { stat = await this.io(fs.lstat(path.join(rootReal, name)), signal); }
+                catch (error) { errorAt(root, name, error); continue; }
+                if (!stat.isFile() || stat.isSymbolicLink()) continue;
+                const version = fileVersion(stat), settleMs = this.options.settleMs ?? 0;
+                const prior = priorVersion.get(root.id, name) as { version: string; fingerprint: string; state: string; observed_at: number } | undefined;
+                // Schema 1 had no filesystem binding. Require one unchanged known
+                // file before accepting a first binding for an existing library.
+                if (!storageVerified && prior?.fingerprint === version) storageVerified = await this.checkStorage(root, signal, true);
+                if (!storageVerified) { unverifiedFiles = true; continue; }
+                const relocated=this.relocations?.find(root.id,name,version);
+                const pending = !relocated && settleMs > 0 && (prior?.fingerprint === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
+                if (pending) this.settling.add({ rootId: root.id, directory: relative });
+                // Database errors fail the job, rather than being treated as a bad file.
+                const state = pending ? 'pending' : 'ready';
+                seenMedia.add(name);
+                if (!shallow || prior?.fingerprint !== version || prior.state !== state)
+                  put(root, name, stat.size, Math.round(stat.mtimeMs), version, state);
+                files++;
               }
-              if (!child.isFile() || !MEDIA_EXTENSIONS.includes(path.extname(name).toLowerCase())) continue;
-              if (shallow && reads++ % 8 === 0 && reads > 1) {
-                await this.io(new Promise<void>(resolve => setTimeout(resolve, this.options.scanBatchDelayMs ?? 25)), signal);
-              }
-              let stat: Stats;
-              try { stat = await this.io(fs.lstat(path.join(rootReal, name)), signal); }
-              catch (error) { errorAt(root, name, error); continue; }
-              if (!stat.isFile() || stat.isSymbolicLink()) continue;
-              const version = fileVersion(stat), settleMs = this.options.settleMs ?? 0;
-              const prior = priorVersion.get(root.id, name) as { version: string; fingerprint: string; state: string; observed_at: number } | undefined;
-              // Schema 1 had no filesystem binding. Require one unchanged known
-              // file before accepting a first binding for an existing library.
-              if (!storageVerified && prior?.fingerprint === version) storageVerified = await this.checkStorage(root, signal, true);
-              if (!storageVerified) { unverifiedFiles = true; continue; }
-              const relocated=this.relocations?.find(root.id,name,version);
-              const pending = !relocated && settleMs > 0 && (prior?.fingerprint === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
-              if (pending) this.settling.add({ rootId: root.id, directory: relative });
-              // Database errors fail the job, rather than being treated as a bad file.
-              const state = pending ? 'pending' : 'ready';
-              seenMedia.add(name);
-              if (!shallow || prior?.fingerprint !== version || prior.state !== state)
-                put(root, name, stat.size, Math.round(stat.mtimeMs), version, state);
-              files++;
             }
           }
           flush();
-          try { if (!await this.checkStorage(root, signal)) throw Object.assign(new Error('尚未核对原媒体存储'), { code: 'ESTORAGEUNVERIFIED' }); }
+          try { if (!root.provider && !await this.checkStorage(root, signal)) throw Object.assign(new Error('尚未核对原媒体存储'), { code: 'ESTORAGEUNVERIFIED' }); }
           catch (error) {
             errorAt(root, directory, error);
             // Legacy bindings may need an unchanged file in a deeper directory
@@ -520,12 +557,31 @@ export class MediaLibraryIndex {
     const row=this.store.find(id);
     return row&&(!version||row.version===version)?row.fingerprint:undefined;
   }
+  /** Capture one versioned storage identity. Provider credentials stay in server configuration. */
+  async source(id: string, version: string, signal?: AbortSignal): Promise<string | ProviderSource | null> {
+    if (this.closed) return null;
+    const row = this.store.find(id);
+    if (!row || row.state !== 'ready' || row.version !== version) return null;
+    const root = this.definitions.find(r => r.id === row.root_id);
+    if (!root?.provider) return this.resolve(id,version);
+    if (!row.fingerprint.startsWith('[')) return null;
+    const [objectId,revision] = JSON.parse(row.fingerprint) as [string,string];
+    const file: ProviderFile = {objectId,revision,size:row.size,lastModified:row.modified};
+    if (providerVersion(root.provider,file) !== version) return null;
+    const source = {...file,provider:root.provider};
+    const lifetime = this.providerLifetime.signal;
+    const probe = verifyProvider(source,signal ? AbortSignal.any([lifetime,signal]) : lifetime);
+    this.providerProbes.add(probe);
+    try { await probe; } finally { this.providerProbes.delete(probe); }
+    if (this.closed || !this.definitions.includes(root) || this.store.find(id)?.version !== version) return null;
+    return source;
+  }
   async resolve(id: string, version?: string): Promise<string | null> {
     if (!/^[0-9a-f]{24}$/.test(id) || this.closed) return null;
     const entry = this.store.find(id);
     if (!entry || entry.state !== 'ready' || (version && version !== entry.version)) return null;
     const root = this.definitions.find(r => r.id === entry.root_id);
-    if (!root) return null;
+    if (!root || root.provider) return null;
     try {
       await this.checkStorage(root);
       const rootReal = await this.io(fs.realpath(root.path));
@@ -545,11 +601,12 @@ export class MediaLibraryIndex {
       for (const id of ids) {
         const root=this.definitions.find(root => root.id===id);
         if (!root) throw new AdminError(404,'媒体库不存在。');
+        if (root.provider) throw new AdminError(403,'媒体适配器为只读。','provider-read-only');
         if (!await this.checkStorage(root)) throw new AdminError(409,'媒体库挂载尚未核验。');
       }
       let relocations:LibraryRelocations|undefined;
       try {
-        const mutation=await mutateLibraryFiles(this.definitions,command,fileVersion,() => {
+        const mutation=await mutateLibraryFiles(this.definitions.filter(root => !root.provider),command,fileVersion,() => {
           relocations=new LibraryRelocations(this.store.db,command);
         }, ref => {
           const row = this.store.db.prepare('SELECT version,fingerprint FROM media WHERE root_id=? AND path=?').get(ref.rootId,ref.path);
@@ -578,11 +635,12 @@ export class MediaLibraryIndex {
   close(ownersStopped?:Promise<void>){return this.closing??=this.closeMedia(ownersStopped);}
   stopExecution(){return this.stopping??=(async()=>{
     this.closed=true;
+    this.providerLifetime.abort();
     await closeResources('Media execution shutdown incomplete',[
       ['library file operations',()=>this.fileMutation?.catch(()=>{})],
       ['cover generation',()=>this.thumbnailJobs.close()],
       ['scan scheduling',()=>this.stop()],['library scan',()=>this.pending?.catch(()=>{})],
-      ['storage reads',async()=>{await Promise.allSettled([...this.storageReads]);}],
+      ['storage reads',async()=>{await Promise.allSettled([...this.storageReads,...this.providerProbes]);}],
       ['index readers',()=>closeResources('Index readers failed to stop',[...this.indexReaders].map((stop,i)=>[String(i),stop] as const))],['index executors',()=>this.indexJobs.close()],
     ]);
   })();}

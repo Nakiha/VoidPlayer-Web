@@ -144,7 +144,7 @@ export function installLibraryListing(list: HTMLElement, options: {
   navigate(root: string, directory: string): void;
   registerMount(row: HTMLElement, root: string): void;
   idPrefix?: string;
-  homeActions?: HTMLElement;
+  manageLink?: HTMLElement;
   collapsible?: boolean;
   recent?: boolean;
 }) {
@@ -155,13 +155,16 @@ export function installLibraryListing(list: HTMLElement, options: {
   const group = (id: string, label: string) => {
     const section = document.createElement('details'); section.className = 'library-root-group'; section.id = `${options.idPrefix ?? ''}${id}`; section.open = true;
     const summary = document.createElement('summary'); summary.innerHTML = icon('caretRight');
-    summary.append(text('span', label, 'source-group-label'));
+    const title = text('span',label,'source-group-label');
+    title.id = section.id + '-label';
+    summary.setAttribute('aria-labelledby',title.id);
+    summary.append(title);
     const body = document.createElement('div'); body.className = 'source-group-items'; section.append(summary, body);
-    return { section, body };
+    return { section, body, summary };
   };
   const mountsGroup = options.collapsible === false ? (() => {
     const section = document.createElement('section'); section.className='library-root-group'; section.id=`${options.idPrefix ?? ''}library-mounts`;
-    const body = document.createElement('div'); body.className='source-group-items'; section.append(body); return {section,body};
+    const body = document.createElement('div'); body.className='source-group-items'; section.append(body); return {section,body,summary:null};
   })() : group('library-mounts', t(msg('sources.mountList', '库列表')));
   const recentGroup = group('library-recents', t(msg('shell.recentlyOpened', '最近打开')));
 
@@ -178,11 +181,13 @@ export function installLibraryListing(list: HTMLElement, options: {
       row.dataset.sourceKey = key; row.dataset.fingerprint = fingerprint; target.push(row);
     };
     for (const folder of folders) {
-      reuse(`folder:${folder.rootId}/${folder.path}`, JSON.stringify(folder), () => {
+      const storage = page?.roots.find(root => root.id === folder.rootId)?.storage;
+      reuse(`folder:${folder.rootId}/${folder.path}`, JSON.stringify([folder,storage]), () => {
         const row = document.createElement('button'); row.className = 'source-row library-folder';
         const glyph = text('span', '', 'source-thumb library-folder-icon'); glyph.innerHTML = icon('open');
         const info = text('span', '', 'source-info');
         info.append(text('span', folder.name, 'filename'));
+        if (storage) row.dataset.storage = storage;
         row.dataset.rootId = folder.rootId;
         row.dataset.libraryPath=folder.path; row.dataset.libraryKind='directory';
         row.setAttribute('aria-haspopup', 'menu');
@@ -194,10 +199,12 @@ export function installLibraryListing(list: HTMLElement, options: {
       while (container.children.length > children.length) container.lastElementChild!.remove();
     };
     if (home) {
-      if (options.homeActions) rows.push(options.homeActions);
+      if (mountsGroup.summary && options.manageLink && options.manageLink.parentElement !== mountsGroup.summary)
+        mountsGroup.summary.append(options.manageLink);
       const mountsRows: HTMLElement[] = [], recentRows: HTMLElement[] = [];
-      for (const mount of mounts) reuse(`mount:${mount.id}`, JSON.stringify([mount.id, mount.name, mount.state, storageText(mount)]), () => {
+      for (const mount of mounts) reuse(`mount:${mount.id}`, JSON.stringify([mount.id, mount.name, mount.state, mount.storage, storageText(mount)]), () => {
         const row = document.createElement('button'); row.type = 'button'; row.className = 'source-row library-folder library-mount';
+        if (mount.storage) row.dataset.storage = mount.storage;
         row.dataset.rootId = mount.id; row.setAttribute('aria-label', t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), { name: mount.name }));
         row.dataset.libraryKind='mount'; row.dataset.libraryPath='';
         const glyph = text('span', '', 'source-thumb library-folder-icon'); glyph.innerHTML = icon('libraryVolume');

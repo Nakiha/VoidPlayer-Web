@@ -36,7 +36,7 @@ export function installLibraryThumbnails(lists: HTMLElement[], signal: AbortSign
     const id = item.library?.id ?? item.libraryId;
     const version = item.library?.version ?? item.version;
     if (id) {
-      if (!version || (item.library?.state && item.library.state!=='ready')) return;
+      if (item.library?.storage === 'provider' || !version || (item.library?.state && item.library.state!=='ready')) return;
       const key = serverCacheKey({mediaId:id,mediaVersion:version});
       row.dataset.thumbnailKey = key;
       row.prepend(makeThumbBox(key,thumbnailImageUrl(id,version)));

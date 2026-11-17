@@ -4,13 +4,13 @@ import { serverLog } from '../logging/logger.ts';
 import { requestAuthority } from '../http.ts';
 import { matchesEtag } from '../conditional.ts';
 import { containerFromHeader } from '../../shared/media/containers/container-header.ts';
-import { fileVersion } from '../library.ts';
+import { openVersionedInput } from '../versioned-input.ts';
+import { serveProvider } from './provider-content.ts';
 import { handleMediaQueryRoutes } from './media-query.ts';
 import { handleThumbnailRoute } from './thumbnail.ts';
 import { handleFrameIndexRoute } from './frame-index.ts';
 import { adminErrorBody } from '../admin-error.ts';
 import type { IncomingMessage, ServerResponse } from '../http.ts';
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { AdminError, adminWriteAllowed } from '../admin.ts';
 import { readAdminJson } from '../admin.ts';
@@ -63,6 +63,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
     let id: string;
     try {id = decodeURIComponent(rootLocation[1]);} catch {sendJson(res, 400, {error:'invalid root id'}); return true;}
     const root = library.definitions.find(root => root.id === id);
+    if (root?.provider) { sendJson(res,404,{error:'No local path',code:'provider-no-local-path'}); return true; }
     sendJson(res, root ? 200 : 404, root ? {absolutePath:root.path} : {error:'unknown library root'});
     return true;
   }
@@ -91,12 +92,14 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
   if (await handleThumbnailRoute(library, req, res, url)) return true;
   const playbackMatch = /^\/api\/media\/([0-9a-f]{24})\/container$/.exec(url.pathname);
   if (playbackMatch) {
+    const controller = new AbortController(), cancel = () => controller.abort();
+    res.once('close',cancel);
     try {
       if (req.method !== 'GET') throw new AdminError(405, '不支持的媒体播放操作。');
       const id = playbackMatch[1], version = requireMediaVersion(url), entry = library.metadata(id);
-      const absolute = version && entry?.version === version && await library.resolve(id, version);
-      if (!absolute || !entry || entry.state !== 'ready') throw new AdminError(409, '媒体不可用或已改变。');
-      const handle = await fs.open(absolute, 'r');
+      const source = entry?.version === version && await library.source(id,version,controller.signal);
+      if (!source || !entry || entry.state !== 'ready') throw new AdminError(409, '媒体不可用或已改变。');
+      const handle = await openVersionedInput(source,entry.size,library.fingerprint(id,version)!,false,controller.signal);
       try {
         const bytes = new Uint8Array(Math.min(entry.size, 1024));
         for (let read = 0; read < bytes.length;) {
@@ -104,13 +107,14 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           if (!bytesRead) throw new AdminError(409, '媒体在识别期间截断。');
           read += bytesRead;
         }
-        if (fileVersion(await handle.stat()) !== library.fingerprint(id) || !await library.resolve(id, version!))
+        await handle.verify();
+        if (typeof source === 'string' && !await library.resolve(id,version))
           throw new AdminError(409, '媒体在识别期间改变。');
         sendJson(res, 200, { id, version, size: entry.size, container: containerFromHeader(bytes) });
       } finally { await handle.close(); }
     } catch (error) {
       if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error));
-    }
+    } finally { res.off('close',cancel); }
     return true;
   }
   const actionMatch = /^\/api\/media\/([0-9a-f]{24})\/(location|reveal)$/.exec(url.pathname);
@@ -160,10 +164,19 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
     } catch(error){sendJson(res,400,adminErrorBody(error));return true;}
     const metadata = library.metadata(mediaMatch[1]),fingerprint=library.fingerprint(mediaMatch[1],requestedVersion);
     if (requestedVersion && metadata && requestedVersion !== metadata.version) { sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return true; }
-    const abs = await library.resolve(mediaMatch[1], requestedVersion);
-    if (!abs) { sendJson(res, 404, { error: 'unknown media id' }); return true; }
-    if (url.searchParams.has('download')) res.setHeader('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(abs))}`);
-    await serveFile(req, res, abs, undefined, fingerprint);
+    const controller = new AbortController(), cancel = () => controller.abort();
+    res.once('close',cancel);
+    try {
+      const source = await library.source(mediaMatch[1],requestedVersion,controller.signal);
+      if (!source || !metadata) { sendJson(res,404,{error:'unknown media id'}); return true; }
+      if (url.searchParams.has('download'))
+        res.setHeader('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(metadata.name))}`);
+      if (typeof source === 'string') await serveFile(req,res,source,undefined,fingerprint);
+      else await serveProvider(req,res,source,requestedVersion,controller.signal);
+    } catch (error) {
+      if (!res.destroyed && !res.headersSent) sendJson(res,error instanceof AdminError ? error.status : 500,adminErrorBody(error));
+      else if (!res.destroyed) res.destroy();
+    } finally { res.off('close',cancel); }
     return true;
   }
   return false;

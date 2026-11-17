@@ -34,6 +34,7 @@ for(const kind of ['database','build'] as const)test(`index ${kind} stop failure
 function library(failed='') {
   const calls:string[]=[],failure=Error('physical exit unconfirmed');
   const value=Object.assign(Object.create(MediaLibraryIndex.prototype),{
+    providerLifetime:new AbortController(),providerProbes:new Set(),
     storageReads:new Set(),thumbnailJobs:{close(){calls.push('thumbnailJobs');if(failed==='thumbnailJobs')throw failure;}},
     stop(){calls.push('stop');if(failed==='stop')throw failure;},store:{close(){calls.push('database');}},indexJobs:{close(){calls.push('indexJobs');if(failed==='indexJobs')throw failure;}}
   }) as MediaLibraryIndex;

@@ -38,7 +38,7 @@ export interface ServerOptions {
   /** Installed only by the explicit temporary stdio page launcher. */
   pageBridge?:PageChannel;
   traffic?: ReturnType<typeof createTrafficState>;
-  roots: string[];
+  roots: import('./library-store.ts').MediaRoot[];
   tls?: HttpsOptions;
   connection?: ConnectionOptions;
   clientAddress?: (req: IncomingMessage) => string;
@@ -56,8 +56,7 @@ export interface ServerOptions {
 export function createMediaServer(options: ServerOptions & { tls?: undefined }): import('node:http').Server;
 export function createMediaServer(options: ServerOptions): ManagedServer;
 export function createMediaServer(options: ServerOptions): ManagedServer {
-  const roots = options.roots.map(r => path.resolve(r));
-  const library = options.library ?? new MediaLibraryIndex(roots,{coreDir:process.env.VOIDPLAYER_WASM_CORE_DIR || (options.staticDir ? path.join(options.staticDir,'vendor/voidplayer-core') : undefined)});
+  const library = options.library ?? new MediaLibraryIndex(options.roots,{coreDir:process.env.VOIDPLAYER_WASM_CORE_DIR || (options.staticDir ? path.join(options.staticDir,'vendor/voidplayer-core') : undefined)});
   if (!options.library) library.start();
   const analysisCore = process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(options.staticDir ?? path.join(process.cwd(), 'public'), 'vendor/voidplayer-analysis');
   const analysis = options.admin?.analysisFor(analysisCore) ?? new AnalysisScheduler(library, analysisCore, library.analysisDirectory);

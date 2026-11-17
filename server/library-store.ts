@@ -4,12 +4,28 @@ import { openIndexDatabase } from './sqlite.ts';
 import type { IndexDatabase } from './sqlite.ts';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import type { ProviderConfig } from './media-provider.ts';
 
-export type MediaRoot = string | { id: string; path: string; name?: string };
-export interface RootRecord { id: string; path: string; name: string; index: number }
+function normalizeProvider(config: ProviderConfig): ProviderConfig {
+  if (!config || typeof config.endpoint !== 'string' || Object.keys(config).some(k => !['endpoint','tokenEnv'].includes(k))
+    || (config.tokenEnv !== undefined && (typeof config.tokenEnv !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(config.tokenEnv))))
+    throw new Error('媒体适配器配置无效。');
+  const url = new URL(config.endpoint);
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
+    throw new Error('媒体适配器需要 HTTP(S) 服务地址。');
+  return {...config, endpoint:url.href.replace(/\/+$/, '')};
+}
+
+export type MediaRoot = string | { id: string; path: string; name?: string } | { id: string; provider: ProviderConfig; name?: string };
+export const isProviderRoot = (r: MediaRoot): r is Extract<MediaRoot,{provider:ProviderConfig}> => typeof r === 'object' && r !== null && 'provider' in r;
+export interface RootRecord { id: string; path: string; name: string; index: number; provider?: ProviderConfig }
 export function mediaId(root: string, relative: string) { return createHash('sha256').update(`${root}\n${relative}`).digest('hex').slice(0, 24); }
 export function normalizeRoots(roots: MediaRoot[]): RootRecord[] {
   const normalized = roots.map((root, index) => {
+    if (isProviderRoot(root)) {
+      const provider = normalizeProvider(root.provider);
+      return { id:root.id, name:root.name || root.id, index, path:'provider:' + root.id, provider };
+    }
     const directory = path.resolve(typeof root === 'string' ? root : root.path);
     return { id: typeof root === 'string' ? mediaId('root', directory) : root.id, path: directory, name: typeof root === 'string' ? path.basename(directory) : root.name || path.basename(directory), index };
   });

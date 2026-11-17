@@ -1,0 +1,59 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title":"VoidPlayer read-only media provider","version":"1.0.0","description":"Implement on the external storage adapter. The configured endpoint is the base URL. One endpoint exposes one virtual root."},
+  "security": [{}, {"bearer":[]}],
+  "paths": {
+    "/v1/list": {"get":{
+      "operationId":"list","summary":"List direct children in bounded, consistent pages",
+      "parameters":[
+        {"in":"query","name":"directory","required":true,"allowEmptyValue":true,"schema":{"type":"string"},"description":"Root is the empty string. Nested directories use slash-separated display names."},
+        {"in":"query","name":"limit","required":true,"schema":{"type":"integer","minimum":1,"maximum":128}},
+        {"in":"query","name":"cursor","schema":{"type":"string","minLength":1,"maxLength":4096},"description":"Opaque cursor for this directory traversal."}
+      ],
+      "responses":{
+        "200":{"description":"At most limit distinct direct children per page. A nonterminal page contains at least one entry. Complete traversal or return an error if continuity cannot be guaranteed.","content":{"application/json":{"schema":{"type":"object","required":["entries","nextCursor"],"properties":{"entries":{"type":"array","maxItems":128,"items":{"oneOf":[{"$ref":"#/components/schemas/Directory"},{"$ref":"#/components/schemas/FileEntry"}]}},"nextCursor":{"oneOf":[{"type":"null"},{"type":"string","minLength":1,"maxLength":4096}]}}}}}},
+        "409":{"description":"Listing changed or cursor expired. Caller retains previous unseen entries and reconciles on the next scan."},
+        "default":{"$ref":"#/components/responses/Failure"}
+      }
+    }},
+    "/v1/stat": {"get":{
+      "operationId":"stat","summary":"Describe the current object without reading its content",
+      "parameters":[{"$ref":"#/components/parameters/objectId"}],
+      "responses":{
+        "200":{"description":"Current source identity, byte length and modification time.","content":{"application/json":{"schema":{"$ref":"#/components/schemas/File"}}}},
+        "default":{"$ref":"#/components/responses/Failure"}
+      }
+    }},
+    "/v1/content": {"get":{
+      "operationId":"readRange","summary":"Read one exact range, conditional on the current revision",
+      "parameters":[
+        {"$ref":"#/components/parameters/objectId"},
+        {"in":"header","name":"Range","required":true,"schema":{"type":"string","pattern":"^bytes=[0-9]+-[0-9]+$"},"description":"Inclusive start and end, at most 1048576 bytes."},
+        {"in":"header","name":"If-Match","required":true,"schema":{"type":"string"},"example":"\"v1\"","description":"One strong entity tag, the revision in double quotes."}
+      ],
+      "responses":{
+        "206":{"description":"Exactly the requested bytes. No content encoding. Provider checks revision as part of the read and stops upstream I/O on disconnect.","headers":{"ETag":{"required":true,"schema":{"type":"string"}},"Content-Range":{"required":true,"schema":{"type":"string"},"example":"bytes 0-15/8193"}},"content":{"application/octet-stream":{"schema":{"type":"string","format":"binary"}}}},
+        "412":{"description":"Revision does not match. No media bytes."},
+        "416":{"description":"Invalid or unsatisfiable range. No media bytes."},
+        "default":{"$ref":"#/components/responses/Failure"}
+      }
+    }}
+  },
+  "components":{
+    "securitySchemes":{"bearer":{"type":"http","scheme":"bearer"}},
+    "parameters":{"objectId":{"in":"query","name":"objectId","required":true,"schema":{"$ref":"#/components/schemas/ObjectId"}}},
+    "responses":{"Failure":{"description":"400 invalid parameters, 401/403 missing credentials or access denied, 404 missing object or directory, 429/503 temporarily unavailable. Never turn a storage failure into a successful empty listing."}},
+    "schemas":{
+      "Name":{"type":"string","minLength":1,"maxLength":255,"pattern":"^[^/\\\\\\u0000-\\u001f]+$","description":"One display path component. Dot and dot-dot are invalid. VoidPlayer skips hidden names."},
+      "ObjectId":{"type":"string","minLength":1,"maxLength":4096,"description":"Opaque stable object lookup key scoped to the configured root."},
+      "Directory":{"type":"object","required":["kind","name"],"properties":{"kind":{"const":"directory"},"name":{"$ref":"#/components/schemas/Name"}}},
+      "File":{"type":"object","required":["objectId","revision","size","lastModified"],"properties":{
+        "objectId":{"$ref":"#/components/schemas/ObjectId"},
+        "revision":{"type":"string","pattern":"^[A-Za-z0-9_-]{1,512}$","description":"Stable for identical revision, changes whenever bytes change. Encode opaque upstream validators as needed."},
+        "size":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},
+        "lastModified":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Unix milliseconds; 0 when unknown."}
+      }},
+      "FileEntry":{"allOf":[{"$ref":"#/components/schemas/File"},{"type":"object","required":["kind","name"],"properties":{"kind":{"const":"file"},"name":{"$ref":"#/components/schemas/Name"}}}]}
+    }
+  }
+}

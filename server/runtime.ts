@@ -7,6 +7,7 @@ import { DATA_DIRECTORY_MARKER } from '../shared/service/data-directory.ts';
 import { stat, access, mkdir, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
+import { isProviderRoot } from './library-store.ts';
 import { MediaLibraryIndex } from './library.ts';
 import { createMediaServer, createTrafficState } from './app.ts';
 import type { ServiceConfig } from './config.ts';
@@ -16,6 +17,7 @@ import { ProtocolGateway, type ManagedServer } from './protocol-server.ts';
 
 export async function validateServiceConfig(config: ServiceConfig, requireStatic = true, checkMedia = true) {
   for (const input of checkMedia ? config.mediaRoots : []) {
+    if (isProviderRoot(input)) continue;
     const root = typeof input === 'string' ? input : input.path;
     if (!(await stat(root).catch(() => null))?.isDirectory()) throw new Error(`媒体目录不存在或不可读: ${root}`);
     await access(root, constants.R_OK);

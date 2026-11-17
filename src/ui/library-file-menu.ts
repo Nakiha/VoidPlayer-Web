@@ -46,13 +46,13 @@ export function installLibraryFileMenu(host: HTMLElement, act: LibraryMenuAction
         run:() => copy(libraryLocationExpression({root:root!,directory,all:false})),
       };
       if (root && row.dataset.libraryKind === 'directory') return [
-        {id:'copy-path', label:t(msg('sourceActions.copyAbsolutePath', '拷贝绝对路径')), glyph:'copy', run:() => copy(libraryAbsolutePath(signal,root,directory))},
+        {id:'copy-path', label:t(msg('sourceActions.copyAbsolutePath', '拷贝绝对路径')), glyph:'copy', disabled:row.dataset.storage === 'provider', run:() => copy(libraryAbsolutePath(signal,root,directory))},
         copyLibraryPath,
       ];
       const record = entries.get(row);
       if (!record) return [];
       if ('rootId' in record) return [
-        {id:'copy-mount-path', label:t(msg('libraryFileMenu.copyMountPath', '拷贝挂载路径')), glyph:'copy', run:() => copy(libraryAbsolutePath(signal,record.rootId))},
+        {id:'copy-mount-path', label:t(msg('libraryFileMenu.copyMountPath', '拷贝挂载路径')), glyph:'copy', disabled:row.dataset.storage === 'provider', run:() => copy(libraryAbsolutePath(signal,record.rootId))},
         copyLibraryPath,
       ];
       const {entry, local} = record, playback = record.playback();
@@ -73,7 +73,7 @@ export function installLibraryFileMenu(host: HTMLElement, act: LibraryMenuAction
       return [
         ...(playback ? [playback] : []),
         { id: 'copy-name', label: t(msg('libraryFileMenu.copyName', '拷贝文件名')), glyph: 'copy', run: () => copy(entry.name.split('/').at(-1)!) },
-        { id: 'copy-path', label: t(msg('sourceActions.copyAbsolutePath', '拷贝绝对路径')), glyph: 'copy', run: () => copy((async () => {
+        { id: 'copy-path', label: t(msg('sourceActions.copyAbsolutePath', '拷贝绝对路径')), glyph: 'copy', disabled:entry.storage === 'provider', run: () => copy((async () => {
           const response = await fetch(mediaActionUrl(source, 'location', location.href), { cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
           const body = await response.json();
           if (!response.ok || typeof body.absolutePath !== 'string') throw new Error(t(msg('libraryFileMenu.pathUnavailable', '无法获取文件绝对路径')));

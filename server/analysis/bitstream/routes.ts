@@ -75,6 +75,11 @@ export async function handleAnalysisRoutes(
       return true;
     }
     const version = requireMediaVersion(url);
+    const entry = ctx.library.describe(media![1]);
+    if (entry?.storage === 'provider' && entry.version === version) {
+      sendJson(res,422,{code:'provider-analysis-unsupported',error:'服务端深度分析需要本地媒体根目录。'});
+      return true;
+    }
     if (
       !version ||
       !/^[a-f0-9]{24}$/.test(version) ||

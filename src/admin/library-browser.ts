@@ -38,6 +38,7 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
     localizeRow:(row,item,home) => patchLibraryRow(row,fileRow(item,true,home))});
   columns.setEnabled(views.mode()==='columns');
   selection=installLibrarySelection(host,list,signal,{navigate:browser.navigate,location:browser.appliedLocation,refresh:browser.load,closeMenu:menu.close,notify,
+    writable:id => browser.page()?.roots.find(root => root.id === id)?.storage !== 'provider',
     selectFile:row=>browser.selectFile(row && rowEntries.get(row)?.library)});
   const scrollbar = installSourceScrollbar(list, find('source-scrollbar'), find('source-scrollbar-thumb'), signal);
   let footFrame = 0, footHeight = -1;

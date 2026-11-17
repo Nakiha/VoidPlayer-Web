@@ -37,7 +37,8 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
       if (!buildCommand && req.method === 'POST' && (kind === 'js-ts'||kind==='js-matroska'||kind==='mp4-playback')) throw new AdminError(405,'此播放索引只能由服务端构建。');
       if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
       const version = requireMediaVersion(url), entry = library.metadata(indexMatch[1]);
-      if (!entry || !await library.resolve(indexMatch[1], version)) throw new AdminError(409, '媒体不可用或已改变。');
+      const source = entry && await library.source(entry.id,version);
+      if (!entry || !source) throw new AdminError(409, '媒体不可用或已改变。');
       if (buildCommand) {
         if (req.method !== 'POST') throw new AdminError(405,'构建索引需要 POST。','method-not-allowed');
         const input = await readAdminJson(req,1024);
@@ -45,10 +46,10 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
           throw new AdminError(400,'索引构建正文必须是空对象。','invalid-index-build');
         const cached = await library.indexJobs.call('has',{id:entry.id,version,identity});
         if (cached) {sendJson(res,200,{state:'complete',id:entry.id,version,identity});return true;}
-        const filePath = await library.resolve(entry.id,version);
-        if (!filePath) throw new AdminError(409,'媒体已改变。','media-version-changed');
+        if (typeof source !== 'string' && kind === 'ffmpeg')
+          throw new AdminError(422,'适配器不支持此索引类型。','provider-index-unsupported');
         const build = library.indexJobs.startBuild({id:entry.id,version,fingerprint:library.fingerprint(entry.id,version),size:entry.size,
-          filePath,epoch:await library.indexJobs.call('epoch'),identity});
+          source,epoch:await library.indexJobs.call('epoch'),identity});
         // The job owns execution; a lost HTTP response never cancels it.
         void build.promise.catch(() => {});
         const result = new URL(url); result.pathname = result.pathname.replace(/\/build$/,'');
@@ -114,7 +115,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
             let built: {built:boolean;epoch:number};
             try {built = await pending.promise; await progressTail;}
             finally {observer?.unsubscribe();}
-            if (built.built && !await library.resolve(entry.id,version))
+            if (built.built && !await library.source(entry.id,version))
               throw new AdminError(409,'媒体已改变，未保存旧索引。');
           }
           const bytes = await library.indexJobs.call('get', { id: entry.id, version, identity });
@@ -149,7 +150,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
         const bytes = new Uint8Array(size); let offset = 0;
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
         chunks.length = 0;
-        if (res.destroyed || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
+        if (res.destroyed || !await library.source(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
         const result = await library.indexJobs.call('put', {
           bytes, size: entry.size, id: entry.id, version, identity,
         }, [bytes.buffer]);
