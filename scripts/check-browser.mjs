@@ -1522,8 +1522,10 @@ try {
     const executor = await page.locator('#canvas-A').getAttribute('data-color-executor');
     const surface = page.locator('#stage-A .frame-presentation[role="img"]');
     const geometry = () => surface.evaluate(c => ({ width: c.width, height: c.height, box: [c.clientWidth, c.clientHeight] }));
+    // The transport overlays the canvas, so exclude its icons from the frame pixel comparison.
+    const capture = () => surface.screenshot({ style: '.transport-dock { visibility: hidden !important; }' });
     const before = await geometry();
-    const pixels = await surface.screenshot();
+    const pixels = await capture();
     const eye = page.locator('[data-track-drag="A"] .track-visibility');
     for (const restoreAll of [false, true]) {
       await eye.click(); await settle(page);
@@ -1532,7 +1534,7 @@ try {
       else await eye.click();
       await eye.focus(); await settle(page);
       assert.deepEqual(await geometry(), before, 'restored surface must retain its viewport-sized backing dimensions');
-      assert.deepEqual(await surface.screenshot(), pixels, 'paused frame pixels and letterboxing must survive hiding');
+      assert.deepEqual(await capture(), pixels, 'paused frame pixels and letterboxing must survive hiding');
     }
     console.log(`  Retained frame verified at DPR 2 (${executor})`);
   }, { deviceScaleFactor: 2 });
