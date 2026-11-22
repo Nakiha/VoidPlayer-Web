@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -128,18 +128,113 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     await assert.rejects(admin.goto(base + '/admin'));
     await admin.close();
     const fixture = path.resolve('fixtures/video/ffv1_yuv422p_8bit.mkv');
-    if (engine === 'chromium') {
-      await offline.evaluate(async encoded => {
+    const fixtureB = path.resolve('fixtures/video/ffv1_yuv444p_8bit.mkv');
+    async function deliverFixture(filename, fixturePath) {
+      await offline.evaluate(async ({ filename, encoded }) => {
         const root = await navigator.storage.getDirectory();
-        const video = await root.getFileHandle('offline-clip.mkv', { create: true });
+        const video = await root.getFileHandle(filename, { create: true });
         const stream = await video.createWritable();
         await stream.write(Uint8Array.from(atob(encoded), ch => ch.charCodeAt(0)));
         await stream.close();
         window.deliverFiles({ files: [video] });
-      }, (await readFile(fixture)).toString('base64'));
-    } else await offline.locator('#file-A').setInputFiles(fixture);
+      }, { filename, encoded: (await readFile(fixturePath)).toString('base64') });
+    }
+    if (engine === 'chromium') await deliverFixture('offline-clip.mkv', fixture);
+    else await offline.locator('#file-A').setInputFiles(fixture);
     await offline.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.frame, null, { timeout: 45000 });
     assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].decoder), 'ffmpeg-wasm');
+    await offline.locator('#toggle-super-resolution').click();
+    const enhancement = offline.locator('#super-resolution-panel');
+    const apply = enhancement.getByRole('button', { name: 'Apply enhancements', exact: true });
+    const scaleOptions = enhancement.getByRole('group', { name: 'Upscale factor', exact: true }).getByRole('button');
+    const scale2 = scaleOptions.filter({ hasText: '2×' });
+    const scale4 = scaleOptions.filter({ hasText: '4×' });
+    const pressed = button => button.getAttribute('aria-pressed');
+    assert.equal(await scaleOptions.count(), 2);
+    const [toggleBox, firstScale] = await Promise.all([apply.boundingBox(), scale2.boundingBox()]);
+    assert.ok(toggleBox && firstScale);
+    assert.equal(toggleBox.width, toggleBox.height);
+    assert.ok(toggleBox.x + toggleBox.width <= firstScale.x, 'enhancement toggle is to the left of the scale options');
+    assert.ok(Math.abs(toggleBox.y + toggleBox.height / 2 - firstScale.y - firstScale.height / 2) <= 1);
+    assert.equal(await apply.getAttribute('aria-pressed'), 'false');
+    const trackA = enhancement.getByRole('button', { name: 'A', exact: true });
+    assert.equal(await trackA.getAttribute('aria-current'), 'true');
+    assert.equal(await trackA.getAttribute('aria-pressed'), 'false');
+    const sharpen = enhancement.getByRole('group', { name: 'Sharpen', exact: true });
+    const sharpOff = sharpen.getByRole('button', { name: 'Off', exact: true });
+    const kernel = sharpen.getByRole('button', { name: '7×7', exact: true });
+    const kernelB = sharpen.getByRole('button', { name: '3×3', exact: true });
+    const strength = enhancement.getByRole('slider');
+    assert.equal(await enhancement.getByRole('checkbox').count(), 0);
+    assert.equal(await pressed(sharpOff), 'true');
+    assert.ok(await strength.isHidden());
+    await kernel.click();
+    await strength.fill('85');
+    assert.equal(await enhancement.locator('[data-strength-value]').innerText(), '85%');
+    const [width, height] = await offline.evaluate(() => {
+      const frame = window.voidPlayer.captureFrame('A');
+      return [frame.width, frame.height];
+    });
+    const restingPanel = await enhancement.boundingBox();
+    const restingToggle = await apply.boundingBox();
+    await apply.evaluate(button => {
+      button.addEventListener('click', () => {
+        const output = button.closest('#super-resolution-panel').querySelector('[data-status]');
+        window.pendingEnhancement = { state: output.dataset.state, text: output.textContent, tooltip: output.getAttribute('data-tooltip') };
+      }, { once: true });
+    });
+    await apply.click();
+    assert.deepEqual(await offline.evaluate(() => window.pendingEnhancement), { state: 'loading', text: '', tooltip: null });
+    const resolution = enhancement.getByText(`${width * 2} × ${height * 2}`, { exact: true });
+    await resolution.waitFor();
+    const [labelBox, resolutionBox] = await Promise.all([enhancement.getByText('Upscale factor', { exact: true }).boundingBox(), resolution.boundingBox()]);
+    assert.ok(labelBox && resolutionBox && restingToggle);
+    assert.ok(resolutionBox.x >= labelBox.x + labelBox.width && resolutionBox.x + resolutionBox.width <= restingToggle.x);
+    assert.ok(Math.abs(resolutionBox.y - labelBox.y) <= 1, 'output resolution is on the upscale label’s row');
+    assert.deepEqual(await enhancement.boundingBox(), restingPanel, 'showing enhancement status leaves the panel in place');
+    assert.deepEqual(await apply.boundingBox(), restingToggle, 'the toggle stays under the pointer');
+    await scale4.click();
+    await enhancement.getByText(`${width * 4} × ${height * 4}`, { exact: true }).waitFor();
+    assert.equal(await trackA.getAttribute('aria-pressed'), 'true');
+
+    if (engine === 'chromium') await deliverFixture('offline-clip-b.mkv', fixtureB);
+    else await offline.locator('#file-B').setInputFiles(fixtureB);
+    const trackB = enhancement.getByRole('button', { name: 'B', exact: true });
+    await trackB.waitFor();
+    assert.equal(await trackB.getAttribute('aria-pressed'), 'false');
+    const [widthB, heightB] = await offline.evaluate(() => {
+      const frame = window.voidPlayer.captureFrame('B');
+      return [frame.width, frame.height];
+    });
+    await trackB.click();
+    await enhancement.getByText(`${widthB * 2} × ${heightB * 2}`, { exact: true }).waitFor();
+    assert.equal(await trackB.getAttribute('aria-current'), 'true');
+    assert.equal(await trackB.getAttribute('aria-pressed'), 'true');
+    assert.equal(await trackA.getAttribute('aria-pressed'), 'true');
+    assert.equal(await pressed(sharpOff), 'true');
+    await kernelB.click();
+    await strength.fill('125');
+
+    await trackA.click();
+    assert.equal(await trackA.getAttribute('aria-current'), 'true');
+    assert.equal(await trackA.getAttribute('aria-pressed'), 'true');
+    assert.equal(await pressed(scale4), 'true');
+    assert.equal(await pressed(kernel), 'true');
+    assert.equal(await enhancement.locator('[data-strength-value]').innerText(), '85%');
+    await trackA.click();
+    assert.equal(await trackA.getAttribute('aria-pressed'), 'false');
+    assert.equal(await trackB.getAttribute('aria-pressed'), 'true');
+    await trackB.click();
+    await enhancement.getByText(`${widthB * 2} × ${heightB * 2}`, { exact: true }).waitFor();
+    await apply.click();
+    assert.equal(await trackB.getAttribute('aria-pressed'), 'false');
+    await trackA.click();
+    await apply.press('Escape');
+    assert.ok(await enhancement.isHidden());
+    assert.ok(await offline.locator('#toggle-super-resolution').evaluate(button => button === document.activeElement));
+    await offline.locator('#toggle-super-resolution').click();
+    assert.equal(await pressed(kernel), 'true');
+    await enhancement.locator('[data-close]').click();
     const next = await offline.evaluate(async () => {
       await window.voidPlayer.step(1);
       return window.voidPlayer.getState().positionUs;
@@ -152,6 +247,19 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       });
       assert.equal(await offline.evaluate(() => window.voidPlayer.getState().positionUs), 0);
       await offline.evaluate(() => window.voidPlayer.step(1));
+    } else {
+      await offline.reload();
+      await offline.waitForFunction(() => !!window.voidPlayer);
+      await offline.locator('#file-A').setInputFiles(fixture);
+      await offline.waitForFunction(() => !!window.voidPlayer.getState().tracks[0]?.frame);
+      const enhancementButton = offline.locator('#toggle-super-resolution');
+      await enhancementButton.click();
+      assert.equal(await pressed(trackA), 'false');
+      assert.equal(await pressed(apply), 'false');
+      assert.equal(await pressed(scale4), 'true');
+      assert.equal(await pressed(kernel), 'true');
+      assert.equal(await strength.inputValue(), '85');
+      await enhancement.locator('[data-close]').click();
     }
     const initial = await offline.evaluate(async icons => {
       const [cacheName] = await caches.keys();
@@ -159,11 +267,16 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       const iconUrls = icons.map(icon => new URL(icon.src, location.origin).href);
       const tabIcons = [...document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map(link => link.href);
       const offlineIcons = await Promise.all([...iconUrls, ...tabIcons].map(async url => (await fetch(url)).ok));
-      return { cacheName, tabIcons, offlineIcons, privateUrls: keys.filter(url => url.search && !url.pathname.startsWith('/vendor/') && !iconUrls.includes(url.href) ||
-        !/^\/(?:assets\/|vendor\/|(?:index\.html|theme-init\.js|startup-guard\.js|manifest\.webmanifest|.*\.(?:png|ico|svg))$)/.test(url.pathname)).map(String) };
+      const notices = ['/licenses/websr.txt', '/licenses/websr-source.json'];
+      const [license, source] = await Promise.all(notices.map(url => fetch(url)));
+      return { cacheName, tabIcons, offlineIcons, license: await license.text(), source: await source.json(),
+        privateUrls: keys.filter(url => !notices.includes(url.pathname) && (url.search && !url.pathname.startsWith('/vendor/') && !iconUrls.includes(url.href) ||
+        !/^\/(?:assets\/|vendor\/|(?:index\.html|theme-init\.js|startup-guard\.js|manifest\.webmanifest|.*\.(?:png|ico|svg))$)/.test(url.pathname))).map(String) };
     }, manifest.icons);
     assert.deepEqual(initial.privateUrls, []);
     assert.ok(initial.offlineIcons.every(Boolean));
+    assert.match(initial.license, /^MIT License/);
+    assert.match(initial.source.weights.sha256, /^[a-f0-9]{64}$/);
     assert.equal(initial.tabIcons.length, 3);
     for (const url of initial.tabIcons) assert.match(new URL(url).pathname, /^\/assets\/(?:favicon|apple-touch-icon)-.+\.(?:ico|svg|png)$/);
     service = await startService(config);
@@ -178,6 +291,8 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       // Publish a second build with a real changed startup asset. An incomplete deployment fails integrity first.
       const chunks = (await readdir(path.join(dist, 'assets'))).map(name => 'assets/' + name).filter(isPlayerAsset);
       const info = JSON.parse(await readFile(path.join(dist, 'build-info.json'), 'utf8'));
+      const nextBuild = randomUUID();
+      await writeFile(path.join(dist, 'build-info.json'), JSON.stringify({ ...info, buildId: nextBuild }));
       const guard = path.join(dist, 'startup-guard.js'), previous = await readFile(guard, 'utf8');
       const updated = previous + '\n// PWA update fixture\n';
       const index = path.join(dist, 'index.html');
@@ -215,6 +330,35 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       await parallel.evaluate(url => import(url).then(() => true), '/' + lazy);
       await writeFile(lazyFile, lazyBytes);
       await parallel.close();
+      // Use the regular update button. Clear the same-tab preference cache to exercise the workspace handoff itself.
+      await offline.route('**/api/health', async route => {
+        const response = await route.fetch();
+        await route.fulfill({ response, json: { ...await response.json(), frontendBuildId: nextBuild } });
+      });
+      await offline.evaluate(() => {
+        for (const key of Object.keys(sessionStorage)) if (key.startsWith('voidplayer.enhancement-preferences.')) sessionStorage.removeItem(key);
+        window.dispatchEvent(new Event('focus'));
+      });
+      await offline.locator('#server-update').click();
+      await offline.locator('meta[name=next-build]').waitFor({ state: 'attached' });
+      await offline.waitForFunction(() => window.voidPlayer?.getState().tracks.filter(track => track.frame).length === 2 &&
+        !document.getElementById('app').hasAttribute('data-workspace-opening'), null, { timeout: 45000 });
+      await offline.unroute('**/api/health');
+      assert.equal(await offline.evaluate(() => window.voidPlayer.getState().positionUs), next);
+      assert.equal(await offline.evaluate(() => sessionStorage.getItem('voidplayer.update-state.v1')), null);
+      await offline.locator('#toggle-super-resolution').click();
+      assert.equal(await pressed(trackA), 'false');
+      assert.equal(await pressed(trackB), 'false');
+      assert.equal(await pressed(apply), 'false');
+      assert.equal(await pressed(scale4), 'true');
+      assert.equal(await pressed(kernel), 'true');
+      assert.equal(await strength.inputValue(), '85');
+      await trackB.click();
+      assert.equal(await pressed(scale2), 'true');
+      assert.equal(await pressed(kernelB), 'true');
+      assert.equal(await strength.inputValue(), '125');
+      await offline.locator('#remove-track-B').click();
+      await trackB.waitFor({ state: 'detached' });
       await offline.evaluate(() => caches.open('unrelated-cache'));
       await offline.close();
       const reopened = await context.newPage();
@@ -223,7 +367,7 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       assert.equal(await reopened.locator('meta[name=next-build]').count(), 1);
       assert.ok(await reopened.evaluate(() => caches.has('unrelated-cache')));
     }
-    console.log(`PASS ${engine}: installable manifest, offline cold launch, isolated local decoding, online-only data and Range`);
+    console.log(`PASS ${engine}: installable manifest, offline cold launch and WebSR 2×/4×, isolated local decoding, online-only data and Range`);
   } finally {
     await context.close();
     await service?.close();

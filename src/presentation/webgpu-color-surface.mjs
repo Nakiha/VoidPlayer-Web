@@ -42,6 +42,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     if (batch) { batch.commands.length = 0; batch.surfaces.clear(); for (const close of batch.closes.splice(0)) close(); }
   });
   let geometry=null,rotation=0,previewCurrent=false,sdrBridge,captureCanvas,captureContext;
+  let enhancement, enhancementCompatible = false;
   const releaseCapture=()=>{
     captureContext?.unconfigure();
     if(captureCanvas)captureCanvas.width=captureCanvas.height=1;
@@ -124,18 +125,18 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
   yuvUniform=device.createBuffer({size:192,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   externalUniform=device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const samplers = {nearest:device.createSampler(),linear:device.createSampler({minFilter:'linear',magFilter:'linear'})};
-  function render(texture, target, linear=false, capture=false, hdrCapture=false) {
+  function render(texture, target, linear=false, capture=false, hdrCapture=false, enhanced=null, angle=rotation) {
     if (resourceError) throw resourceError;
     if (disposed || lost || !current) throw new Error('No live GPU/frame resource');
     beforeWrite(device,token);
-    const isYuv=!!current.yuv;
-    const copied = !isYuv && (current.rgba || previewCurrent || mode === 'copy' || browserHdrBridge?.available && hdrTransfer(current.colorSpace?.transfer));
+    const isYuv=!!current.yuv && !enhanced;
+    const copied = !isYuv && (enhanced || current.rgba || previewCurrent || mode === 'copy' || browserHdrBridge?.available && hdrTransfer(current.colorSpace?.transfer));
     const pipeline = (isYuv ? yuvPipelines : copied ? bridgePipelines : pipelines).get(target);
     let rect=[0,0,texture.width,texture.height];
     if(geometry&&!capture){const g=geometry,w=g.imageWidth*g.zoom*g.dpr,h=g.imageHeight*g.zoom*g.dpr;rect=[((g.width-g.imageWidth*g.zoom)/2+g.offsetX)*g.dpr,((g.height-g.imageHeight*g.zoom)/2+g.offsetY)*g.dpr,w,h];}
-    device.queue.writeBuffer(externalUniform,0,new Float32Array([...rect,rotation,current.displayWidth,current.displayHeight,Number(linear)]));
-    if(isYuv){yuvParams[3]=presentationChannelCode(getPresentationChannel());yuvParams.set(rect,32);yuvParams[31]=rotation;yuvParams[29]=Number(linear);yuvParams[45]=Number(hdrOutput&&(!capture||hdrCapture));yuvParams[46]=output.hdrWhiteNits;device.queue.writeBuffer(yuvUniform,0,yuvParams);}
-    const external=isYuv?null:copied?copiedTexture.createView():device.importExternalTexture({source:current,colorSpace:hdrOutput&&(!capture||hdrCapture)?'display-p3':'srgb'});
+    device.queue.writeBuffer(externalUniform,0,new Float32Array([...rect,angle,enhanced?.width??current.displayWidth,enhanced?.height??current.displayHeight,Number(linear)]));
+    if(isYuv){yuvParams[3]=presentationChannelCode(getPresentationChannel());yuvParams.set(rect,32);yuvParams[31]=angle;yuvParams[29]=Number(linear);yuvParams[45]=Number(hdrOutput&&(!capture||hdrCapture));yuvParams[46]=output.hdrWhiteNits;device.queue.writeBuffer(yuvUniform,0,yuvParams);}
+    const external=isYuv?null:copied?(enhanced??copiedTexture).createView():device.importExternalTexture({source:current,colorSpace:hdrOutput&&(!capture||hdrCapture)?'display-p3':'srgb'});
     const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:isYuv?[{binding:0,resource:{buffer:yuvBuffer}},{binding:1,resource:{buffer:yuvUniform}}]:[{binding:0,resource:external},{binding:1,resource:samplers.nearest},{binding:2,resource:{buffer:externalUniform}}]});
     const encoder=device.createCommandEncoder();
     const pass=encoder.beginRenderPass({colorAttachments:[{view:texture.createView(),loadOp:'clear',storeOp:'store',clearValue:[0,0,0,0]}]});
@@ -154,7 +155,48 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
         context.configure({device,format:screenSdr?sdrFormat:format,colorSpace:screenSdr?'srgb':'display-p3',
           ...(screenSdr?{}:{toneMapping:{mode:'extended'}}),alphaMode:'premultiplied'});
       }
-      const w=geometry?Math.max(1,Math.round(geometry.width*geometry.dpr)):canvas.width,h=geometry?Math.max(1,Math.round(geometry.height*geometry.dpr)):canvas.height;if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;if(current?.yuv&&yuvParams)yuvParams[3]=presentationChannelCode(getPresentationChannel());render(context.getCurrentTexture(),screenSdr?sdrFormat:format,geometry?geometry.imageWidth*geometry.zoom*geometry.dpr<current.displayWidth:w<current.displayWidth);},
+      const w=geometry?Math.max(1,Math.round(geometry.width*geometry.dpr)):canvas.width,h=geometry?Math.max(1,Math.round(geometry.height*geometry.dpr)):canvas.height;
+      if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;
+      const texture = context.getCurrentTexture(), target = screenSdr ? sdrFormat : format;
+      const displayWidth = geometry ? geometry.imageWidth * geometry.zoom * geometry.dpr : w;
+      if (enhancement && screenSdr && enhancementCompatible && (!current.yuv || getPresentationChannel() === 'rgb')) {
+        const preview = enhancement;
+        const enhanced = preview.paint(current, current.displayWidth, current.displayHeight, input => {
+          render(input, 'rgba8unorm', input.width < current.displayWidth, true, false, null, 0);
+          flush(device);
+        }, outputTexture => {
+          const rotated = rotation === 90 || rotation === 270;
+          render(texture, target, displayWidth < (rotated ? outputTexture.height : outputTexture.width), false, false, outputTexture);
+          flush(device);
+        }, () => {
+          if (enhancement === preview && current && this.available) {
+            try { this.presentRetained(); } catch { /* The normal presenter owns recovery. */ }
+          }
+        });
+        if (enhanced) return;
+      } else if (enhancement) enhancement.unsupported();
+      render(texture, target, displayWidth < current.displayWidth);
+    },
+    attachEnhancement(preview) {
+      enhancement?.dispose();
+      enhancement = preview;
+      const redraw = () => { if (enhancement === preview && current && geometry && this.available) this.presentRetained(); };
+      try { redraw(); }
+      catch (error) {
+        enhancement = undefined;
+        preview.dispose();
+        throw error;
+      }
+      return {
+        redraw,
+        detach: () => {
+          if (enhancement !== preview) return;
+          enhancement = undefined;
+          preview.dispose();
+          if (current && geometry && this.available) this.presentRetained();
+        },
+      };
+    },
     redrawChannel(){if(!current?.yuv)return false;this.presentRetained();return true;},
     device, failure, lost: device.lost, adapter: adapterInfo ? {vendor:adapterInfo.vendor,architecture:adapterInfo.architecture,device:adapterInfo.device,description:adapterInfo.description} : null,errors,
     // Own one clone so paused redraw and capture use precisely the same resource.
@@ -180,7 +222,10 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       if (isRgba) validateDescription(frame.description, frame.pixels?.byteLength);
       const next=isYuv||isRgba?{yuv:isYuv,rgba:isRgba,displayWidth:frame.description.width,displayHeight:frame.description.height,close(){}}:frame.clone();
       const previous=current, previousPreview=previewCurrent;
+      const previousCompatibility = enhancementCompatible;
       current=next;previewCurrent=preview;
+      enhancementCompatible = !preview && !isRgba && !hdrTransfer(frame.colorSpace?.transfer)
+        && !hdrTransfer(frame.description?.color.transfer) && !hdrTransfer(frame.description?.sourceColor?.transfer);
       width??=next.displayWidth;height??=next.displayHeight;
       try {if(!geometry){if(canvas.width!==width)canvas.width=width;if(canvas.height!==height)canvas.height=height;}
         const bridge=!isYuv&&!isRgba&&!preview&&browserHdrBridge?.available&&hdrTransfer(current.colorSpace?.transfer);
@@ -205,11 +250,11 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
           }
         }
         this.presentRetained();
-      } catch(e) {current=previous;previewCurrent=previousPreview;next.close();throw e;}
+      } catch(e) {current=previous;previewCurrent=previousPreview;enhancementCompatible=previousCompatibility;next.close();throw e;}
       retire(device,previous);
     },
     get available(){return !lost&&!disposed&&!resourceError;},
-    clear(){flush(device);releaseCapture();current?.close();current=undefined;yuvBuffer?.destroy();yuvBuffer=undefined;yuvSize=0;copiedTexture?.destroy();copiedTexture=undefined;browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;},
+    clear(){flush(device);releaseCapture();enhancement?.clear();current?.close();current=undefined;yuvBuffer?.destroy();yuvBuffer=undefined;yuvSize=0;copiedTexture?.destroy();copiedTexture=undefined;browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;},
     captureSource(target) {
       if(!current)throw new Error('No frame');
       const swap=rotation===90||rotation===270;
@@ -272,7 +317,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       }finally{buffer.destroy();texture.destroy();}
     },
     drain:()=>{flush(device);return device.queue.onSubmittedWorkDone();},
-    dispose(){if(disposed)return;flush(device);disposed=true;releaseCapture();current?.close();current=undefined;yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;context.unconfigure();device.removeEventListener('uncapturederror',onError);if(ownsDevice)device.destroy();}
+    dispose(){if(disposed)return;flush(device);disposed=true;releaseCapture();enhancement?.dispose();enhancement=undefined;current?.close();current=undefined;yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;context.unconfigure();device.removeEventListener('uncapturederror',onError);if(ownsDevice)device.destroy();}
   };
   } catch(error) {
     current?.close();yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;context?.unconfigure();

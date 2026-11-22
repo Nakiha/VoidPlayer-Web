@@ -58,6 +58,7 @@ import { createViewBindings } from './ui/view-bindings.ts';
 import { installViewportTrace } from './ui/viewport-trace.ts';
 import { installViewportGestures } from './ui/viewport-gestures.ts';
 import { installViewportChrome } from './ui/viewport-chrome.ts';
+import { installEnhancement } from './ui/enhancement.ts';
 import { installPixelGrid } from './ui/pixel-grid.ts';
 import { openMedia } from './media/source.ts';
 import { ReviewSession } from './session.ts';
@@ -184,6 +185,7 @@ const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => 
 const notify = (message: string) => { toasts.show(message); };
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'), topbar);
 const workbench = installWorkbench(session, act, openMarkDialog, notify, viewportChrome.setPanelOpen);
+const enhancement = localOnly ? undefined : installEnhancement(canvases, uiEvents.signal);
 $('toggle-annotations').onclick = () => {
   if (session.getState().busy) return;
   if (drawingEditor.active()) $('mark-close').click();
@@ -273,10 +275,18 @@ for (const slot of SLOTS) resizeObserver.observe($(`stage-${slot}`));
 for (const el of document.querySelectorAll('.viewport-surface .card-heading, .viewport-surface .transport-dock')) resizeObserver.observe(el);
 const uriState = installUriState(session, {
   editsReady: () => !drawingEditor.active() && annotationSync.locallySaved(),
-  identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), panBasis: viewBindings.capturePanBasis(), layout: workbench.getState() }),
+  identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close,
+  capture: () => ({ viewport: viewport.snapshot(), panBasis: viewBindings.capturePanBasis(), layout: workbench.getState(),
+    enhancements: enhancement?.snapshot() }),
   openingChanged: () => render(),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); },
-  async restore(document, resumeCloudAnnotations) { viewBindings.restoreViewport(document.viewport, document.panBasis); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
+  async restore(document) {
+    if (document.enhancements) enhancement?.restore(document.enhancements);
+    viewBindings.restoreViewport(document.viewport, document.panBasis);
+    setPresentationChannel(viewport.channel);
+    await workbench.restore(document.layout ?? workbench.getState());
+    render();
+  },
 });
 watchingStateChanged = uriState.changed;
 const zoomMenu = installNumericChoice('zoom-select', { glyph: 'search', presets: ZOOM_PRESETS, suffix: '×', min: ZOOM_MIN, max: ZOOM_MAX,
@@ -430,6 +440,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   drawingEditor.render(state);
   markPreviewBackfill.schedule();
   workbench.render(state);
+  enhancement?.render(state);
   sourceActions.render(state);
 
 }

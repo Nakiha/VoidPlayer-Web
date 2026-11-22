@@ -2,6 +2,7 @@ import {selectReleaseSources} from './tools/release/source-files.mjs';
 import { normalizeReleasePermissions, verifyReleaseArchivePermissions } from './tools/release/permissions.mjs';
 import { verifyFrontendBuild } from '../server/frontend-releases.ts';
 import { verifyStaticAssets } from './static-assets.mjs';
+import { webSrLicenseFile, webSrProvenanceFile } from './websr-assets.mjs';
 import { cp, mkdir, readFile, writeFile, readdir, stat, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -19,7 +20,7 @@ const bun = process.env.BUN_BIN || 'bun';
 const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
 const bunVersion = (await readFile(path.join(root, '.bun-version'), 'utf8')).trim();
 if (execFileSync(bun, ['--version'], { encoding: 'utf8' }).trim() !== bunVersion) throw new Error(`构建需要 Bun ${bunVersion}，用 BUN_BIN 指定该版本。`);
-const required = ['manifest.webmanifest', 'sw.js', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'static-assets.json', 'index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING', 'vendor/voidplayer-analysis/voidplayer-analysis.js', 'vendor/voidplayer-analysis/voidplayer-analysis.wasm', 'vendor/voidplayer-analysis/manifest.json', 'vendor/voidplayer-analysis/provenance.json', 'vendor/voidplayer-analysis/LICENSE'];
+const required = ['manifest.webmanifest', 'sw.js', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'static-assets.json', 'index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', webSrLicenseFile, webSrProvenanceFile, 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING', 'vendor/voidplayer-analysis/voidplayer-analysis.js', 'vendor/voidplayer-analysis/voidplayer-analysis.wasm', 'vendor/voidplayer-analysis/manifest.json', 'vendor/voidplayer-analysis/provenance.json', 'vendor/voidplayer-analysis/LICENSE'];
 for (const name of required) if (!(await stat(path.join(root, 'dist', name)).catch(() => null))?.isFile()) throw new Error(`发布包缺少 ${name}；请先同步解码器并构建。`);
 await verifyStaticAssets(path.join(root, 'dist'));
 await verifyFrontendBuild(path.join(root, 'dist'));
@@ -98,6 +99,8 @@ Analysis build source: https://github.com/${analysis.source.repository}/tree/${a
 Analysis FFmpeg source: https://github.com/${analysis.source.ffmpegRepository}/tree/${analysis.source.ffmpegRevision}
 Server analysis FFmpeg source: https://github.com/${analysis.source.ffmpegRepository}/tree/${analysis.source.threadedFfmpegRevision}
 Analysis provenance: dist/vendor/voidplayer-analysis/provenance.json
+WebSR source and weight SHA-256: dist/licenses/websr-source.json
+WebSR license: dist/licenses/websr.txt
 Analysis license: dist/vendor/voidplayer-analysis/LICENSE
 WASM licenses: dist/vendor/voidplayer-core/LICENSES
 `);

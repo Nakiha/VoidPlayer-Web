@@ -100,6 +100,9 @@ Windows 模式切换验证使用 `npm run test:color:modes`（需先运行本地
 | 原生 PQ/HLG，浮点 HDR 能力完整 | 浏览器 float16 P3 转换 → 浮点纹理 | webgpu-browser-hdr-float |
 | 原生 PQ/HLG，SDR 目标或浮点能力不足 | 浏览器 sRGB 2D 中转 → 普通纹理，SDR 输出 | webgpu-browser-sdr |
 
+完整版与 Dock PWA 的画面增强默认关闭。每条轨道独立启用并配置倍率和锐化，对 SDR RGB 呈现执行超分，再使用原视口几何绘制。WebSR 4× 将第一遍 2× 的输出纹理交给第二遍 2×，共用同一组权重。启用锐化时，在最终超分分辨率做亮度锐化。增强队列饱和时，轨道保持原画，直到用户切换倍率或重新应用增强。HDR、单通道视图和 RGBA8 帧沿用各自的呈现路径。标注预览和截图使用原帧路径。
+WebSR 实拍 S 2× 的上游版本及权重 SHA-256 见 [WebSR 锁定记录](../scripts/release-websr.json)。构建本地校验权重和 MIT 许可并生成 WGSL，PWA 将同源模型模块及许可记录纳入离线完整性清单。
+
 截图按需由同一 shader 生成源尺寸、包含旋转的 SDR 图像，再物化为 2D canvas。原生 HDR 截图由浏览器转换为 sRGB，不能当作 HDR 导出。捕获不会改变当前视口或实际显示目标。缩略图使用独立帧与小尺寸 2D/OffscreenCanvas，不依赖播放画布。图表、网格、分析覆盖层及品牌动画继续使用 2D；矢量标注继续使用 SVG。
 
 缩小对邻近四个源 RGB 像素做双线性插值，放大取最近源像素；旋转和采样在最终视口尺寸执行。RGBA/原生 RGB 着色器保留 alpha，并输出预乘 alpha 供画布合成；画面外透明。YUV 色度重建与视口滤波是独立步骤，颜色数学不随视口大小改变。

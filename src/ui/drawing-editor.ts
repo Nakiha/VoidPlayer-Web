@@ -320,7 +320,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
   };
   window.addEventListener('resize', () => { positionBar(); if (active && !text) redraw(); }, { signal: life.signal });
   document.addEventListener('keydown', e => {
-    if (!active || (e.target as Element)?.closest?.('#analysis-overlay-panel') || (e.target as Element)?.closest?.('[popover]:popover-open') || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || (e.target as HTMLElement)?.isContentEditable) return;
+    if (!active || (e.target as Element)?.closest?.('.viewport-options-panel, [popover]:popover-open') || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || (e.target as HTMLElement)?.isContentEditable) return;
     if (matchesShortcut(e, 'close')) { e.preventDefault(); e.stopImmediatePropagation(); close(); }
     else if (matchesShortcut(e, 'undo') || matchesShortcut(e, 'redo')) { e.preventDefault(); $(matchesShortcut(e, 'redo') ? 'drawing-redo' : 'drawing-undo').click(); }
     else if (matchesShortcut(e, 'delete') || e.key === 'Backspace') { e.preventDefault(); $('drawing-delete').click(); }

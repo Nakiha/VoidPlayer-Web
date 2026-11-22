@@ -38,11 +38,18 @@ export type WorkspaceLayout = {
 export type ComparisonConditions = { colorMode:ColorMode; referenceDecode:ReferenceDecode } & ({
   version: 1; presentation: 'voidplayer-sdr-v1'; outputColorSpace: 'srgb';
 } | { version: 2; presentation:'voidplayer-color-v2'; outputColorSpace:'srgb'|'display-p3'; colorOutput:ColorOutput });
+export type WorkspaceEnhancement = {
+  slot: Slot;
+  scale: 2 | 4;
+  sharpened: boolean;
+  sharpen: { radius: 1 | 2 | 3; strength: number };
+};
 export type WorkspaceFile = {
   schema: 'voidplayer-workspace'; version: 1 | 2 | 3; name?: string; generatedAt: string; serverUrl: string;
   comparison?: ComparisonConditions;
   positionUs: number; tracks: { slot: Slot; mediaId: string; offsetUs: number; visible?: boolean }[];
   media: MediaInfo[]; marks: Mark[]; viewport: ViewportSnapshot; panBasis?: PanBasis; layout?: WorkspaceLayout;
+  enhancements?: WorkspaceEnhancement[];
   thumbnails?: { id: string; url: string; width: number; height: number }[];
 };
 const MAX_BYTES = 32 * 1024 * 1024;
@@ -65,6 +72,18 @@ function array(value: unknown, max: number): any[] {
 function boolean(value: unknown): boolean {
   if (typeof value !== 'boolean') throw new Error('工作区开关无效。');
   return value;
+}
+export function parseWorkspaceEnhancements(value: unknown): WorkspaceEnhancement[] {
+  const entries = array(value, SLOTS.length).map((entry): WorkspaceEnhancement => {
+    const { slot, scale, sharpened, sharpen } = object(entry);
+    const { radius, strength } = object(sharpen);
+    if ((scale !== 2 && scale !== 4) || (radius !== 1 && radius !== 2 && radius !== 3) ||
+        typeof strength !== 'number' || !Number.isFinite(strength) || strength < 0 || strength > 2)
+      throw new Error('工作区画面增强参数无效。');
+    return { slot: slotValue(slot), scale, sharpened: boolean(sharpened), sharpen: { radius, strength } };
+  });
+  if (new Set(entries.map(entry => entry.slot)).size !== entries.length) throw new Error('工作区画面增强轨道重复。');
+  return entries;
 }
 export function workspaceUrl(value: unknown, base?: string) {
   const url = new URL(text(value, 8192), base);
@@ -94,6 +113,8 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   const tracks = array(d.tracks, SLOTS.length).map(value => { const t = object(value); return { slot: slotValue(t.slot), mediaId: text(t.mediaId, 200), offsetUs: integer(t.offsetUs), ...(t.visible === undefined ? {} : { visible: boolean(t.visible) }) }; });
   if (new Set(tracks.map(t => t.slot)).size !== tracks.length || new Set(tracks.map(t => t.mediaId)).size !== tracks.length) throw new Error('工作区轨道重复。');
   for (const t of tracks) { const m = media.find(m => m.id === t.mediaId); if (!m || m.durationUs + t.offsetUs <= 0 || !Number.isSafeInteger(m.durationUs + t.offsetUs)) throw new Error('工作区轨道引用或时间范围无效。'); }
+  const enhancements = d.enhancements === undefined ? undefined : parseWorkspaceEnhancements(d.enhancements);
+  if (enhancements?.some(entry => !tracks.some(track => track.slot === entry.slot))) throw new Error('工作区画面增强轨道引用无效。');
   const marks: Mark[] = array(d.marks, 10000).map(value => {
     const m = object(value), mediaId = text(m.mediaId, 200), severity = integer(m.severity);
     if (!ids.has(mediaId) || severity < 1 || severity > 5 || !['human', 'agent'].includes(m.origin)) throw new Error('工作区标注引用或属性无效。');
@@ -169,7 +190,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
     if (!markIds.has(id) || !/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(url)) throw new Error('工作区缩略图无效。');
     return { id, url, width: timeUs(t.width), height: timeUs(t.height) };
   });
-  return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, ...(comparison ? { comparison } : {}), viewport: viewport.snapshot(), ...(panBasis ? { panBasis } : {}), ...(layout ? { layout } : {}), thumbnails };
+  return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, ...(comparison ? { comparison } : {}), viewport: viewport.snapshot(), ...(panBasis ? { panBasis } : {}), ...(layout ? { layout } : {}), ...(enhancements ? { enhancements } : {}), thumbnails };
 }
 export class UnrecognizedWorkspaceFile extends Error {}
 

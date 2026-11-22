@@ -32,6 +32,22 @@ test('workspace library navigation and pending search survive plain and compress
   assert.equal(parseWorkspace(document()).layout,undefined);
 });
 
+test('workspace round trips per-track enhancement settings without activation', async () => {
+  const original = document();
+  const tracks = [...original.tracks, { slot: 'B', mediaId: 'b', offsetUs: 0 }];
+  const media = [...original.media, { ...original.media[0], id: 'b' }];
+  const a = { slot: 'A', scale: 4, sharpened: true, sharpen: { radius: 3, strength: 0.85 } };
+  const b = { slot: 'B', scale: 2, sharpened: false, sharpen: { radius: 1, strength: 1.75 } };
+  const value = parseWorkspace({ ...original, tracks, media, enhancements: [{ ...a, enabled: true }, b] });
+  assert.deepEqual(value.enhancements, [a, b]);
+  assert.deepEqual((await readWorkspaceFile(await compressWorkspace(value), original.serverUrl)).enhancements, [a, b]);
+  assert.equal(parseWorkspace(original).enhancements, undefined);
+  for (const enhancements of [[a, a], [{ ...a, slot: 'C' }], [{ ...a, scale: 1 }], [{ ...a, sharpened: 1 }],
+    [{ ...b, sharpen: { radius: 4, strength: 1 } }], [{ ...b, sharpen: { radius: 1, strength: Infinity } }]]) {
+    assert.throws(() => parseWorkspace({ ...value, enhancements }));
+  }
+});
+
 test('analysis panel state survives workspace round trips, invalid blocks are rejected',async()=>{
   const analysisView={view:{start:1000000,end:2000000},axis:'pts',windowUs:250000,layoutMode:'merged',showBitrate:true,showSize:false,follow:false,selected:['A','B'],numAxis:'pts'};
   const value=parseWorkspace({...document(),layout:{panels:{inspector:false,subtracks:true,sources:true,analysis:true},selected:'A',dockHeight:180,marksExpanded:false,analysisView}});

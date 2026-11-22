@@ -2716,6 +2716,60 @@
     "source": "细 · 2 px",
     "params": {}
   },
+  "enhancement.close": {
+    "source": "关闭增强面板",
+    "params": {}
+  },
+  "enhancement.enable": {
+    "source": "应用增强",
+    "params": {}
+  },
+  "enhancement.error": {
+    "source": "当前画面增强失败。{reason}",
+    "params": {
+      "reason": "string | number"
+    }
+  },
+  "enhancement.overloaded": {
+    "source": "GPU 未能跟上播放，已回到原画。可降低倍率或重新应用增强。",
+    "params": {}
+  },
+  "enhancement.scale": {
+    "source": "超分倍率",
+    "params": {}
+  },
+  "enhancement.sharpen": {
+    "source": "锐化",
+    "params": {}
+  },
+  "enhancement.sharpenOff": {
+    "source": "关闭",
+    "params": {}
+  },
+  "enhancement.strength": {
+    "source": "锐化强度",
+    "params": {}
+  },
+  "enhancement.title": {
+    "source": "画面增强",
+    "params": {}
+  },
+  "enhancement.track": {
+    "source": "轨道",
+    "params": {}
+  },
+  "enhancement.unsupported": {
+    "source": "当前画面无法增强。请选择 SDR RGB 视频。",
+    "params": {}
+  },
+  "enhancement.websrRealLife": {
+    "source": "WebSR 实拍 S 2×",
+    "params": {}
+  },
+  "enhancement.websrRealLife4x": {
+    "source": "WebSR 实拍 S 4×",
+    "params": {}
+  },
   "error.allTracksDisabled": {
     "source": "所有轨道均已停用，请重新载入片源",
     "params": {}
@@ -4159,6 +4213,10 @@
   },
   "settingsShell.videoDecoding": {
     "source": "视频解码",
+    "params": {}
+  },
+  "settingsShell.videoSuperResolution": {
+    "source": "视频超分辨率",
     "params": {}
   },
   "settingsShell.wasmThreads": {

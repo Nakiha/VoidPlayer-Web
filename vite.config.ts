@@ -1,6 +1,7 @@
 import { FRONTEND_ENTRIES, FRONTEND_HTML_INPUTS } from './scripts/frontend-entries.mjs';
 import { isPlayerAsset, writePlayerWorker } from './scripts/pwa/build.mjs';
 import { prepareStaticAssets, verifyStaticAssets } from './scripts/static-assets.mjs';
+import { readWebSrAssets, webSrBuildInputs, webSrLicenseFile, webSrProvenanceFile } from './scripts/websr-assets.mjs';
 import { lowerDescriptors } from './scripts/testing/i18n-transform.mjs';
 import { defineConfig, normalizePath } from 'vite';
 import { readBuildIdentity } from './scripts/release-version.mjs';
@@ -10,6 +11,8 @@ import { readFile, writeFile, rm } from 'node:fs/promises';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 const buildId = randomUUID();
+const webSrShaders = '\0virtual:voidplayer-websr-shaders';
+const noEnhancement = '\0virtual:voidplayer-no-enhancement';
 const sourceDir = resolve(import.meta.dirname, 'src');
 let englishCatalogRef = '';
 let buildCatalog = false;
@@ -35,7 +38,7 @@ async function buildInfo() {
   }
   hashSources(sourceDir, 'src/');
   hashSources(resolve(import.meta.dirname, 'shared'), 'shared/');
-  for (const file of ['package-lock.json', 'vite.config.ts', ...FRONTEND_HTML_INPUTS, 'public/theme-init.js', 'public/startup-guard.js']) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
+  for (const file of ['package-lock.json', 'vite.config.ts', ...FRONTEND_HTML_INPUTS, 'public/theme-init.js', 'public/startup-guard.js', ...webSrBuildInputs]) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
   const wasmDigests = Object.fromEntries(['voidplayer-core.wasm', 'voidplayer-core-mt.wasm'].map(name => {
     try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir(), name))).digest('hex')]; }
     catch { return [name, null]; }
@@ -64,13 +67,31 @@ export default defineConfig(({ mode }) => {
   worker: { plugins: () => [{ name: 'voidplayer-worker-build-evidence', transform: transformBuildInfo }] },
   build: { rollupOptions: { input: Object.fromEntries(Object.entries(entries).map(([name,file]) => [name,resolve(import.meta.dirname,file)])) } },
   plugins: [{ name: 'voidplayer-i18n-catalog-url', enforce: 'pre',
-    configResolved(config) { buildCatalog = config.command === 'build'; outputDirectory = resolve(config.root, config.build.outDir); publicDirectory = config.publicDir; },
+    configResolved(config) {
+      buildCatalog = config.command === 'build';
+      outputDirectory = resolve(config.root, config.build.outDir);
+      publicDirectory = config.publicDir;
+    },
     buildStart() { if(buildCatalog) englishCatalogRef=this.emitFile({type:'chunk',id:resolve(sourceDir,'i18n/generated/en.js'),name:'en'}); },
     transform(code,id) {
       if(normalizePath(id.split('?')[0])!==normalizePath(resolve(sourceDir,'i18n.ts')))return;
       return {code:code.replace("'__EN_CATALOG_URL__'",englishCatalogRef ? `import.meta.ROLLUP_FILE_URL_${englishCatalogRef}` : "'/src/i18n/generated/en.js'"),map:null};
     },
   }, { name: 'voidplayer-i18n-descriptors', enforce: 'pre', transform: lowerDescriptors }, {
+    name: 'voidplayer-websr',
+    enforce: 'pre',
+    resolveId(id, importer) {
+      if (sites && id === './ui/enhancement.ts' && normalizePath(importer ?? '').endsWith('/src/main.ts')) return noEnhancement;
+      if ('\0' + id === webSrShaders) return webSrShaders;
+    },
+    async load(id) {
+      if (id === noEnhancement) return 'export function installEnhancement() {}';
+      if (id !== webSrShaders) return;
+      for (const file of webSrBuildInputs) this.addWatchFile(resolve(import.meta.dirname, file));
+      const { shaders } = await readWebSrAssets(import.meta.dirname);
+      return 'export default ' + JSON.stringify(shaders) + ';';
+    },
+  }, {
     name: 'voidplayer-dev-favicon',
     apply: 'serve',
     transformIndexHtml(html) {
@@ -123,7 +144,7 @@ export default defineConfig(({ mode }) => {
     generateBundle(_options, bundle) {
       playerAssets = Object.keys(bundle).filter(isPlayerAsset);
     },
-    async closeBundle() {
+    async writeBundle() {
       if (!productionBuildInfo) return;
       // Classic bootstrap scripts run before the module graph. Pin them to the HTML that selected them.
       for (const file of ['theme-init.js', 'startup-guard.js']) {
@@ -138,8 +159,12 @@ export default defineConfig(({ mode }) => {
       }
       if (sites) {
         await rm(resolve(outputDirectory, 'manifest.webmanifest'), { force: true });
+        await rm(resolve(outputDirectory, webSrLicenseFile), { force: true });
         return;
       }
+      const { lock } = await readWebSrAssets(import.meta.dirname);
+      await writeFile(resolve(outputDirectory, webSrProvenanceFile), lock);
+      playerAssets.push(webSrLicenseFile, webSrProvenanceFile);
       await writePlayerWorker(outputDirectory, playerAssets, (await productionBuildInfo).coreAssetDigests);
       await prepareStaticAssets(outputDirectory);
       await verifyStaticAssets(outputDirectory);

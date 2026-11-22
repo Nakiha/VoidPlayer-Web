@@ -1,14 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { prepareStaticAssets, verifyStaticAssets, digest } from '../../scripts/static-assets.mjs';
+import { readWebSrAssets, webSrBuildInputs } from '../../scripts/websr-assets.mjs';
 import { StaticAssets } from '../../server/static-assets.ts';
 import { serveFile } from '../../server/http-utils.ts';
 import { httpFetch } from '../helpers/http-request.ts';
+
+test('WebSR source weights and license must match the release lock', async () => {
+  const root = path.resolve(import.meta.dirname, '../..');
+  const { lock, shaders } = await readWebSrAssets(root);
+  assert.equal(JSON.parse(lock).license.spdx, 'MIT');
+  assert.equal(shaders.length, 5);
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'vp-websr-'));
+  try {
+    for (const file of webSrBuildInputs) {
+      const destination = path.join(fixture, file);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await cp(path.join(root, file), destination);
+    }
+    const model = path.join(fixture, 'scripts/vendor/websr/cnn-2x-s-rl.json');
+    await writeFile(model, '{}');
+    await assert.rejects(readWebSrAssets(fixture), /WebSR weight SHA-256 mismatch/);
+    await cp(path.join(root, 'scripts/vendor/websr/cnn-2x-s-rl.json'), model);
+    await writeFile(path.join(fixture, 'public/licenses/websr.txt'), 'Different license');
+    await assert.rejects(readWebSrAssets(fixture), /WebSR license SHA-256 mismatch/);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
 
 test('static assets negotiate verified compression, immutable versions, revalidation and raw ranges', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-static-'));

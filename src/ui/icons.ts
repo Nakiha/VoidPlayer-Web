@@ -41,6 +41,7 @@ import zoomIn from '@phosphor-icons/core/assets/regular/magnifying-glass-plus.sv
 import zoomOut from '@phosphor-icons/core/assets/regular/magnifying-glass-minus.svg?raw';
 import fullRange from '@phosphor-icons/core/assets/regular/arrows-out-line-horizontal.svg?raw';
 import search from '@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw';
+import sparkle from '@phosphor-icons/core/assets/regular/sparkle.svg?raw';
 import down from '@phosphor-icons/core/assets/regular/caret-down.svg?raw';
 import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw';
 import caretRight from '@phosphor-icons/core/assets/regular/caret-right.svg?raw';
@@ -93,7 +94,7 @@ const colorDecoding = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
   <rect x="2" y="4" width="20" height="16" rx="2" fill="none"/>
   <path fill="none" d="M6 9v6M9 7v10M12 9v6M16 9l4 3-4 3Z"/>
 </svg>`;
-const icons = { navigationArrow, colorDecoding, database, stack, fileText, gauge, save, compactRows, externalLink, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, refreshRegular, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
+const icons = { navigationArrow, colorDecoding, database, stack, fileText, gauge, save, compactRows, externalLink, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, refreshRegular, search, sparkle, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

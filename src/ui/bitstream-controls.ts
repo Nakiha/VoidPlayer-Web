@@ -47,32 +47,30 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   let filter: BlockFilter | null = null;
   const fill = (): FillMode => mode === 'sizes' && !sizeFill ? 'none' : mode;
   host.innerHTML = `
-    <div class="bitstream-panel-head">
+    <div class="viewport-tool-head">
       <button id="bitstream-grip" class="icon-button viewport-tool-grip" data-floating-grip type="button">${icon('grip')}</button>
-      <div id="bitstream-tracks" class="bitstream-tracks" role="group"></div>
-      <button id="bitstream-close" class="icon-button" type="button">${icon('close')}</button>
+      <div id="bitstream-tracks" class="viewport-tool-tracks" role="group"></div>
+      <button id="bitstream-close" class="icon-button viewport-tool-close" type="button">${icon('close')}</button>
     </div>
-    <div class="bitstream-panel-body">
-      <div id="bitstream-retries"></div>
-      <div id="bitstream-mode" role="group">${modes.map(value =>
-        `<button type="button" data-mode="${value}" aria-pressed="false">${icon(modeIcons[value])}<span></span></button>`).join('')}</div>
-      <button id="bitstream-show-display" type="button" class="bitstream-fold" aria-controls="bitstream-display" aria-expanded="true">
-        <span></span>${icon('down')}</button>
-      <div id="bitstream-display">
-        <label id="bitstream-size-style"><input id="bitstream-size-fill" type="checkbox"><span></span></label>
-        <div id="bitstream-prediction-key" class="bitstream-legend" hidden></div>
-        <div id="bitstream-qp-key" class="bitstream-legend" hidden><span></span><i></i><span></span></div>
-        <div class="bitstream-layer-buttons">
-          <button id="bitstream-boundaries" type="button" aria-pressed="true">${icon('analysisOverlay')}<span></span></button>
-          <button id="bitstream-labels" type="button" aria-pressed="false">${icon('text')}<span></span></button>
-        </div>
-        <div class="bitstream-field"><span id="bitstream-opacity-label"></span>
-          <button id="bitstream-opacity" class="choice-trigger" type="button"></button></div>
+    <div id="bitstream-retries"></div>
+    <div id="bitstream-mode" role="group">${modes.map(value =>
+      `<button type="button" data-mode="${value}" aria-pressed="false">${icon(modeIcons[value])}<span></span></button>`).join('')}</div>
+    <button id="bitstream-show-display" type="button" class="bitstream-fold" aria-controls="bitstream-display" aria-expanded="true">
+      <span></span>${icon('down')}</button>
+    <div id="bitstream-display">
+      <label id="bitstream-size-style"><input id="bitstream-size-fill" type="checkbox"><span></span></label>
+      <div id="bitstream-prediction-key" class="bitstream-legend" hidden></div>
+      <div id="bitstream-qp-key" class="bitstream-legend" hidden><span></span><i></i><span></span></div>
+      <div class="bitstream-layer-buttons">
+        <button id="bitstream-boundaries" type="button" aria-pressed="true">${icon('analysisOverlay')}<span></span></button>
+        <button id="bitstream-labels" type="button" aria-pressed="false">${icon('text')}<span></span></button>
       </div>
-      <button id="bitstream-inspect-frame" type="button" class="bitstream-fold" aria-controls="bitstream-frame-inspector" aria-expanded="false">
-        <span></span>${icon('down')}</button>
-      <div id="bitstream-frame-inspector" hidden></div>
-    </div>`;
+      <div class="bitstream-field"><span id="bitstream-opacity-label"></span>
+        <button id="bitstream-opacity" class="choice-trigger" type="button"></button></div>
+    </div>
+    <button id="bitstream-inspect-frame" type="button" class="bitstream-fold" aria-controls="bitstream-frame-inspector" aria-expanded="false">
+      <span></span>${icon('down')}</button>
+    <div id="bitstream-frame-inspector" hidden></div>`;
   const entries = new Map<Slot, Entry>();
   let lastState = session.getState();
   const life = new AbortController();
@@ -279,7 +277,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       tracks.dataset.tracks = signature;
       $('bitstream-retries').replaceChildren(); retryButtons.clear();
       tracks.replaceChildren(...state.tracks.filter(track=>!track.failure).map(track=>{
-        const button=document.createElement('button'); button.type='button'; button.dataset.slot=track.slot; button.className='bitstream-track-control';
+        const button=document.createElement('button'); button.type='button'; button.dataset.slot=track.slot; button.className='viewport-tool-track bitstream-track-control';
         button.append(analysisTrackBadge(track.slot));
         const progress=document.createElement('span'); progress.className='bitstream-track-progress'; progress.setAttribute('role','progressbar'); progress.setAttribute('aria-valuemin','0'); progress.setAttribute('aria-valuemax','100');
         progress.innerHTML=progressRingMarkup;

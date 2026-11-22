@@ -6,3 +6,8 @@ declare const __BUILD_INFO__: { revision: string; builtAt: string };
 declare class FileReaderSync {
   readAsArrayBuffer(blob: Blob): ArrayBuffer;
 }
+
+declare module 'virtual:voidplayer-websr-shaders' {
+  const shaders: readonly string[];
+  export default shaders;
+}

@@ -63,7 +63,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await selectDiagrams(page, 'overview');
         async function checkOverlaySections() {
           const layout = await page.locator('#bitstream-inspector').evaluate(host => {
-            const head = host.firstElementChild, tracks = head.querySelector('#bitstream-tracks'), body = head.nextElementSibling;
+            const head = host.firstElementChild, tracks = head.querySelector('#bitstream-tracks');
             const grip = head.firstElementChild, close = head.lastElementChild;
             const rail = tracks.getBoundingClientRect(), bottom = head.getBoundingClientRect().bottom;
             return {
@@ -71,14 +71,16 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
               railHeight: head.offsetHeight,
               header: grip.id === 'bitstream-grip' && close.id === 'bitstream-close' &&
                 grip.getBoundingClientRect().right <= rail.left && close.getBoundingClientRect().left >= rail.right,
+              flat: host.querySelector('#bitstream-mode').parentElement === host && getComputedStyle(host).backgroundColor === 'rgba(0, 0, 0, 0)',
               lower: [...host.querySelectorAll('button,select,input')].filter(el => el.getClientRects().length && !head.contains(el))
-                .every(el => body.contains(el) && el.getBoundingClientRect().top >= bottom - 1),
+                .every(el => el.getBoundingClientRect().top >= bottom - 1),
               retryFits: [...host.querySelectorAll('#bitstream-retries button:not([hidden])')].every(button => {
                 const box = button.getBoundingClientRect(), text = button.lastElementChild.getBoundingClientRect();
                 return text.left >= box.left && text.right <= box.right && text.top >= box.top && text.bottom <= box.bottom;
               }),
             };
           });
+          assert.ok(layout.flat, 'overlay controls sit directly on the floating panel material');
           assert.deepEqual(layout.badges, ['A','B']);
           assert.ok(layout.header && layout.railHeight <= 32 && layout.lower, 'the grip, stream switches and close action share the first row');
           assert.ok(layout.retryFits, 'recovery captions fit their buttons without covering the track switches');

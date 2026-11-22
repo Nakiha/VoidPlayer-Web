@@ -1,5 +1,6 @@
 import type { DecodedFrame } from '../media/contract.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
+import type { PresentationEnhancement } from './enhancement.ts';
 export interface GpuSurface {
   device: unknown;
   adapter: { vendor?: string; architecture?: string; device?: string; description?: string } | null;
@@ -15,6 +16,7 @@ export interface GpuSurface {
   setGeometry(geometry: PresentationGeometry | null, rotation?: number): void;
   present(frame: VideoFrame | DecodedFrame, width?: number, height?: number, preview?: boolean): void;
   redrawChannel(): boolean;
+  attachEnhancement(preview: PresentationEnhancement): { redraw(): void; detach(): void };
   captureSource(target: HTMLCanvasElement): HTMLCanvasElement;
   capture(viewport?: boolean): Promise<Uint8ClampedArray>;
   captureHdrPixels(): Promise<Float32Array>;

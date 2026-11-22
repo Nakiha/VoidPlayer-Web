@@ -2523,6 +2523,58 @@
     "source": "细 · 2 px",
     "translation": "Thin · 2 px"
   },
+  "enhancement.close": {
+    "source": "关闭增强面板",
+    "translation": "Close enhancement panel"
+  },
+  "enhancement.enable": {
+    "source": "应用增强",
+    "translation": "Apply enhancements"
+  },
+  "enhancement.error": {
+    "source": "当前画面增强失败。{reason}",
+    "translation": "Could not enhance the current image. {reason}"
+  },
+  "enhancement.overloaded": {
+    "source": "GPU 未能跟上播放，已回到原画。可降低倍率或重新应用增强。",
+    "translation": "The GPU could not keep up. Original frames are shown. Lower the upscale factor or reapply enhancement."
+  },
+  "enhancement.scale": {
+    "source": "超分倍率",
+    "translation": "Upscale factor"
+  },
+  "enhancement.sharpen": {
+    "source": "锐化",
+    "translation": "Sharpen"
+  },
+  "enhancement.sharpenOff": {
+    "source": "关闭",
+    "translation": "Off"
+  },
+  "enhancement.strength": {
+    "source": "锐化强度",
+    "translation": "Sharpening strength"
+  },
+  "enhancement.title": {
+    "source": "画面增强",
+    "translation": "Enhancements"
+  },
+  "enhancement.track": {
+    "source": "轨道",
+    "translation": "Track"
+  },
+  "enhancement.unsupported": {
+    "source": "当前画面无法增强。请选择 SDR RGB 视频。",
+    "translation": "Enhancement is unavailable for this image. Select an SDR RGB video."
+  },
+  "enhancement.websrRealLife": {
+    "source": "WebSR 实拍 S 2×",
+    "translation": "WebSR Real Life S 2×"
+  },
+  "enhancement.websrRealLife4x": {
+    "source": "WebSR 实拍 S 4×",
+    "translation": "WebSR Real Life S 4×"
+  },
   "error.allTracksDisabled": {
     "source": "所有轨道均已停用，请重新载入片源",
     "translation": "All tracks are disabled. Reload a source."
@@ -3884,6 +3936,10 @@
   "settingsShell.videoDecoding": {
     "source": "视频解码",
     "translation": "Video decoding"
+  },
+  "settingsShell.videoSuperResolution": {
+    "source": "视频超分辨率",
+    "translation": "Video super-resolution"
   },
   "settingsShell.wasmThreads": {
     "source": "软件解码线程配置",

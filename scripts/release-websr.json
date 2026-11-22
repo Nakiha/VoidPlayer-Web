@@ -1,0 +1,15 @@
+{
+  "repository": "sb2702/websr",
+  "tag": "v0.1.1",
+  "revision": "ab5c08c06b9ac912b64838ba1ae8bfb592d0b7dd",
+  "model": "WebSR Real Life S 2×",
+  "weights": {
+    "path": "weights/anime4k/cnn-2x-s-rl.json",
+    "sha256": "28f9853f8a4640dbc2bef0617e8dc5929590f46c16c5a5fd50a9de2502f8724b"
+  },
+  "license": {
+    "spdx": "MIT",
+    "path": "LICENSE",
+    "sha256": "32efd167268c181f862e1b9e805c872106a405bd487c54273fc1b0a9137cf3d3"
+  }
+}

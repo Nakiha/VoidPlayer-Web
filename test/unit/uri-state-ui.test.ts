@@ -4,7 +4,7 @@ import { setImmediate } from 'node:timers/promises';
 import { installUriState } from '../../src/ui/uri-state.ts';
 import { emptyUriState } from '../../shared/review/uri-state.ts';
 import type { ReviewSession } from '../../src/session.ts';
-import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
+import type { WorkspaceEnhancement, WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import { stageUpdateState, takeUpdateState } from '../../src/services/update-state.ts';
 
 test('URI restoration preserves snapshot addresses and cannot overwrite newer navigation or user intent', async t => {
@@ -96,12 +96,18 @@ test('local update state is scoped to one tab, target and consumption without a 
   } });
   try {
     const state = emptyUriState(); state.positionUs = 1234567;
-    stageUpdateState('new-build', state);
-    assert.deepEqual(takeUpdateState('new-build'), state);
+    state.tracks.push({ slot: 'A', id: 'local-a', version: '', local: { name: 'a.mp4', size: 100, lastModified: 1 },
+      offsetUs: 0, visible: true });
+    const enhancements: WorkspaceEnhancement[] = [{ slot: 'A', scale: 4, sharpened: true, sharpen: { radius: 3, strength: 0.85 } }];
+    const workspace = { state, enhancements };
+    stageUpdateState('new-build', workspace);
+    assert.deepEqual(takeUpdateState('new-build'), workspace);
     assert.equal(takeUpdateState('new-build'), undefined);
-    stageUpdateState('other-build', state);
+    stageUpdateState('other-build', { state });
     assert.equal(takeUpdateState('new-build'), undefined);
     assert.equal(data.size, 0, 'mismatched and consumed handoffs are not retained as checkpoints');
+    data.set('voidplayer.update-state.v1', JSON.stringify({ target: 'new-build', state }));
+    assert.deepEqual(takeUpdateState('new-build'), { state, enhancements: undefined });
   } finally { if (previous) Object.defineProperty(globalThis, 'sessionStorage', previous); else Reflect.deleteProperty(globalThis, 'sessionStorage'); }
 });
 

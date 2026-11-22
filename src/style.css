@@ -156,7 +156,7 @@ button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible {
 /* Keep every viewport tool; give up time editing, then frame stepping. */
 @container (max-width: 600px) { .transport-time { display:none; } }
 @container (max-width: 340px) { .transport #previous, .transport #next { display:none; } }
-@container (max-width: 300px) { .transport-actions, .transport .play-buttons { gap:0; } }
+@container (max-width: 300px) { .transport-dock { --transport-group-gap: 0px; } }
 
 .play-buttons { display: flex; align-items: center; gap: var(--control-gap); }
 .play-buttons button { border: 0; background: transparent; }
@@ -330,7 +330,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 .track-choice.track-drop-target::after { left: 0; right: 0; top: 0; height: 2px; }
 .track-choice.track-drop-target[data-drop-edge=after]::after { top: auto; bottom: 0; }
 .remove-track { background: transparent; color: var(--text-secondary); transition: color var(--transition-fast), background var(--transition-fast); }
-.remove-track:hover:not(:disabled), #mark-close:hover:not(:disabled), #bitstream-close:hover:not(:disabled) { color: var(--action-danger); background-color: var(--action-danger-fill); }
+.remove-track:hover:not(:disabled), #mark-close:hover:not(:disabled), .viewport-tool-close:hover:not(:disabled) { color: var(--action-danger); background-color: var(--action-danger-fill); }
 @media (prefers-reduced-motion: reduce) { .remove-track { transition: none; } }
 .subtrack-label { display: flex; align-items: center; min-width: 0; gap: var(--tool-gap); }
 .subtrack-name { flex: 1; }
@@ -523,10 +523,25 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .annotation-text[contenteditable=true] { outline: 1px dashed var(--annotation-edit-outline); caret-color: currentColor; cursor: text; pointer-events: auto; user-select: text; }
 .annotation-text[contenteditable=true]:empty::before { content: attr(data-placeholder); opacity: .6; pointer-events: none; }
 .viewport-tool-panel { position: absolute; z-index: 5; width: max-content; max-width: calc(100% - 16px); padding: 4px; border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--annotation-toolbar-shadow); animation: viewport-tool-panel-enter 150ms ease-out; }
+.viewport-options-panel {
+  width: 304px; box-sizing: border-box; bottom: 60px; overflow: auto;
+  transform: translateY(var(--floating-offset-y, 0px)); transition: transform 180ms ease, max-height 180ms ease;
+}
+#analysis-overlay-panel { right: 12px; }
+.viewport-tool-controls { display: grid; min-width: 0; gap: 4px; font: 12px/1.45 var(--font-ui); }
+.viewport-tool-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 2px; }
+.viewport-tool-head .icon-button { background: transparent; }
+.viewport-tool-tracks { display: flex; align-items: center; min-width: 0; gap: 3px; padding-inline: 2px; overflow-x: auto; }
+.viewport-tool-track {
+  display: inline-flex; flex: none; align-items: center; height: var(--button-size); min-height: var(--button-size);
+  padding: 3px; gap: 0; border: 0; border-radius: 6px; background: transparent;
+}
+.viewport-tool-track:is([aria-pressed=false], :has(input:not(:checked))) .slot { opacity: .4; }
+.viewport-tool-tracks .slot { width: 22px; height: 22px; font-size: 12px; border-radius: 5px; }
 /* Place a newly opened panel before fading it in; only later avoidance moves slide. */
 .viewport-tool-panel[data-positioning] { transition: none; }
 @keyframes viewport-tool-panel-enter { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .viewport-tool-panel { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .viewport-tool-panel { animation: none; transition: none; } }
 .drawing-tools { display: flex; align-items: center; flex-wrap: nowrap; gap: 3px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior: contain; }
 .drawing-tools::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .drawing-tools > * { flex-shrink: 0; }
@@ -716,7 +731,7 @@ button[aria-haspopup=menu], .choice-menu button { -webkit-user-select: none; use
   backdrop-filter: var(--glass-filter);
   text-shadow: none;
 }
-.remove-track, .annotation-remove { --button-hover-text: var(--action-danger); }
+.remove-track, .annotation-remove, .viewport-tool-close { --button-hover-text: var(--action-danger); }
 .primary { --button-hover-text: var(--accent-on); }
 .brand { --button-hover-text: var(--accent); }
 
@@ -907,5 +922,18 @@ button[aria-haspopup=menu], .choice-menu button { -webkit-user-select: none; use
 .analysis-picture-overlay { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
 
 #toggle-annotations[aria-expanded=true] { color:var(--accent); background:var(--annotation-toolbar-selected); }
+#toggle-super-resolution.enhancement-active, #toggle-super-resolution[aria-expanded=true] { color: var(--accent); background: var(--annotation-toolbar-selected); }
+#super-resolution-panel { left: 12px; }
+.super-resolution-controls .viewport-tool-track[aria-current=true] { background: var(--glass-control-selected-hover); }
+.enhancement-field { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: var(--button-size); padding-inline: 5px; }
+.enhancement-field > span:first-child, .enhancement-scale-info { color: var(--text-secondary); }
+.enhancement-scale-info { display: flex; align-items: baseline; flex: 1; min-width: 0; gap: 8px; white-space: nowrap; }
+.enhancement-scale-info output { overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.enhancement-scale-actions { display: flex; align-items: center; flex: none; gap: 4px; }
+.enhancement-field .segmented { font-variant-numeric: tabular-nums; }
+.enhancement-strength input { flex: 1; min-width: 24px; }
+.enhancement-strength input::-webkit-slider-thumb { width: 10px; height: 10px; margin-top: calc((var(--timeline-track-size) - 10px) / 2); border-radius: 50%; background: var(--accent); }
+.enhancement-strength input::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.enhancement-strength [data-strength-value] { min-width: 4ch; text-align: end; font-variant-numeric: tabular-nums; }
 .annotation-row > .annotation-card-actions { position:absolute; top:0; right:4px; justify-content:flex-end; gap:2px; }
 .annotation-card-actions > button:not(.icon-button) { font-size:11px; min-height:24px; padding:2px 5px; }

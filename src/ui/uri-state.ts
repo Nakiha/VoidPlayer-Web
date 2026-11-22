@@ -18,7 +18,7 @@ import { t, msg, onLanguageChange } from '../i18n.ts';
 
 export function installUriState(session: ReviewSession, options: {
   act(action: () => unknown | Promise<unknown>, name: string): Promise<void>;
-  capture(): Pick<WorkspaceFile, 'viewport' | 'layout' | 'panBasis'>;
+  capture(): Pick<WorkspaceFile, 'viewport' | 'layout' | 'panBasis' | 'enhancements'>;
   restore(document: WorkspaceFile, resumeCloudAnnotations: boolean): void | Promise<void>;
   beforeRestore(): void;
   closeSettings(): Promise<void>;
@@ -33,7 +33,7 @@ export function installUriState(session: ReviewSession, options: {
   let addressEpoch = 0, addressOperation = new AbortController();
   const defaultLayout = structuredClone(options.capture().layout);
   const original = new URL(location.href), explicit = hasUriState(original);
-  const updating = !localOnly && !explicit && original.searchParams.has('vp-update');
+  const updating = !localOnly && original.searchParams.has('vp-update');
   opening = explicit || updating;
   let startupPending = opening;
   const root = document.getElementById('app')!;
@@ -42,11 +42,12 @@ export function installUriState(session: ReviewSession, options: {
   function exportWorkspace(): WorkspaceFile {
     return { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture() };
   }
-  const exportState = () => {
-    const state = uriStateFromDocument(exportWorkspace(), location.href);
+  function stateFromWorkspace(workspace: WorkspaceFile) {
+    const state = uriStateFromDocument(workspace, location.href);
     if (focusedMark && state.positionUs === focusedPosition) state.mark = focusedMark;
     return state;
-  };
+  }
+  const exportState = () => stateFromWorkspace(exportWorkspace());
   // Compare the restored scene, including recipient-side layout and pan scaling.
   // Frame/index metadata and annotation bodies are not part of this snapshot.
   function stateSignature() {
@@ -97,7 +98,7 @@ export function installUriState(session: ReviewSession, options: {
     }
     throw new Error(t(msg('uriState.markUnavailable', '当前片源版本中找不到这条标注。')));
   }
-  async function restoreState(value: unknown, dismissSettings = true) {
+  async function restoreState(value: unknown, dismissSettings = true, enhancements?: WorkspaceFile['enhancements']) {
     const state = parseUriState(value), capturedActor = currentActor()?.id, stamp = ++epoch;
     operation.abort();
     operation = new AbortController();
@@ -133,7 +134,8 @@ export function installUriState(session: ReviewSession, options: {
         await session.reorderTracks(state.tracks.map(track => track.slot));
         await session.seek(state.positionUs);
         if (!current()) return false;
-        await options.restore({ ...exportWorkspace(), viewport: state.viewport, panBasis: state.panBasis, layout: state.layout ?? defaultLayout }, true);
+        await options.restore({ ...exportWorkspace(), viewport: state.viewport, panBasis: state.panBasis,
+          layout: state.layout ?? defaultLayout, enhancements }, true);
         await focusMark(state, signal, current);
         return current();
       }
@@ -157,7 +159,7 @@ export function installUriState(session: ReviewSession, options: {
       const document = parseWorkspace({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(),
         serverUrl: location.origin + '/', tracks: state.tracks.map((track, i) => ({ slot: track.slot, mediaId: media[i].id,
           offsetUs: track.offsetUs, visible: track.visible })), media, marks: [], positionUs: state.positionUs,
-        viewport: state.viewport, panBasis: state.panBasis, comparison: state.comparison, layout: state.layout ?? defaultLayout });
+        viewport: state.viewport, panBasis: state.panBasis, comparison: state.comparison, layout: state.layout ?? defaultLayout, enhancements });
       staged = true;
       options.beforeRestore();
       if (dismissSettings) await options.closeSettings();
@@ -258,8 +260,11 @@ export function installUriState(session: ReviewSession, options: {
   if (explicit || updating) void options.identityReady.then(async () => {
     const handoff = updating ? takeUpdateState(original.searchParams.get('vp-update')!) : undefined;
     if (!handoff) return openAddress(original, false);
-    if (await restoreState(handoff, false)) {
-      const url = new URL(location.href); url.search = ''; history.replaceState(history.state, '', url);
+    if (await restoreState(handoff.state, false, handoff.enhancements)) {
+      const url = new URL(location.href);
+      url.searchParams.delete('vp-update');
+      history.replaceState(history.state, '', url);
+      watchAddress(url);
     }
   }).catch(error => {
     options.toasts.show((error as Error).message, { kind: 'error', durationMs: 0 });
@@ -270,7 +275,8 @@ export function installUriState(session: ReviewSession, options: {
     const state = session.getState();
     if (opening || state.busy || state.playing || !options.editsReady())
       throw new Error(t(msg('update.wait', '请先暂停播放，完成标注并等载入和保存结束，再刷新。')));
-    const saved = exportState();
+    const workspace = exportWorkspace();
+    const saved = stateFromWorkspace(workspace);
     for (const track of saved.tracks) if (track.local) {
       try {
         const file = await restoreHandleFile(handleKey(track.local), undefined, false);
@@ -281,7 +287,7 @@ export function installUriState(session: ReviewSession, options: {
     const local = saved.tracks.some(track => track.local);
     const uri = local ? new URL('/', location.href) : createShareUrl(saved, location.href);
     await prepareOfflineUpdate(target);
-    if (local) stageUpdateState(target, saved);
+    if (local || workspace.enhancements?.length) stageUpdateState(target, { state: saved, enhancements: workspace.enhancements });
     uri.searchParams.set('vp-update', target); location.assign(uri.href);
   }
   return { exportState, applyState, shareState: localOnly ? undefined : shareState, refreshForUpdate, changed,

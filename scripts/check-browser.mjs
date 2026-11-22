@@ -1801,7 +1801,7 @@ try {
       assert.equal(await page.locator('.transport-time').isVisible(),time,'time editing gives way first');
       for(const id of ['previous','next'])assert.equal(await page.locator(`#${id}`).isVisible(),stepping,'frame stepping gives way second');
       const boxes=[];
-      for(const id of ['play','timeline','toggle-annotations','toggle-analysis-overlay','fullscreen','toggle-chrome']) {
+      for(const id of ['play','timeline','toggle-super-resolution','toggle-annotations','toggle-analysis-overlay','fullscreen','toggle-chrome']) {
         assert.ok(await page.locator(`#${id}`).isVisible(),`${id} remains visible at ${width}px`);
         boxes.push(await page.locator(`#${id}`).boundingBox());
       }

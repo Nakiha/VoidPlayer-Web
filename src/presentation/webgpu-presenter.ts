@@ -11,6 +11,7 @@ import { presentationColor, isHdrTransfer } from './presentation-color.ts';
 import { validateDescription } from '../../shared/media/frame-description.ts';
 import { GpuPresentationGuard } from './gpu-presentation-guard.ts';
 import { hdrDisplayAvailable } from './display-capabilities.ts';
+import type { PresentationEnhancement } from './enhancement.ts';
 
 // Browser compensation is diagnostic-only: a neutral decoded probe cannot
 // certify other codecs, backing resources, or color tags.
@@ -269,6 +270,20 @@ export function gpuRendererName(source: HTMLCanvasElement) {
   const adapter = entry?.surface.adapter;
   if (!adapter || entry.disabled || !entry.geometry || !entry.surface.available) return null;
   return adapter.description || [adapter.vendor, adapter.architecture, adapter.device].filter(Boolean).join(' ') || null;
+}
+export async function gpuApplyEnhancement(source: HTMLCanvasElement, signal: AbortSignal,
+  create: (device: GPUDevice) => Promise<PresentationEnhancement>) {
+  const entry = entries.get(source);
+  if (!entry || entry.disabled || !entry.surface.available) throw new Error('WebGPU unavailable');
+  const preview = await create(entry.surface.device as GPUDevice);
+  if (signal.aborted || entries.get(source) !== entry || !entry.surface.available) {
+    preview.dispose();
+    signal.throwIfAborted();
+    throw new Error('WebGPU preview surface changed');
+  }
+  const { redraw, detach } = entry.surface.attachEnhancement(preview);
+  signal.addEventListener('abort', detach, { once: true });
+  return redraw;
 }
 export function gpuCapture(source:HTMLCanvasElement){
   const entry = entries.get(source);

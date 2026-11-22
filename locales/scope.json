@@ -95,6 +95,7 @@
     "src/ui/library-view.ts",
     "src/ui/live-localization.ts",
     "src/ui/local-source-browser.ts",
+    "src/ui/enhancement.ts",
     "src/ui/local-sources-resize.ts",
     "src/ui/localized-shell.ts",
     "src/ui/logging/panel.ts",
