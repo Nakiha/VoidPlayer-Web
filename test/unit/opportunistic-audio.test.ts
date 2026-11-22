@@ -211,6 +211,53 @@ test('default output is inert; pause, seek generation, stalled video and selecti
   assert.equal(context.state, 'suspended'); output.dispose();
 });
 
+test('consecutive audio joins without gaps or overlap when video ticks jitter', async () => {
+  const output = new OpportunisticAudio(() => {}, platform), a = source();
+  output.select(a.media); await settle(); output.tick(100000, 0, true);
+  const context = FakeContext.instances.at(-1)!, generation = a.requests[0][1];
+  const durationUs = 1024 / 48000 * 1e6;
+  const ticks = [[2120000, 100000, 1], [2120000 + Math.round(durationUs) + 450, 114000, 1.016],
+    [2120000 + Math.round(durationUs * 2), 136000, 1.034]];
+  for (const [pts, position, time] of ticks) {
+    a.media.onCachedAudio!(generation, batch(pts)); await settle();
+    context.currentTime = time;
+    output.tick(position, 0, true);
+  }
+  assert.equal(context.nodes.length, 3);
+  assert.deepEqual(context.nodes[0].starts, [[1.020, 0]]);
+  for (let i = 1; i < context.nodes.length; i++) {
+    const prev = context.nodes[i - 1];
+    assert.deepEqual(context.nodes[i].starts, [[prev.starts[0][0] + prev.buffer!.duration, 0]]);
+  }
+  output.dispose();
+});
+
+test('audio preserves a missing packet gap and reanchors after clock drift or a video stall', async () => {
+  const output = new OpportunisticAudio(() => {}, platform), a = source();
+  output.select(a.media); await settle(); output.tick(100000, 0, true);
+  const context = FakeContext.instances.at(-1)!, generation = a.requests[0][1];
+  const durationUs = 1024 / 48000 * 1e6;
+  const ticks = [[2120000, 100000, 1], [2120000 + Math.round(durationUs * 2), 117000, 1.020],
+    [2120000 + Math.round(durationUs * 3), 128000, 1.068]];
+  for (const [pts, position, time] of ticks) {
+    a.media.onCachedAudio!(generation, batch(pts)); await settle();
+    context.currentTime = time;
+    output.tick(position, 0, true);
+  }
+  assert.equal(context.nodes.length, 3);
+  const missingGap = context.nodes[1].starts[0][0] - context.nodes[0].starts[0][0] - durationUs / 1e6;
+  assert.ok(Math.abs(missingGap - durationUs / 1e6) < 1e-6, 'the missing packet stays silent for its source duration');
+  assert.deepEqual(context.nodes[2].starts, [[1.124, 0]], 'a substantial clock drift realigns to video');
+  output.tick(167000, 0, false);
+  assert.ok(context.nodes.every(node => node.stopped));
+  context.currentTime = 1.2;
+  output.tick(167000, 0, true);
+  assert.equal(context.nodes.length, 5);
+  assert.equal(context.nodes[3].starts[0][0], 1.2, 'resumption discards the old audio clock');
+  assert.ok(Math.abs(context.nodes[3].starts[0][1] - 0.004333) < 1e-6, 'resumption trims audio before the new position');
+  output.dispose();
+});
+
 test('late codec probe cannot resurrect output after mute or seek; missing bytes do not wait', async () => {
   let resolve!: (result: { supported: boolean }) => void;
   FakeDecoder.support = () => new Promise(r => { resolve = r; });

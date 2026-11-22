@@ -66,6 +66,8 @@ middle-filename[data-display]::after { grid-area: 1 / 1; justify-self: start; wi
 }
 .toolbar-spacer { flex: 1; }
 .topbar { display: flex; align-items: center; flex: 0 0 var(--toolbar-height); height: var(--toolbar-height); gap: var(--control-gap); padding: var(--toolbar-padding-block) var(--toolbar-padding-inline); z-index: 10; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.topbar { transition: margin-block-start var(--panel-motion-duration) var(--panel-motion-easing); }
+.topbar.topbar-collapsed { margin-block-start: calc(-1 * var(--toolbar-height)); }
 .topbar::-webkit-scrollbar { display: none; }
 .topbar-primary-actions, .topbar-utility-actions { display: flex; align-items: center; gap: var(--control-gap); min-width: 0; }
 .topbar .add-video { flex: 0 0 auto; height: var(--button-size); white-space: nowrap; color: var(--text); background: var(--surface-control); --button-hover-text: var(--accent); --button-press-text: var(--accent); --button-press-fill: var(--glass-control-selected-pressed); }

@@ -20,6 +20,8 @@ interface AudioPlatform {
   EncodedAudioChunk?: new (init: { type: 'key'; timestamp: number; duration: number; data: Uint8Array }) => unknown;
 }
 type Pcm = { ptsUs: number; buffer: AudioBuffer };
+const timestampToleranceUs = 1000;
+const maxClockDriftSeconds = 0.030;
 
 /** One optional output, driven by the video session clock. All requests are fire-and-forget
  * cache observations. Missing/unsupported audio never changes video state or its clock. */
@@ -40,6 +42,7 @@ export class OpportunisticAudio {
   private submittedUs = -Infinity;
   private pcm: Pcm[] = [];
   private nodes = new Map<AudioBufferSourceNode, Pcm>();
+  private scheduledEnd?: { ptsUs: number; time: number };
   private disposed = false;
   private changed: () => void;
   private platform: AudioPlatform;
@@ -75,6 +78,7 @@ export class OpportunisticAudio {
     } catch { this.setStatus('unsupported'); }
   }
   private clearNodes(requeue: boolean) {
+    this.scheduledEnd = undefined;
     for (const [node, item] of this.nodes) {
       node.onended = null;
       try { node.stop(); } catch {}
@@ -160,13 +164,26 @@ export class OpportunisticAudio {
       if (endUs <= this.positionUs) { this.pcm.shift(); continue; }
       if (item.ptsUs > this.positionUs + 60000 || this.nodes.size >= 8) break;
       this.pcm.shift();
+      const now = context.currentTime, videoTime = now + (item.ptsUs - this.positionUs) / 1e6;
+      const previous = this.scheduledEnd;
+      let start = videoTime;
+      if (previous) {
+        const gapUs = item.ptsUs - previous.ptsUs;
+        // Join adjacent PCM on the audio clock, including millisecond-quantized timestamps.
+        const continued = previous.time + (Math.abs(gapUs) <= timestampToleranceUs ? 0 : gapUs / 1e6);
+        if (continued >= now && Math.abs(continued - videoTime) <= maxClockDriftSeconds) start = continued;
+      }
+      // A re-anchor or overlapping source timestamps can put this block behind the queued audio.
+      const when = Math.max(start, now, previous?.time ?? now), offset = when - start;
+      if (offset >= item.buffer.duration) continue;
       const node = context.createBufferSource(); node.buffer = item.buffer;
       node.connect(context.destination); this.nodes.set(node, item);
       node.onended = () => { this.nodes.delete(node); node.disconnect(); };
-      const delay = Math.max(0, (item.ptsUs - this.positionUs) / 1e6);
-      const offset = Math.max(0, (this.positionUs - item.ptsUs) / 1e6);
-      try { node.start(context.currentTime + delay, offset); ++this.playedPackets; }
-      catch { this.nodes.delete(node); node.disconnect(); }
+      try {
+        node.start(when, offset);
+        this.scheduledEnd = { ptsUs: endUs, time: when + item.buffer.duration - offset };
+        ++this.playedPackets;
+      } catch { this.nodes.delete(node); node.disconnect(); }
     }
     this.setStatus(this.nodes.size ? 'playing' : 'waiting');
   }

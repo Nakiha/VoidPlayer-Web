@@ -11,6 +11,13 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   const focused=()=>page.locator('#toggle-chrome').getAttribute('aria-pressed');
   const beforeFocus=await page.locator('#stage-A').boundingBox();
   const beforeView=await page.evaluate(()=>window.voidPlayer.getViewport());
+  const topbar = page.locator('.topbar');
+  const toolbarBottom = await topbar.evaluate(bar => bar.getBoundingClientRect().bottom);
+  const waitForTopbar = collapsed => page.waitForFunction(({ collapsed, toolbarBottom }) => {
+    const bar = document.querySelector('.topbar');
+    return bar.inert === collapsed && bar.getBoundingClientRect().bottom === (collapsed ? 0 : toolbarBottom)
+      && bar.getAnimations().every(animation => animation.playState !== 'running');
+  }, { collapsed, toolbarBottom });
   const focusButton = page.locator('#toggle-chrome');
   const opacity = () => focusButton.evaluate(button => getComputedStyle(button).opacity);
   const dockMaterial = () => page.locator('.transport-dock').evaluate(dock => {
@@ -35,13 +42,32 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   assert.equal(await focused(), 'true', 'idle fade preserves focus mode');
   await assertFocusMaterial();
   assert.equal(await page.locator('#control-tooltip').isVisible(), false, 'idle button leaves no floating tooltip');
-  const box = await focusButton.boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const centerX = beforeFocus.x + beforeFocus.width / 2, centerY = beforeFocus.y + beforeFocus.height / 2;
+  await page.mouse.move(centerX, centerY);
   await page.waitForFunction(() => getComputedStyle(document.getElementById('toggle-chrome')).opacity === '1');
   await page.waitForTimeout(1100);
-  await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2);
+  await page.mouse.move(centerX + 1, centerY);
   await page.waitForTimeout(1100);
-  assert.equal(await opacity(), '1', 'movement over the button restarts its idle timer');
+  assert.equal(await opacity(), '1', 'movement elsewhere in the viewport restarts the focus button timer');
+  await waitForTopbar(true);
+  assert.ok(await topbar.evaluate(bar => parseFloat(getComputedStyle(bar).transitionDuration) > 0), 'the toolbar slides when motion is allowed');
+  const expandedStage = await page.locator('#stage-A').boundingBox();
+  assert.equal(expandedStage.y, beforeFocus.y - toolbarBottom, 'the viewport reclaims the topbar space');
+  assert.equal(expandedStage.height, beforeFocus.height + toolbarBottom, 'the viewport grows to fill that space');
+  for (const [id, shortcut] of [['inspector', 'Backquote'], ['analysis', '1'], ['subtracks', '2'], ['sources', '3']]) {
+    await page.keyboard.press(`Control+${shortcut}`);
+    assert.equal(await page.locator(`#toggle-${id}`).getAttribute('aria-expanded'), 'true', `${id} opens while the toolbar is inert`);
+    await waitForTopbar(false);
+    if (id === 'sources') {
+      await page.keyboard.press('Control+2');
+      await page.locator('#toggle-sources').click();
+      await waitForTopbar(false);
+      assert.equal(await page.locator('#toggle-subtracks').getAttribute('aria-expanded'), 'true', 'an open panel keeps the toolbar visible');
+      await page.locator('#toggle-subtracks').click();
+    } else await page.locator(`#toggle-${id}`).click();
+    await waitForTopbar(true);
+    assert.equal(await focused(), 'true', 'panel actions preserve focus mode');
+  }
   await page.mouse.move(0, 0);
   await page.waitForFunction(() => getComputedStyle(document.getElementById('toggle-chrome')).opacity === '0', null, { timeout: 5000 });
   // macOS WebKit uses Option+Tab to include buttons in keyboard navigation.
@@ -53,12 +79,15 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await page.keyboard.press('f');
   assert.equal(await focused(), 'false', 'keyboard shortcut exits after fading');
   assert.deepEqual(await dockMaterial(), normalMaterial, 'exiting focus mode restores the transport material');
-  assert.deepEqual(await page.locator('#stage-A').boundingBox(), beforeFocus, 'fade never changes stage geometry');
+  await waitForTopbar(false);
+  assert.deepEqual(await page.locator('#stage-A').boundingBox(), beforeFocus, 'exit restores the original stage geometry');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('#toggle-chrome').focus();
   await page.keyboard.down('f');
   assert.equal(await focused(),'true','F enters focus mode from a focused button');
   assert.equal(await focusButton.evaluate(button => getComputedStyle(button).transitionProperty), 'none', 'reduced motion skips the fade animation');
+  assert.equal(await topbar.evaluate(bar => getComputedStyle(bar).transitionProperty), 'none', 'reduced motion skips the toolbar animation');
+  await waitForTopbar(true);
   await page.keyboard.down('f');
   assert.equal(await focused(),'true','holding F does not toggle repeatedly');
   await page.keyboard.up('f');await page.keyboard.press('f');

@@ -1771,15 +1771,21 @@ try {
     });
     await page.waitForFunction(before => window.voidPlayer.getViewport().zoom < before, zoomBeforeFractionalWheel);
     await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1, offsetX: 0, offsetY: 0 }));
-    const beforeFocus = await page.locator('#stage-A').boundingBox();
+    const viewportSurface = page.locator('.viewport-surface');
+    const beforeFocus = await viewportSurface.boundingBox();
     const focusButton = await page.locator('#toggle-chrome').boundingBox();
+    const toolbarHeight = (await page.locator('.topbar').boundingBox()).height;
     assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式 (F)');
-    await page.locator('#toggle-chrome').click(); await settle(page);
+    await page.locator('#toggle-chrome').click();
+    await page.waitForFunction(() => document.querySelector('.topbar').getBoundingClientRect().bottom === 0);
     assert.equal(await page.locator('.transport').evaluate(el => el.inert), true);
-    assert.deepEqual(await page.locator('#stage-A').boundingBox(), beforeFocus);
+    assert.deepEqual(await viewportSurface.boundingBox(),
+      { ...beforeFocus, y: beforeFocus.y - toolbarHeight, height: beforeFocus.height + toolbarHeight });
     assert.deepEqual(await page.locator('#toggle-chrome').boundingBox(), focusButton, 'focus toggle stays in place');
     assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式 (F)');
     await page.locator('#toggle-chrome').click();
+    await page.waitForFunction(() => document.querySelector('.topbar').getBoundingClientRect().top === 0);
+    assert.deepEqual(await viewportSurface.boundingBox(), beforeFocus, 'exit restores the original viewport');
     await page.locator('#toggle-annotations').click();
     checkpoint('focus mode and viewport gestures verified');
     assert.equal(await page.locator('#toggle-annotations').getAttribute('aria-expanded'),'true');

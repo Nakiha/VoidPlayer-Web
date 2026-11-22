@@ -88,7 +88,8 @@ installLanguageControls(uiEvents.signal, toasts);
 document.title = tr(msg("page.title", "VoidPlayer · 视频对比"));
 const removeThemeControls = installThemeControls(toasts);
 const removeHeaderActions = installHeaderActions();
-installTopbarCompact(document.querySelector<HTMLElement>('.topbar')!, uiEvents.signal);
+const topbar = document.querySelector<HTMLElement>('.topbar')!;
+installTopbarCompact(topbar, uiEvents.signal);
 const settings = installSettings(toasts);
 $<HTMLButtonElement>('start-identity').onclick = () => settings.openPane('identity', $<HTMLButtonElement>('start-identity'));
 const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'),
@@ -181,7 +182,8 @@ const identitySettings = localOnly ? { ready: Promise.resolve(), dispose() {} } 
 const drawingEditor = installDrawingEditor(session, canvases);
 const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => drawingEditor.active());
 const notify = (message: string) => { toasts.show(message); };
-const workbench = installWorkbench(session, act, openMarkDialog, notify);
+const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'), topbar);
+const workbench = installWorkbench(session, act, openMarkDialog, notify, viewportChrome.setPanelOpen);
 $('toggle-annotations').onclick = () => {
   if (session.getState().busy) return;
   if (drawingEditor.active()) $('mark-close').click();
@@ -259,7 +261,6 @@ window.addEventListener('pagehide', event => {
   disposePresentation();
 });
 const screens = document.querySelector<HTMLElement>('.screens')!;
-const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
 const grids = Object.fromEntries(SLOTS.map(slot => [slot, installPixelGrid($<HTMLCanvasElement>(`grid-${slot}`), $(`grid-label-${slot}`))])) as Record<Slot, ReturnType<typeof installPixelGrid>>;
 let watchingStateChanged = () => {};
 const viewBindings = createViewBindings({ $, screens, canvases, grids, viewport, session, drawingEditor, trace: viewportTrace,

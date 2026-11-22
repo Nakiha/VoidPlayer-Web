@@ -28,7 +28,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const HISTORY_KEY = 'voidplayer.sources.v1';
 function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]'); } catch { return []; } }
 
-export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void, notify: (message: string) => void = () => {}) {
+export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void,
+  notify: (message: string) => void, panelsChanged: (open: boolean) => void) {
   const view = new WorkspaceState();
   if (!localOnly && new URL(location.href).searchParams.has('library')) {
     try { parseLibraryLocationLink(location.href,location.href); view.panels.sources = true; } catch { /* Ignore malformed startup links. */ }
@@ -39,9 +40,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   installStartPanelResize($('start-panel'), lifecyle.signal);
   const trackColumns = installTrackColumnResize(document.querySelector<HTMLElement>('.subtrack-scroll')!, $('track-label-resize'), lifecyle.signal);
   const panelMotion = installPanelMotion(workspace, lifecyle.signal);
-  const panelResize = installPanelResize(workspace, lifecyle.signal, panel => {
-    setPanel(panel, false); $(`toggle-${panel}`).focus();
-  });
+  const panelResize = installPanelResize(workspace, lifecyle.signal, closePanel);
   let dockHeight = Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')) || 180;
   const save = () => { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(catalog.serializable())); } catch { /* Session access still works when storage is disabled/full. */ } };
   const annotationHeightDelta = () => {
@@ -85,8 +84,8 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       const panelName = { inspector: t(msg("shell.trackInfo", "轨道信息")), subtracks: t(msg("shell.tracks", "子轨道")), sources: t(msg("shell.sources", "片源")), analysis: t(msg("shell.bitstreamAnalysis", "码流分析")) }[panel];
       const label = open ? t(msg("workbench.collapsePanel", "收起{panel}"), { panel: panelName }) : t(msg("workbench.expandPanel", "展开{panel}"), { panel: panelName });
       $(`toggle-${panel}`).dataset.tooltip = shortcutTooltip(label, PANEL_SHORTCUTS[panel]);
-
     }
+    panelsChanged(Object.values(view.panels).some(Boolean));
     analysis.setOpen(view.panels.analysis);
     panelResize.refresh();
   }
@@ -100,14 +99,15 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       sources.ensureLibrary();
     }
   }
+  function closePanel(panel: Panel) {
+    $(`toggle-${panel}`).focus({ preventScroll: true });
+    setPanel(panel, false);
+  }
   for (const panel of ['inspector', 'subtracks', 'sources', 'analysis'] as Panel[]) {
     $(`toggle-${panel}`).onclick = () => setPanel(panel, !view.panels[panel]);
   }
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-close-panel]')) {
-    button.onclick = () => {
-      const panel = button.dataset.closePanel as Panel;
-      setPanel(panel, false); $(`toggle-${panel}`).focus();
-    };
+    button.onclick = () => closePanel(button.dataset.closePanel as Panel);
   }
   function inspect(slot: Slot) {
     const close = view.panels.inspector && view.selected === slot;
@@ -155,7 +155,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     reset: () => Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')) + (annotations.expanded() ? annotationHeightDelta() : 0),
     dragging(active) { workspace.classList.toggle('panel-dragging', active); dock.classList.toggle('panel-pushing', active); if (!active) animatePanelLayout(workspace); },
     preview(push, veil) { workspace.style.setProperty('--dock-push-space', `${push}px`); dock.style.setProperty('--panel-push', `${push}px`); dock.style.setProperty('--panel-veil-opacity', String(veil)); },
-    collapse() { setPanel('subtracks', false); $('toggle-subtracks').focus(); },
+    collapse() { closePanel('subtracks'); },
   }, lifecyle.signal);
   // 顶部码流分析面板：与底部子轨道同一套高度手势（下拉放大、上推过阈值收起）。
   const analysisPanel = $('analysis-panel');
@@ -187,7 +187,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     reset: analysisDefaultHeight,
     dragging(active) { workspace.classList.toggle('panel-dragging', active); analysisPanel.classList.toggle('panel-pushing', active); if (!active) animatePanelLayout(workspace); },
     preview(push, veil) { workspace.style.setProperty('--analysis-push-space', `${-push}px`); analysisPanel.style.setProperty('--panel-push', `${push}px`); analysisPanel.style.setProperty('--panel-veil-opacity', String(veil)); },
-    collapse() { setPanel('analysis', false); $('toggle-analysis').focus(); },
+    collapse() { closePanel('analysis'); },
   }, lifecyle.signal);
   window.addEventListener('resize', () => {
     resize(dockHeight);
