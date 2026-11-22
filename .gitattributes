@@ -1,3 +1,7 @@
 # Deterministic localization artifacts use LF on every checkout.
 /locales/*.json text eol=lf
 /src/i18n/generated/* text eol=lf
+
+# The release lock verifies the upstream WebSR files byte for byte.
+/public/licenses/websr.txt -text
+/scripts/vendor/websr/cnn-2x-s-rl.json -text
