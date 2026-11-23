@@ -8,6 +8,8 @@ const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css',
   '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.wasm': 'application/wasm', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8',
+  '.h264': 'video/h264', '.avc': 'video/h264', '.h265': 'video/h265', '.hevc': 'video/h265',
+  '.h266': 'video/h266', '.vvc': 'video/h266',
   '.md': 'text/markdown; charset=utf-8', '.flv': 'video/x-flv', '.mp4': 'video/mp4', '.webm': 'video/webm',
 };
 

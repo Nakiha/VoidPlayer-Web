@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from '../http.ts';
 import { JS_TS_INDEX_BYTES } from '../../shared/media/indexing/ts-packet-index.ts';
 import { FLV_INDEX_BYTES } from '../../shared/media/indexing/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
-import { FLV_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, isJsPacketIndexKind, parseMediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity, MediaIndexKind } from '../../shared/media/indexing/media-index-identity.ts';
 import { AdminError, adminWriteAllowed, readAdminJson } from '../admin.ts';
 import { adminErrorBody } from '../admin-error.ts';
@@ -25,7 +25,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
       for (const key of url.searchParams.keys()) if (!allowed.includes(key) || url.searchParams.getAll(key).length !== 1)
         throw new AdminError(400,'未知或重复的索引参数。','invalid-index-query');
       const kindParam = url.searchParams.get('kind') ?? 'flv';
-      if (kindParam !== 'flv' && kindParam !== 'ffmpeg' && kindParam !== 'js-ts' && kindParam!=='js-matroska' && kindParam!=='mp4-playback') throw new AdminError(400, '未知帧索引类型。');
+      if (kindParam !== 'flv' && kindParam !== 'ffmpeg' && !isJsPacketIndexKind(kindParam) && kindParam!=='mp4-playback') throw new AdminError(400, '未知帧索引类型。');
       const kind = kindParam as MediaIndexKind;
       let identity: MediaIndexIdentity;
       try {
@@ -34,7 +34,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
           : parseMediaIndexIdentity(kind, url.searchParams);
       } catch (error) { throw new AdminError(400, (error as Error).message); }
       if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
-      if (!buildCommand && req.method === 'POST' && (kind === 'js-ts'||kind==='js-matroska'||kind==='mp4-playback')) throw new AdminError(405,'此播放索引只能由服务端构建。');
+      if (!buildCommand && req.method === 'POST' && (isJsPacketIndexKind(kind) || kind==='mp4-playback')) throw new AdminError(405,'此播放索引只能由服务端构建。');
       if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
       const version = requireMediaVersion(url), entry = library.metadata(indexMatch[1]);
       const source = entry && await library.source(entry.id,version);
@@ -136,7 +136,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
         }
         releaseUpload = library.indexJobs.acquireUpload();
         if (!String(req.headers['content-type']).startsWith('application/json')) throw new AdminError(400, '请提交 JSON 索引。');
-        const limit = (kind === 'ffmpeg' ? FFMPEG_INDEX_BYTES : (kind === 'js-ts'||kind==='js-matroska') ? JS_TS_INDEX_BYTES : FLV_INDEX_BYTES) + 1024;
+        const limit = (kind === 'ffmpeg' ? FFMPEG_INDEX_BYTES : isJsPacketIndexKind(kind) ? JS_TS_INDEX_BYTES : FLV_INDEX_BYTES) + 1024;
         if (Number(req.headers['content-length']) > limit) throw new AdminError(413, '帧索引过大。');
         const chunks: Buffer[] = []; let size = 0;
         const timeout = setTimeout(() => req.destroy(new Error('索引上传超时。')), 30000);

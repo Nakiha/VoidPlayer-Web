@@ -1,3 +1,5 @@
+import { AnnexBPacketSource } from '../shared/media/containers/annex-b-packet-source.ts';
+import type { JsPacketFormat } from '../shared/media/containers/matroska-packet-index.ts';
 import {TsContainerPacketSource} from '../shared/media/containers/mpeg2-ts-packet-source.ts';
 import { openVersionedInput, type MediaInput } from './versioned-input.ts';
 import {MatroskaPacketSource} from '../shared/media/containers/matroska-packet-source.ts';
@@ -8,7 +10,7 @@ import type { MediaIndexScanProgress } from '../shared/media/indexing/media-inde
 
 /** Disk indexing owns no decoder/core; the client and server use the same parser. */
 export async function buildJsTsIndexDocument(input: MediaInput, size: number, version: string, sourceVersion: string,
-  onProgress?: (data: MediaIndexScanProgress) => void, signal = new AbortController().signal, format:'ts'|'matroska'='ts') {
+  onProgress?: (data: MediaIndexScanProgress) => void, signal = new AbortController().signal, format:JsPacketFormat='ts') {
   const started = performance.now(), cpu = process.cpuUsage(), handle = await openVersionedInput(input,size,version,false,signal);
   let readCalls = 0, readBytes = 0, closed = false;
   const blocks = new Map<number, Uint8Array>(), blockBytes = 1024 * 1024;
@@ -38,16 +40,17 @@ export async function buildJsTsIndexDocument(input: MediaInput, size: number, ve
     },
     close() { closed = true; blocks.clear(); },
   };
-  let source: TsPacketSource | TsContainerPacketSource | MatroskaPacketSource | undefined;
+  let source: TsPacketSource | TsContainerPacketSource | MatroskaPacketSource | AnnexBPacketSource | undefined;
   try {
     await handle.verify();
-    source=format==='ts'?new TsContainerPacketSource(reader,sourceVersion,signal):new MatroskaPacketSource(reader,sourceVersion,signal);
+    const Source = format === 'ts' ? TsContainerPacketSource : format === 'matroska' ? MatroskaPacketSource : AnnexBPacketSource;
+    source = new Source(reader, sourceVersion, signal);
     onProgress?.({ packets: 0, scannedBytes: 0, totalBytes: size });
     const document = await source.open(undefined,onProgress);
     await handle.verify();
     onProgress?.({ packets: document.packets.length, scannedBytes: size, totalBytes: size });
     const used = process.cpuUsage(cpu);
-    return { document, profile: { scanMode: format==='ts'?'js-ts-packets':'js-matroska-packets', totalBuildWallMs: performance.now() - started,
+    return { document, profile: { scanMode: document.kind, totalBuildWallMs: performance.now() - started,
       cpuUserMs: used.user / 1000, cpuSystemMs: used.system / 1000, scannedBytes: size, packets: document.packets.length,
       diskReadCalls: readCalls, diskReadBytes: readBytes } };
   } finally { source?.close(); await handle.close(); }

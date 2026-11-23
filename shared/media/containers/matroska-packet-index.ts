@@ -1,4 +1,5 @@
 import type {TsPacketIndex,TsPacketRecord} from '../indexing/ts-packet-index.ts';
+import type { AnnexBPacketIndex } from '../indexing/annex-b-index.ts';
 import { MEDIABUNNY_VERSION } from '../mediabunny-version.ts';
 export const MATROSKA_PACKET_BUILD = `mediabunny-${MEDIABUNNY_VERSION}-matroska-packets-v6` as const;
 export interface MatroskaPacketRecord extends Omit<TsPacketRecord,'timing'|'pesOffset'> {
@@ -12,8 +13,9 @@ export interface MatroskaPacketIndex extends Omit<TsPacketIndex,'schema'|'kind'|
   nativeConfig?: Omit<VideoDecoderConfig, 'description'> & { description?: number[] };
   codecParameters?:import('./matroska-clocks.ts').PacketCodecParameters;packets:MatroskaPacketRecord[];
 }
-export type JsPacketIndex=TsPacketIndex|MatroskaPacketIndex;
-export const jsPictureStream=(index:JsPacketIndex)=>`${index.streamKey}:${index.pid}@${index.build}`;
+export type JsPacketFormat = 'ts' | 'matroska' | 'annexb';
+export type JsPacketIndex = TsPacketIndex | MatroskaPacketIndex | AnnexBPacketIndex;
+export const jsPictureStream = (index: JsPacketIndex) => `${index.streamKey}:${'pid' in index ? index.pid : 0}@${index.build}`;
 export function parseMatroskaPacketIndex(value:unknown,version:string,size:number):MatroskaPacketIndex|undefined {
   if(!value||typeof value!=='object')return;const d=value as Partial<MatroskaPacketIndex>;
   if(d.schema!==1||d.kind!=='js-matroska-packets'||d.build!==MATROSKA_PACKET_BUILD||d.sourceVersion!==version||d.size!==size||d.streamKey!=='video:0'

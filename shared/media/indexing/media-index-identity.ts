@@ -1,8 +1,10 @@
+import { ANNEX_B_PACKET_BUILD } from './annex-b-index.ts';
+import type { JsPacketFormat, JsPacketIndex } from '../containers/matroska-packet-index.ts';
 import { TS_PACKET_BUILD } from './ts-packet-index.ts';
 import {MATROSKA_PACKET_BUILD} from '../containers/matroska-packet-index.ts';
 import { FFMPEG_INDEX_SCHEMA } from './ffmpeg-index-cache.ts';
 import { MEDIABUNNY_VERSION } from '../mediabunny-version.ts';
-export type MediaIndexKind = 'flv' | 'ffmpeg' | 'js-ts' | 'js-matroska' | 'mp4-playback';
+export type MediaIndexKind = 'flv' | 'ffmpeg' | 'js-ts' | 'js-matroska' | 'js-annexb' | 'mp4-playback';
 
 export interface MediaIndexIdentity {
   kind: MediaIndexKind;
@@ -15,6 +17,21 @@ export const JS_TS_MEDIA_INDEX_IDENTITY: MediaIndexIdentity = {
   kind: 'js-ts', streamKey: 'video:0', schemaVersion: 2, indexerBuild: TS_PACKET_BUILD,
 };
 export const JS_MATROSKA_MEDIA_INDEX_IDENTITY:MediaIndexIdentity={kind:'js-matroska',streamKey:'video:0',schemaVersion:1,indexerBuild:MATROSKA_PACKET_BUILD};
+
+export const JS_ANNEX_B_MEDIA_INDEX_IDENTITY: MediaIndexIdentity = {
+  kind: 'js-annexb', streamKey: 'video:0', schemaVersion: 1, indexerBuild: ANNEX_B_PACKET_BUILD,
+};
+export const JS_PACKET_IDENTITIES = {
+  ts: JS_TS_MEDIA_INDEX_IDENTITY, matroska: JS_MATROSKA_MEDIA_INDEX_IDENTITY, annexb: JS_ANNEX_B_MEDIA_INDEX_IDENTITY,
+} satisfies Record<JsPacketFormat, MediaIndexIdentity>;
+export const JS_PACKET_INDEX_KINDS = { 'js-ts': 'js-ts-packets', 'js-matroska': 'js-matroska-packets', 'js-annexb': 'js-annexb-packets' };
+export function isJsPacketIndexKind(kind: unknown): kind is keyof typeof JS_PACKET_INDEX_KINDS {
+  return typeof kind === 'string' && Object.hasOwn(JS_PACKET_INDEX_KINDS, kind);
+}
+export function jsPacketIndexIdentity(index: JsPacketIndex) {
+  return index.kind === 'js-ts-packets' ? JS_PACKET_IDENTITIES.ts
+    : index.kind === 'js-matroska-packets' ? JS_PACKET_IDENTITIES.matroska : JS_PACKET_IDENTITIES.annexb;
+}
 
 export const FLV_INDEXER_BUILD = 'flv-demux-v3';
 export const MP4_PLAYBACK_MEDIA_INDEX_IDENTITY: MediaIndexIdentity = {
@@ -32,7 +49,7 @@ export function mediaIndexIdentityKey(identity: MediaIndexIdentity): string {
 }
 
 export function parseMediaIndexIdentity(kind: string, params: URLSearchParams): MediaIndexIdentity {
-  if (kind !== 'flv' && kind !== 'ffmpeg' && kind !== 'js-ts' && kind !== 'js-matroska' && kind!=='mp4-playback') throw new Error('未知帧索引类型。');
+  if (kind !== 'flv' && kind !== 'ffmpeg' && !isJsPacketIndexKind(kind) && kind!=='mp4-playback') throw new Error('未知帧索引类型。');
   const streamKey = params.get('stream') ?? '';
   const schemaVersion = Number(params.get('schema'));
   const indexerBuild = params.get('indexer') ?? '';
@@ -47,6 +64,8 @@ export function parseMediaIndexIdentity(kind: string, params: URLSearchParams): 
     || schemaVersion !== JS_TS_MEDIA_INDEX_IDENTITY.schemaVersion
     || indexerBuild !== JS_TS_MEDIA_INDEX_IDENTITY.indexerBuild)) throw new Error('JS TS 索引版本不受支持。');
   if(kind==='js-matroska'&&(streamKey!==JS_MATROSKA_MEDIA_INDEX_IDENTITY.streamKey||schemaVersion!==JS_MATROSKA_MEDIA_INDEX_IDENTITY.schemaVersion||indexerBuild!==JS_MATROSKA_MEDIA_INDEX_IDENTITY.indexerBuild))throw new Error('JS Matroska 索引版本不受支持。');
+  if (kind === 'js-annexb' && mediaIndexIdentityKey({kind, streamKey, schemaVersion, indexerBuild})
+    !== mediaIndexIdentityKey(JS_ANNEX_B_MEDIA_INDEX_IDENTITY)) throw new Error('裸码流索引版本不受支持。');
   if (kind === 'mp4-playback' && mediaIndexIdentityKey({kind, streamKey, schemaVersion, indexerBuild})
     !== mediaIndexIdentityKey(MP4_PLAYBACK_MEDIA_INDEX_IDENTITY)) throw new Error('MP4 播放索引版本不受支持。');
   return { kind, streamKey, schemaVersion, indexerBuild };

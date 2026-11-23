@@ -113,11 +113,11 @@ async function start() {
           const data = await engine.open('', undefined, false, message.threads, progress => send({ id, type: 'progress', progress }), true);
           send(reply(message, data, engine.nativeDiagnostics));
         } else if (type === 'init') {
-          const preparedTs = (message.container === 'ts'||message.container==='matroska') && message.preparedTsSession !== undefined;
+          const preparedTs = 'sourceVersion' in message && message.preparedTsSession !== undefined;
           if (preparedTs && (!(engine instanceof JsContainerEngine) || message.preparedTsSession !== tsSession
-            || engine.packetIndex?.sourceVersion !== message.sourceVersion || (message.container==='ts')!==(engine.packetIndex?.kind==='js-ts-packets'))) throw new MediaOpenError('input','JS TS admission session changed');
+            || engine.packetIndex?.sourceVersion !== message.sourceVersion || message.container !== engine.format)) throw new MediaOpenError('input','JS TS admission session changed');
           if (!(engine instanceof FlvEngine && message.container === 'flv') && !preparedTs) {
-            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : (message.container==='ts'||message.container==='matroska')?new JsContainerEngine(message.input,message.sourceVersion,{persistent:message.persistent},message.container): new FlvEngine(message.input, 'prepared' in message?message.prepared:undefined);
+            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : 'sourceVersion' in message?new JsContainerEngine(message.input,message.sourceVersion,{persistent:message.persistent},message.container): new FlvEngine(message.input, 'prepared' in message?message.prepared:undefined);
           }
           tsSession = undefined;
           if (!engine) throw new MediaOpenError('input','Packet engine is not initialized');

@@ -1,3 +1,4 @@
+import type { JsPacketFormat } from '../../../shared/media/containers/matroska-packet-index.ts';
 import { sharePixelFrame } from './pixel-frame.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
 import { decodeThreadsForCodec, lightPlaybackThreads, wasmThreadMode } from '../policy/wasm-threads.ts';
@@ -30,9 +31,10 @@ import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, Ana
 
 const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 
-export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
+export async function openPacketMedia(container: 'flv' | 'mp4' | JsPacketFormat, input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
   loadAborted(deps.signal);
-  if((container==='ts'||container==='matroska') && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
+  const jsPackets = container !== 'flv' && container !== 'mp4';
+  if (jsPackets && !deps.sourceVersion) throw new MediaOpenError('input', 'JS packet source namespace is required');
   const mode = wasmThreadMode();
   let reservation = reserveFallbackThreads(mode);
   let reservationHeld = true, lightweight = false, pendingLightLimit = false;
@@ -90,8 +92,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
         if (container !== 'flv') deps.onProgress?.('inspect');
         init = await rpc.call('init', { input, glueURL, wasmBinary: deps.wasmBinary,
           forceWasm: container === 'flv' || !!deps.forceWasm, threads: startupThreads(glueURL),
-          ...((container==='ts'||container==='matroska')?{container,persistent:true,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
-          container === 'flv' && fallbackCoreVariant(glueURL) === 'multi-thread' ? 10000 : libraryPlayback ? 120000 : 60000, libraryPlayback || container==='ts' || container==='matroska');
+          ...(jsPackets?{container,persistent:true,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
+          container === 'flv' && fallbackCoreVariant(glueURL) === 'multi-thread' ? 10000 : libraryPlayback ? 120000 : 60000, libraryPlayback || jsPackets);
         selected = glueURL;
       } catch (error) {
         rpc.terminate(); rpc = undefined; failure = error;
@@ -112,7 +114,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     if (lightweight) reservation.limitToLightSource();
     if (init.decoder === 'webcodecs' && !deps.rawNative) releaseReservation();
     let { times, durations, trackMetadata, lightweight: _lightweight, pendingLightLayout: _pendingLightLayout, ...details } = init;
-    const info: MediaInfo = { id: (container==='ts'||container==='matroska')?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
+    const info: MediaInfo = { id: jsPackets?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
       ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: fallbackCoreVariant(selected) } : {}) };
     let presentationMode: ColorMode = deps.rawNative ? 'reference' : deps.nativeColorMode ?? (getColorMode() === 'reference' ? 'reference' : 'browser');
@@ -121,7 +123,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     let activateVerifiedNativeYuv = (_adapter: MediaSource) => {};
     let deactivateVerifiedNativeYuv = () => {};
     const selectedThreads = threadsFor(selected);
-    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? decodeThreadsForCodec(selectedThreads, init.codec) : undefined,
+    contextLog().info('media', `${container.toUpperCase()} 已载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? decodeThreadsForCodec(selectedThreads, init.codec) : undefined,
       requestedFrameContexts: init.decoder === 'ffmpeg-wasm' && init.codec === 'vvc'
         ? typeof selectedThreads === 'object' ? selectedThreads.vvcFrameContexts : 1 : undefined,
       startupPacketOffset: startup?.index.packets[0]?.offset, startupNextOffset: startup?.nextOffset, startupIndexComplete: startup?.complete });
@@ -397,7 +399,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       },
       getAnalysisCapability(): AnalysisCapability {
         return {
-          hasSize: true, hasDts: (container==='ts'||container==='matroska')?!!deps.preparedTs?.hasDts:true, keySource: (container==='ts'||container==='matroska')?'verified':'container',
+          hasSize: true, hasDts: jsPackets?!!deps.preparedTs?.hasDts:true, keySource: jsPackets?'verified':'container',
           pictureType: 'key-only', qp: 'unsupported',
           indexState: info.indexState ?? 'complete',
           ...(info.indexError ? { indexError: info.indexError } : {}),

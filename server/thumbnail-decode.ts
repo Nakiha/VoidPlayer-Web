@@ -2,6 +2,7 @@ import type { loadServerPlaybackCore } from './playback-core.ts';
 import { closeSync, fstatSync, openSync, readSync, statSync } from 'node:fs';
 import { CustomSource, EncodedPacketSink, Input, MP4, QTFF, MATROSKA, WEBM, MPEG_TS } from 'mediabunny';
 import jpeg from 'jpeg-js';
+import { firstAnnexBPicture } from '../shared/media/containers/annex-b-packet-source.ts';
 import { containerFromHeader } from '../shared/media/containers/container-header.ts';
 import { scanFlv } from '../shared/media/containers/flv-demux.ts';
 import { matroskaFfv1Configuration, matroskaStructure } from '../shared/media/containers/matroska-clocks.ts';
@@ -84,6 +85,11 @@ export async function decodeCover({core,heap}:Awaited<ReturnType<typeof loadServ
       core.vpBlobs=new Map([[ctx,{blob:{size,slice:(start:number,end:number)=>({start,end})},
         reader:{readAsArrayBuffer:({start,end}:{start:number;end:number})=>read(start,Math.min(end,size)-start).buffer}}]]);
       ready=core._vp_open_blob(ctx,ctx,BigInt(size))===0 && core._vp_prime_first_presentable(ctx)===1;
+    } else if (format === 'annexb') {
+      const first = await firstAnnexBPicture(reader);
+      configure(first.codec, first.config);
+      submit(first.bytes, 0, null, true);
+      if (!ready) submit();
     } else if (format==='flv') {
       let part=await scanFlv(reader,undefined,undefined,true);
       configure(part.index.codec,part.index.description);

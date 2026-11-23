@@ -65,11 +65,12 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
   let nativeOpens = 0, softwareOpens = 0;
   const libraryReference='url' in input?input.library:undefined;
   const libraryId=libraryReference?.id,mediaVersion=libraryReference?.version;
-  const tsAdmission = container==='mpegts'||container==='matroska' ? await (await import('./decoding/js-container-media.ts')).admitJsContainerMedia(container==='mpegts'?'ts':'matroska',input,meta,
+  const jsFormat = container === 'mpegts' ? 'ts' : container === 'matroska' || container === 'annexb' ? container : undefined;
+  const jsAdmission = jsFormat ? await (await import('./decoding/js-container-media.ts')).admitJsContainerMedia(jsFormat,input,meta,
     libraryId&&mediaVersion?`${libraryId}@${mediaVersion}`:randomUUID(),{signal,onProgress,rawNative:reference,
       ...(reference?{}:{nativeColorMode:'browser' as const})}) : undefined;
   try {
-    const packetJs=tsAdmission?.kind==='js-packet-static';
+    const packetJs=jsAdmission?.kind==='js-packet-static';
     const ffmpegPlan = container !== 'flv' && !packetMp4 && !packetJs;
     const openMp4Packet = async (forceWasm: boolean) => {
       const { openPacketMedia } = await import('./decoding/packet-media.ts');
@@ -81,7 +82,7 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
       return 'file' in input ? openFFmpegMedia(input.file as File, { signal, onProgress })
         : openFFmpegContainerFromUrl(input.url, meta, { signal, onProgress });
     };
-    const software = packetJs ? () => tsAdmission.open(true) : customSoftware ?? (packetMp4 ? () => openMp4Packet(true)
+    const software = packetJs ? () => jsAdmission.open(true) : customSoftware ?? (packetMp4 ? () => openMp4Packet(true)
       : ffmpegPlan ? openFfmpeg : () => openSoftwareMedia(input, meta, { signal, onProgress }, container));
     const countedSoftware = async () => { softwareOpens++; return software(); };
     const openBrowser = async () => {
@@ -94,23 +95,23 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
       nativeOpens++;
       return container === 'flv'
         ? (async () => { const { openFlvMedia } = await import('./decoding/flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); })()
-        : packetJs ? tsAdmission.open(false) : packetMp4 ? openMp4Packet(false)
+        : packetJs ? jsAdmission.open(false) : packetMp4 ? openMp4Packet(false)
           : ffmpegPlan && !customSoftware ? openFfmpeg()
             : openBrowser();
     };
-    contextLog().info('media', '媒体适配器选择', { container, mp4DemuxPlan, tsDemuxPlan:tsAdmission?.kind, input: 'file' in input ? 'local' : 'remote', reference,
-      preference: reference ? preference.decoder : 'hardware', software: packetJs?(container==='matroska'?'packet-matroska':'packet-ts'):container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
+    contextLog().info('media', '媒体适配器选择', { container, mp4DemuxPlan, tsDemuxPlan:jsAdmission?.kind, input: 'file' in input ? 'local' : 'remote', reference,
+      preference: reference ? preference.decoder : 'hardware', software: packetJs?`packet-${jsFormat}`:container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
     contextLog().info('media', '媒体管线追踪', {
       phase: 'container-selected', mediaId: libraryId, mediaVersion, container,
-      demuxBackend: packetJs?(container==='matroska'?'js-matroska-packets':'js-ts-packets'):container === 'flv' ? 'flv-engine' : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm',
-      indexBackend: packetJs?(container==='matroska'?'js-matroska-packet-index':'js-ts-packet-index'):container === 'flv' ? 'flv-packet-index' : container === 'isobmff' && packetMp4 ? 'mp4-sample-index' : 'ffmpeg-index',
+      demuxBackend: packetJs?`js-${jsFormat}-packets`:container === 'flv' ? 'flv-engine' : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm',
+      indexBackend: packetJs?`js-${jsFormat}-packet-index`:container === 'flv' ? 'flv-packet-index' : container === 'isobmff' && packetMp4 ? 'mp4-sample-index' : 'ffmpeg-index',
       decoderPreference: reference ? preference.decoder : 'hardware', colorMode,
     });
     const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
       native, software: countedSoftware, nativeOwnsFallback: packetJs || (packetMp4 || ffmpegPlan) && !customSoftware, onProgress, signal });
     source.info.container = container;
     if ('file' in input) source.bitstreamFile = input.file;
-    const demuxBackend = packetJs?(container==='matroska'?'js-matroska-packets':'js-ts-packets'):container === 'flv' ? 'flv-engine'
+    const demuxBackend = packetJs?`js-${jsFormat}-packets`:container === 'flv' ? 'flv-engine'
       : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm';
     contextLog().info('media', '媒体管线追踪', {
       phase: 'first-frame-ready', mediaId: libraryId, mediaVersion, container, demuxBackend,
@@ -122,7 +123,7 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
       nativeOpenCount: nativeOpens, softwareOpenCount: softwareOpens,
     });
     return source;
-  } finally {if(tsAdmission?.kind==='js-packet-static')tsAdmission.close();}
+  } finally {if(jsAdmission?.kind==='js-packet-static')jsAdmission.close();}
 }
 
 export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {

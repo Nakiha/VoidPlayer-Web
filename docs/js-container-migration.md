@@ -1,7 +1,7 @@
 # JS container packets and reusable indexes
 
 Container parsing, indexing, source clocks and packet selection belong to JS for
-MP4/MOV/fMP4, FLV, admitted MPEG-TS and Matroska/WebM inputs. WebCodecs and
+MP4/MOV/fMP4, FLV, admitted MPEG-TS, Matroska/WebM and Annex-B elementary streams. WebCodecs and
 packet-fed WASM receive the same packets and index; decoder selection does not
 select another demuxer. AVI, MPEG-PS and elementary MPEG video retain the
 FFmpeg container backend. Removed MOV/Matroska/TS demuxers are not fallback
@@ -23,6 +23,7 @@ independent thread and frame-context counts.
 | Matroska/WebM | VP8 / VP9 | Browser or packet WASM; packet statistics do not imply block/QP support. |
 | Matroska | FFV1 | Packet WASM with admitted configuration and source-plane geometry; no block/QP analysis. |
 | WebM | AV1 temporal units | Packet playback preserves hidden/show-existing inputs; no exact one-AU picture identity. |
+| Annex-B | H.264 / HEVC / VVC | Access-unit byte ranges and picture order for playback, stepping and packet statistics. |
 | MP4/MOV/fMP4 | Supported visual sample descriptions | JS sample tables drive browser or packet WASM; multiple descriptions retain the conservative software policy. |
 
 Finite static stream/configuration rules are checked by the corresponding
@@ -39,6 +40,24 @@ TS and Matroska index schemas/builds are owned by
 `shared/media/containers/matroska-packet-index.ts`. Release locks and actual core
 capability manifests define the consumed artifacts. Historical pins and initial
 migration matrices are not current support tables.
+
+## Elementary streams
+
+The supported filename extensions are `.h264` / `.avc`, `.h265` / `.hevc` and
+`.h266` / `.vvc`. Detection uses Annex-B start codes and parameter-set headers.
+The source must start with a random access picture and use a single layer and
+stable parameter sets. The parser rejects unsupported picture layouts such as
+interlaced AVC/HEVC, AVC slice groups and VVC gradual decoder refresh.
+
+The index separates compressed access units from their picture order. It assigns
+a playback timeline using nominal AVC/HEVC/VVC SPS timing when available and 30 fps
+otherwise. Track information shows the chosen rate and its origin. Raw PTS/DTS
+remain unknown. The synthetic clock supports stepping and seeks. Exact block/QP
+analysis requires a supported source clock and picture identity.
+
+Local files and external Range URLs use the shared JS scanner. The media library
+builds a version-bound index on the server and reuses its byte ranges on playback.
+Installed Chromium PWAs advertise the same six extensions for OS launch.
 
 ## Identity, clocks and ownership
 

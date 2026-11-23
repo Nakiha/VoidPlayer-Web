@@ -18,4 +18,15 @@ export class ParameterBits {
     if (value > max) throw new Error('parameter set value exceeds limit');
     return value;
   }
+  se() { const n = this.ue(); return n & 1 ? (n + 1) / 2 : -n / 2; }
+}
+
+export function nalPayload(nal: Uint8Array, header: number) {
+  const bytes = new Uint8Array(Math.max(0, nal.length - header));
+  let count = 0;
+  for (let i = header; i < nal.length; i++) {
+    if (i >= header + 2 && !nal[i-2] && !nal[i-1] && nal[i] === 3 && nal[i+1] <= 3) continue;
+    bytes[count++] = nal[i];
+  }
+  return new ParameterBits(bytes.subarray(0, count));
 }

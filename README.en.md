@@ -46,6 +46,7 @@ Workspace files do not contain videos. Local recovery depends on browser storage
 - **Frame inspection:** step forward or backward, seek, pan and zoom, sample pixels and capture screenshots.
 - **Review annotations:** text and vector drawings, replies, resolved states, annotation cards and frame thumbnails.
 - **Media analysis:** codec and color information, bitrate and packet statistics, plus NAL, GOP, reference and block/QP analysis within the supported codec scope.
+- **Elementary streams:** open Annex-B H.264, H.265 and H.266 through drag and drop, the media library or installed PWA file associations. Playback defaults to 30 fps when the frame rate is unavailable.
 - **Browser decoding:** WebCodecs where supported, with FFmpeg WASM software decoding for unsupported codec combinations.
 - **Chinese and English UI:** light, dark and custom themes, with keyboard shortcuts for common actions.
 

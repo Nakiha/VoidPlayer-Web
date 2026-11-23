@@ -6,10 +6,11 @@ import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import { annexBFixture } from '../helpers/media/annex-b-fixture.ts';
 import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import {MediaLibraryIndex} from '../../server/library.ts';
 import {createMediaServer} from '../../server/app.ts';
-import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from '../../shared/media/indexing/media-index-identity.ts';
+import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY,JS_ANNEX_B_MEDIA_INDEX_IDENTITY} from '../../shared/media/indexing/media-index-identity.ts';
 import {MediaIndexClient} from '../../src/media/indexing/media-index-client.ts';
 import {WorkerRpc} from '../../src/media/workers/worker-rpc.ts';
 import type {PacketCommands} from '../../src/media/workers/worker-protocol.ts';
@@ -44,7 +45,9 @@ test('an unregistered HTTP service with a library-shaped URL cannot authorize dr
 
 test('JS library indexes persist across server and consumer Worker restarts; corrupt complete documents rebuild without WASM demux',async t=>{
  const previousLocation=Object.getOwnPropertyDescriptor(globalThis,'location');t.after(()=>{if(previousLocation)Object.defineProperty(globalThis,'location',previousLocation);else Reflect.deleteProperty(globalThis,'location');});
- const temp=await mkdtemp(join(tmpdir(),'vp-js-container-store-')),root=join(temp,'media'),database=join(temp,'library.sqlite');const {mkdir,copyFile,readdir}=await import('node:fs/promises');await mkdir(root);for(const name of await readdir('fixtures/js-container'))if(name.endsWith('.ts')||name.endsWith('.mkv')||name.endsWith('.webm'))await copyFile(join('fixtures/js-container',name),join(root,name));execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=32x32:rate=5:duration=1','-c:v','huffyuv','-pix_fmt','yuv422p',join(root,'uncompiled-huffyuv.mkv')]);
+ const temp=await mkdtemp(join(tmpdir(),'vp-js-container-store-')),root=join(temp,'media'),database=join(temp,'library.sqlite');const {mkdir,copyFile,readdir,writeFile}=await import('node:fs/promises');await mkdir(root);for(const name of await readdir('fixtures/js-container'))if(name.endsWith('.ts')||name.endsWith('.mkv')||name.endsWith('.webm'))await copyFile(join('fixtures/js-container',name),join(root,name));execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=32x32:rate=5:duration=1','-c:v','huffyuv','-pix_fmt','yuv422p',join(root,'uncompiled-huffyuv.mkv')]);
+ const raw = await annexBFixture('fixtures/video/h264_9s_1920x1080.mp4', 'h264', 16);
+ await writeFile(join(root, 'h264.h264'), raw.bytes);
  const originalCore=process.env.VOIDPLAYER_WASM_CORE_DIR;let library:MediaLibraryIndex|undefined,server:ReturnType<typeof createMediaServer>|undefined;
  let builds=0, inventoryReads=0;
  const start=async()=>{
@@ -59,11 +62,17 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
  const stop=async()=>{server?.closeAllConnections();if(server?.listening)await new Promise<void>((ok,bad)=>server!.close(e=>e?bad(e):ok()));server=undefined;await library?.close();library=undefined;};
  try{
   let base=await start();const documents=new Map<string,unknown>();
-  const names=['h264.ts','hevc.ts','h264.mkv','hevc.mkv','hevc10.ts','hevc10.mkv','hevc-audio.mkv','vp8.webm','vp9.webm'];
-  const read=async(name:string)=>{const e=library!.browse().entries.find(e=>e.name===name)!;assert.ok(e);const identity=name.endsWith('.ts')?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY;
+  const names=['h264.ts','hevc.ts','h264.mkv','hevc.mkv','hevc10.ts','hevc10.mkv','hevc-audio.mkv','vp8.webm','vp9.webm','h264.h264'];
+  const read=async(name:string)=>{const e=library!.browse().entries.find(e=>e.name===name)!;assert.ok(e);const identity = name.endsWith('.ts') ? JS_TS_MEDIA_INDEX_IDENTITY : name.endsWith('.h264') ? JS_ANNEX_B_MEDIA_INDEX_IDENTITY : JS_MATROSKA_MEDIA_INDEX_IDENTITY;
    const client=new MediaIndexClient(`${base}/api/media/${e.id}/content?v=${e.version}`,identity.kind,64*1024*1024,120000,true,identity);try{const d=await client.read();assert.ok(d);return d;}finally{client.close();}};
   for(const name of names)documents.set(name,await read(name));assert.equal(builds,names.length);
   await stop();builds=0;base=await start();for(const name of names)assert.deepEqual(await read(name),documents.get(name));assert.equal(builds,0,'server restart uses stored source/build-bound complete indexes');
+  const rawEntry = library!.browse().entries.find(e => e.name === 'h264.h264')!;
+  const ref = ownLibraryIndexReference(rawEntry.id, rawEntry.version!);
+  const rawUrl = `${base}/api/media/${ref.id}/content?v=${ref.version}`;
+  const rawIndex = await loadServerJsIndex(rawUrl, `${ref.id}@${ref.version}`, rawEntry.size, 'annexb', new AbortController().signal, undefined, ref);
+  assert.equal(rawIndex?.kind, 'js-annexb-packets');
+  assert.equal(rawIndex.packets.length, 16);
   const e=library!.browse().entries.find(e=>e.name==='hevc.mkv')!,version=`${e.id}@${e.version}`;
   // Node has no document origin. This fixture explicitly hosts the real
   // library application at base, including its fresh consumer Worker's origin.

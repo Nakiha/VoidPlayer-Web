@@ -21,7 +21,10 @@
       "video/mp2t": [".m2ts"],
       "video/mpeg": [".mpg", ".mpeg"],
       "video/x-msvideo": [".avi"],
-      "video/x-flv": [".flv"]
+      "video/x-flv": [".flv"],
+      "video/h264": [".h264", ".avc"],
+      "video/h265": [".h265", ".hevc"],
+      "video/h266": [".h266", ".vvc"]
     }
   }],
   "icons": [

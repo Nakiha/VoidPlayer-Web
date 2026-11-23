@@ -11,7 +11,7 @@ import { AdminError } from './admin-error.ts';
 import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../shared/media/indexing/flv-index-cache.ts';
 import type { FlvIndexDocument } from '../shared/media/indexing/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../shared/media/indexing/ffmpeg-index-cache.ts';
-import { MP4_PLAYBACK_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../shared/media/indexing/media-index-identity.ts';
+import { MP4_PLAYBACK_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY, isJsPacketIndexKind, jsPacketIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity, MediaIndexKind } from '../shared/media/indexing/media-index-identity.ts';
 import { validFfmpegRecovery } from '../shared/media/indexing/index-integrity.ts';
 import type { FfmpegIndexRecovery } from '../shared/media/indexing/index-integrity.ts';
@@ -62,7 +62,7 @@ export class FrameIndexStore {
 
   has(id: string, version: string, kind: FrameIndexKind = 'flv', identity?: MediaIndexIdentity): boolean {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
-    if (selected?.kind === 'js-ts' || selected?.kind === 'js-matroska' || selected?.kind === 'mp4-playback') {
+    if (selected && (isJsPacketIndexKind(selected.kind) || selected.kind === 'mp4-playback')) {
       // The seal and reconstructed document must come from the same snapshot;
       // a concurrent clear/recommit must never make us delete its valid winner.
       this.db.exec('BEGIN');
@@ -117,7 +117,7 @@ export class FrameIndexStore {
 
   private readJson(id: string, version: string, kind: FrameIndexKind, identity?: MediaIndexIdentity): { json: string; hit: boolean } {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
-    if((selected?.kind==='js-ts'||selected?.kind==='js-matroska'||selected?.kind==='mp4-playback')&&!this.validServerDocument(id,version,selected))return { json: JSON.stringify({epoch:this.epoch,index:null}), hit: false };
+    if(selected && (isJsPacketIndexKind(selected.kind) || selected.kind === 'mp4-playback')&&!this.validServerDocument(id,version,selected))return { json: JSON.stringify({epoch:this.epoch,index:null}), hit: false };
     if (!selected) return { json: JSON.stringify({ epoch: this.epoch, index: null }), hit: false };
     if (selected.kind === 'ffmpeg') {
       const row = this.db.prepare('SELECT epoch,metadata_json FROM frame_index_epoch,media_index_manifests WHERE frame_index_epoch.id=1 AND media_id=? AND media_version=? AND ' + identityWhere + ' AND complete=1').get(id, version, ...identityArgs(selected));
@@ -133,7 +133,7 @@ export class FrameIndexStore {
   }
 
   put(id: string, version: string, size: number, value: unknown, epoch: unknown, identity: MediaIndexIdentity = FLV_MEDIA_INDEX_IDENTITY) {
-    if (identity.kind === 'js-ts' || identity.kind === 'js-matroska' || identity.kind === 'mp4-playback')
+    if (isJsPacketIndexKind(identity.kind) || identity.kind === 'mp4-playback')
       throw new AdminError(405, '此索引只能由服务端构建。');
     if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');
     return this.commit(id, version, prepareFrameIndex(value, size, identity, `${id}@${version}`), epoch);
@@ -146,7 +146,7 @@ export class FrameIndexStore {
       const media = this.db.prepare("SELECT 1 FROM media JOIN roots ON media.root_id=roots.id WHERE media.id=? AND version=? AND media.state='ready' AND roots.active=1").get(id, version);
       if (!media) throw new AdminError(409, '媒体已改变，未保存旧索引。');
       const { text, frames, scannedBytes, identity } = prepared;
-      if ((identity.kind === 'js-ts'||identity.kind==='js-matroska') && !parseJsPacketIndex(JSON.parse(text), `${id}@${version}`, scannedBytes))
+      if (isJsPacketIndexKind(identity.kind) && !parseJsPacketIndex(JSON.parse(text), `${id}@${version}`, scannedBytes))
         throw new AdminError(409, 'JS TS 索引源身份与提交不匹配。');
       const now = Date.now();
       if (identity.kind === 'ffmpeg') {
@@ -204,7 +204,7 @@ export class FrameIndexStore {
       ).run(id, version, ...identityArgs(identity), seq, part.payload, Buffer.byteLength(part.payload), part.frames, now);
       if (sharded) this.db.prepare('UPDATE media_index_manifests SET packet_storage=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
         .run(JSON.stringify(sharded.storage), id, version, ...identityArgs(identity));
-      if ((identity.kind==='js-ts'||identity.kind==='js-matroska'||identity.kind==='mp4-playback')) this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere)
+      if (isJsPacketIndexKind(identity.kind) || identity.kind === 'mp4-playback') this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere)
         .run(JSON.stringify({jsIndexSha256:createHash('sha256').update(text).digest('hex')}),id,version,...identityArgs(identity));
       if (prepared.semanticHeader) {
         const header = prepared.semanticHeader;
@@ -426,10 +426,11 @@ export function prepareFrameIndex(value: unknown, size: number, identityOrKind: 
       throw new AdminError(409, 'MP4 播放索引身份不匹配。');
     text = JSON.stringify(value); bytes = Buffer.byteLength(text);
     if (bytes > MP4_PLAYBACK_INDEX_BYTES) throw new AdminError(413, 'MP4 播放索引过大。');
-  } else if ((expectedKind === 'js-ts'||expectedKind==='js-matroska')) {
+  } else if (isJsPacketIndexKind(expectedKind)) {
     const parsed = sourceVersion ? parseJsPacketIndex(value, sourceVersion, size) : undefined;
-    if (!parsed||(parsed.kind==='js-ts-packets')!==(expectedKind==='js-ts')) throw new AdminError(400, 'JS TS 索引格式、源身份或范围无效。');
-    identity = expectedKind==='js-ts'?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY;
+    if (!parsed) throw new AdminError(400, 'JS 播放索引格式、源身份或范围无效。');
+    identity = jsPacketIndexIdentity(parsed);
+    if (identity.kind !== expectedKind) throw new AdminError(409, 'JS 播放索引类型与请求不匹配。');
     if (typeof identityOrKind !== 'string' && identityArgs(identityOrKind).some((v,i)=>v !== identityArgs(identity)[i]))
       throw new AdminError(409, 'JS TS 索引身份与请求不匹配。');
     if (parsed.kind === 'js-ts-packets') semanticHeader = tsCommittedHeader(parsed);

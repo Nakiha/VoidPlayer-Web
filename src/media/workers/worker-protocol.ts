@@ -70,7 +70,7 @@ type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: Dec
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
   'tune-vvc': Command<{ axis?: import('../contract.ts').VvcTuningAxis }, import('../contract.ts').VvcTuningState | null>;
-  'prepare-js':Command<{input:PacketInput;sourceVersion:string;format:'ts'|'matroska';persistent?:boolean},{admitted:true;session:string;index:import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;
+  'prepare-js':Command<{input:PacketInput;sourceVersion:string;format:import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketFormat;persistent?:boolean},{admitted:true;session:string;index:import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;
   'analysis-js-index':Command<Empty,import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex>;
   'prepare-ts': Command<{input: PacketInput; sourceVersion: string},
     {admitted: true; session: string; index: import('../../../shared/media/indexing/ts-packet-index.ts').TsPacketIndex} | {admitted: false; reason: string}>;
@@ -78,7 +78,7 @@ export interface PacketCommands {
   'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: PacketInput }, PreparedFlv>;
   native: Command<{ threads?: DecodeThreads }, PacketInitResult | null>;
-  init: Command<SoftwareOptions & { input: PacketInput; forceWasm?: boolean } & ({container: 'ts'|'matroska'; sourceVersion: string; preparedTsSession?: string;persistent?:boolean} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
+  init: Command<SoftwareOptions & { input: PacketInput; forceWasm?: boolean } & ({container: import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketFormat; sourceVersion: string; preparedTsSession?: string;persistent?:boolean} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
   'analysis-ts-index': Command<Empty, import('../../../shared/media/indexing/ts-packet-index.ts').TsPacketIndex>;
   'analysis-flv-index': Command<Empty, import('../../../shared/media/indexing/flv-index-cache.ts').FlvIndexDocument>;
   'analysis-index': Command<Empty, import('../../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>;

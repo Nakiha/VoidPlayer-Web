@@ -1,3 +1,4 @@
+import type { JsPacketFormat } from '../../../shared/media/containers/matroska-packet-index.ts';
 import {MediaOpenError} from '../../../shared/media/io/media-errors.ts';
 import { openPacketMedia } from './packet-media.ts';
 import { WorkerRpc } from '../workers/worker-rpc.ts';
@@ -13,7 +14,7 @@ export type JsContainerAdmission = {
 /** Select the declared combination before decoding. Successful admission keeps
  * the actual source/index in its Worker; serialized metadata is not authority.
  * Only an explicit unsupported combination selects the unmigrated route. */
-export async function admitJsContainerMedia(format:'ts'|'matroska',input:RandomAccessInput,meta:MediaMeta,sourceVersion:string,deps:FallbackDeps):Promise<JsContainerAdmission> {
+export async function admitJsContainerMedia(format:JsPacketFormat,input:RandomAccessInput,meta:MediaMeta,sourceVersion:string,deps:FallbackDeps):Promise<JsContainerAdmission> {
   loadAborted(deps.signal);
   const worker = deps.workerFactory ? deps.workerFactory() : new Worker(new URL('./packet-worker.ts',import.meta.url),{type:'module'});
   const rpc = new WorkerRpc<PacketCommands>(worker,undefined,deps.onProgress);

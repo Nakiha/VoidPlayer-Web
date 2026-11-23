@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../../../../server/config.ts';
 import { startService } from '../../../../server/runtime.ts';
+import { annexBFixture } from '../../../../test/helpers/media/annex-b-fixture.ts';
 import { isPlayerAsset, writePlayerWorker } from '../../../pwa/build.mjs';
 
 export async function verifyOfflinePlayer(browser, engine, staticDir) {
@@ -56,7 +57,7 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       assert.equal(new URL(handler.action, base).href, base + '/?open=files');
       assert.equal(parsed.manifest.launchHandler.clientMode, 'kNavigateNew');
       const extensions = Object.values(handler.accept).flat();
-      for (const ext of ['.mp4', '.mkv']) assert.ok(extensions.includes(ext));
+      for (const ext of ['.mp4', '.mkv', '.h264', '.avc', '.h265', '.hevc', '.h266', '.vvc']) assert.ok(extensions.includes(ext));
       for (const ext of ['.voidplayer', '.ts', '.gz', '.json']) assert.ok(!extensions.includes(ext));
       await session.detach();
       await first.evaluate(() => {
@@ -129,7 +130,7 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     await admin.close();
     const fixture = path.resolve('fixtures/video/ffv1_yuv422p_8bit.mkv');
     const fixtureB = path.resolve('fixtures/video/ffv1_yuv444p_8bit.mkv');
-    async function deliverFixture(filename, fixturePath) {
+    async function deliverBytes(filename, bytes) {
       await offline.evaluate(async ({ filename, encoded }) => {
         const root = await navigator.storage.getDirectory();
         const video = await root.getFileHandle(filename, { create: true });
@@ -137,8 +138,18 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
         await stream.write(Uint8Array.from(atob(encoded), ch => ch.charCodeAt(0)));
         await stream.close();
         window.deliverFiles({ files: [video] });
-      }, { filename, encoded: (await readFile(fixturePath)).toString('base64') });
+      }, { filename, encoded: bytes.toString('base64') });
     }
+    const deliverFixture = async (name, file) => deliverBytes(name, await readFile(file));
+    const raw = await annexBFixture(path.resolve('fixtures/video/h266_10s_1920x1080.mp4'), 'vvc', 16);
+    if (engine === 'chromium') await deliverBytes('offline-clip.h266', raw.bytes);
+    else await offline.locator('#file-A').setInputFiles({ name: 'offline-clip.h266', mimeType: 'video/h266', buffer: raw.bytes });
+    await offline.waitForFunction(() => window.voidPlayer.getState().tracks.some(track => track.name === 'offline-clip.h266' && track.frame));
+    assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].container), 'annexb');
+    await offline.evaluate(() => window.voidPlayer.step(1));
+    assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].frame.ptsUs), 16683);
+    await offline.locator('#remove-track-A').click();
+    await offline.waitForFunction(() => !window.voidPlayer.getState().tracks.length);
     if (engine === 'chromium') await deliverFixture('offline-clip.mkv', fixture);
     else await offline.locator('#file-A').setInputFiles(fixture);
     await offline.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.frame, null, { timeout: 45000 });

@@ -5,7 +5,8 @@ import { TsPacketSource } from '../../../shared/media/containers/ts-packet-sourc
 import type { TsPlaybackPrefix } from '../../../shared/media/containers/ts-packet-source.ts';
 import {TsContainerPacketSource} from '../../../shared/media/containers/mpeg2-ts-packet-source.ts';
 import {MatroskaPacketSource} from '../../../shared/media/containers/matroska-packet-source.ts';
-import type {JsPacketIndex} from '../../../shared/media/containers/matroska-packet-index.ts';
+import { AnnexBPacketSource } from '../../../shared/media/containers/annex-b-packet-source.ts';
+import type { JsPacketFormat, JsPacketIndex } from '../../../shared/media/containers/matroska-packet-index.ts';
 import {jsPictureStream} from '../../../shared/media/containers/matroska-packet-index.ts';
 import {jsDecodeIndex} from '../indexing/js-decode-index.ts';
 import { PacketTimeline } from './packet-timeline.ts';
@@ -25,9 +26,9 @@ import {loadServerJsIndex} from '../indexing/js-packet-index-client.ts';
  * the engine has no FFmpeg container entry or alternative demux path. */
 export class JsContainerEngine {
   private reader: RangeReader;
-  private format:'ts'|'matroska';
+  readonly format: JsPacketFormat;
   private controller = new AbortController();
-  private source?: TsPacketSource | TsContainerPacketSource | MatroskaPacketSource;
+  private source?: TsPacketSource | TsContainerPacketSource | MatroskaPacketSource | AnnexBPacketSource;
   private input:RandomAccessInput;private sourceVersion:string;private persistent:boolean;
   private index?: PacketDecodeIndex;
   private document?: JsPacketIndex;
@@ -117,7 +118,7 @@ export class JsContainerEngine {
   }
 
   private updateStatistics(index: Pick<JsPacketIndex,'packets'>) {
-    this.statistics = {packets: index.packets.map(packet=>({pts:packet.timing.pts===null?null:packet.ptsUs,
+    this.statistics = {packets: index.packets.map(packet=>({pts:packet.timing.pts===null&&this.format!=='annexb'?null:packet.ptsUs,
       dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6*packet.timing.timebase[0]/packet.timing.timebase[1]),size:packet.size,key:packet.key}))};
   }
 
@@ -127,8 +128,10 @@ export class JsContainerEngine {
       times:index.order.map(au=>index.packets[au].pts-origin),durations:index.durations,indexSource:this.indexOrigin,
       seekAnchorCount:index.packets.filter(packet=>packet.key).length,jsIndexPacketsScanned:this.indexPacketsScanned,
       indexIntegrity:document.indexIntegrity==='prefix'?'prefix' as const:'complete' as const,indexTruncatedAt:document.indexTruncatedAt,
-      indexWarning:document.kind==='js-ts-packets'&&document.recovery?'广播采集恢复：保留原始时钟；部分尾包，画面身份未验证。':
-        document.indexIntegrity==='prefix'?'封装损坏：仅保留已确认的有效前段。':undefined };
+      ...(document.kind === 'js-annexb-packets' ? { timelineSource: 'annex-b' as const,
+        annexBFrameRate: { fps: document.frameRate, source: document.rateSource } } : {}),
+      ...(document.kind === 'js-ts-packets' && document.recovery ? { indexWarning: '广播采集恢复：保留原始时钟；部分尾包，画面身份未验证。' }
+        : document.indexIntegrity === 'prefix' ? { indexWarning: '封装损坏：仅保留已确认的有效前段。' } : {}) };
   }
 
   private checkContinuation(document: Pick<TsPacketIndex,'codec'|'pid'|'configuration'|'packets'>, index: PacketDecodeIndex) {
@@ -198,7 +201,7 @@ export class JsContainerEngine {
     return this.indexTask;
   }
   constructor(input: RandomAccessInput, sourceVersion: string,
-    decoders: {native?:typeof nativePacketDecoder;software?:typeof wasmPacketDecoder;persistent?:boolean} = {}, format:'ts'|'matroska'='ts') {
+    decoders: {native?:typeof nativePacketDecoder;software?:typeof wasmPacketDecoder;persistent?:boolean} = {}, format: JsPacketFormat = 'ts') {
     this.format=format;this.reader = new RangeReader(input);
     this.input=input;this.sourceVersion=sourceVersion;this.persistent=!!decoders.persistent;
     this.createNative=decoders.native??nativePacketDecoder;
@@ -252,7 +255,8 @@ export class JsContainerEngine {
       const bytes=await this.reader.read(at,length);
       return bytes;
     },close:()=>this.reader.close()};
-    this.source=this.format==='ts'?new TsContainerPacketSource(sourceReader,this.sourceVersion,this.controller.signal):new MatroskaPacketSource(sourceReader,this.sourceVersion,this.controller.signal);
+    const Source = this.format === 'ts' ? TsContainerPacketSource : this.format === 'matroska' ? MatroskaPacketSource : AnnexBPacketSource;
+    this.source = new Source(sourceReader, this.sourceVersion, this.controller.signal);
     this.document = await this.source!.open(cached,onIndexProgress,libraryPlayback);
     this.indexPacketsScanned=this.source!.packetsRead;
     this.check();
@@ -297,7 +301,7 @@ export class JsContainerEngine {
   }
   private decoderInfo() {
     const decoder = this.timeline!.decoder;
-    return { codec: this.document!.codec,demuxBackend:this.document!.kind,indexBackend:this.document!.kind==='js-ts-packets'?'js-ts-packet-index':'js-matroska-packet-index', decoder: decoder.kind, hardwareAcceleration: decoder.hardwareAcceleration,
+    return { codec: this.document!.codec,demuxBackend:this.document!.kind,indexBackend:`js-${this.format}-packet-index`, decoder: decoder.kind, hardwareAcceleration: decoder.hardwareAcceleration,
       width: this.outputSize!.width, height: this.outputSize!.height, ...decoder.metadata?.() };
   }
   private timed(frame: PacketFrame): PacketFrame {

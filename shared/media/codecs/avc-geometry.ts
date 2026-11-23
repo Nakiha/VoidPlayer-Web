@@ -12,7 +12,7 @@ class Bits {
   se(){const n=this.ue();return n&1?(n+1)/2:-n/2;}
 }
 const ratios=[[1,1],[1,1],[12,11],[10,11],[16,11],[40,33],[24,11],[20,11],[32,11],[80,33],[18,11],[15,11],[64,33],[160,99],[4,3],[3,2],[2,1]];
-export function parseAvcSpsDetails(nal:Uint8Array,aspectWitness=false) {
+export function parseAvcSequence(nal:Uint8Array,aspectWitness=false) {
   if((nal[0]&31)!==7)throw new Error('not AVC SPS');
   const rbsp=[];for(let i=1;i<nal.length;i++){if(nal[i]===3&&i>=3&&nal[i-1]===0&&nal[i-2]===0)continue;rbsp.push(nal[i]);}
   const b=new Bits(Uint8Array.from(rbsp));const profile=b.read(8);b.skip(8);const levelIdc=b.read(8),id=b.ue(31);
@@ -21,7 +21,13 @@ export function parseAvcSpsDetails(nal:Uint8Array,aspectWitness=false) {
     chroma=b.ue(3);if(chroma===3)separate=b.read(1);lumaBitDepth+=b.ue(6);b.ue(6);b.skip(1);
     if(b.read(1))for(let i=0;i<(chroma===3?12:8);i++)if(b.read(1)){let last=8,next=8;for(let j=0;j<(i<6?16:64);j++){if(next)next=(last+b.se()+256)%256;last=next||last;}}
   }
-  b.ue(12);const poc=b.ue(2);if(poc===0)b.ue(12);else if(poc===1){b.skip(1);b.se();b.se();for(let i=b.ue(255);i>0;i--)b.se();}
+  const frameNumBits=b.ue(12)+4,pocType=b.ue(2),pocBits=pocType===0?b.ue(12)+4:0;
+  let deltaAlwaysZero=false,nonRefOffset=0,topToBottomOffset=0;
+  const referenceOffsets:number[]=[];
+  if(pocType===1){
+    deltaAlwaysZero=!!b.read(1);nonRefOffset=b.se();topToBottomOffset=b.se();
+    for(let i=b.ue(255);i>0;i--)referenceOffsets.push(b.se());
+  }
   const maxReferenceFrames=b.ue(16);b.skip(1);const codedWidth=(b.ue(2047)+1)*16,mbHeight=b.ue(2047)+1;
   const frameOnly=b.read(1);if(!frameOnly)b.skip(1);b.skip(1);
   const codedHeight=mbHeight*16*(2-frameOnly),array=separate?0:chroma;
@@ -29,18 +35,27 @@ export function parseAvcSpsDetails(nal:Uint8Array,aspectWitness=false) {
   let x=0,y=0,right=0,bottom=0;
   if(b.read(1)){x=b.ue(32768)*subX;right=b.ue(32768)*subX;y=b.ue(32768)*subY;bottom=b.ue(32768)*subY;}
   const width=codedWidth-x-right,height=codedHeight-y-bottom;if(width<=0||height<=0)throw new Error('invalid AVC crop');
-  let sarNum=1,sarDen=1,sarSpecified=false,maxReorderFrames:number|null=null;
+  let sarNum=1,sarDen=1,sarSpecified=false,maxReorderFrames:number|null=null,frameRate:number|undefined;
   if(b.read(1)){
     if(b.read(1)){const id=b.read(8);sarSpecified=id!==0;if(id===255){sarNum=b.read(16);sarDen=b.read(16);}else if(ratios[id])[sarNum,sarDen]=ratios[id];else throw new Error('invalid AVC SAR');}
     if(b.read(1))b.skip(1);if(b.read(1)){b.skip(4);if(b.read(1))b.skip(24);}if(b.read(1)){b.ue();b.ue();}
-    if(b.read(1))b.skip(65);
+    if(b.read(1)){
+      const units=b.read(32),scale=b.read(32);
+      b.skip(1); // fixed_frame_rate_flag
+      if(units&&scale)frameRate=scale/(2*units);
+    }
     const hrd=()=>{const count=b.ue(31);b.skip(8);for(let i=0;i<=count;i++){b.ue();b.ue();b.skip(1);}b.skip(20);};
     const nalHrd=b.read(1);if(nalHrd)hrd();const vclHrd=b.read(1);if(vclHrd)hrd();if(nalHrd||vclHrd)b.skip(1);b.skip(1);
     if(b.read(1)){b.skip(1);b.ue();b.ue();b.ue();b.ue();maxReorderFrames=b.ue(16);b.ue(16);}
   }
   if(!sarNum||!sarDen)throw new Error('invalid AVC SAR');
   const geometry: AvcGeometry = {codedWidth,codedHeight,x,y,width,height,sarNum,sarDen,interlaced:!frameOnly,maxReorderFrames,...(aspectWitness?{sarSpecified}:{})};
-  return { geometry, id, profileIdc: profile, levelIdc, maxReferenceFrames, lumaBitDepth, chromaFormatIdc: chroma };
+  return { geometry, id, profileIdc: profile, levelIdc, maxReferenceFrames, lumaBitDepth, chromaFormatIdc: chroma,
+    frameRate, frameNumBits, pocType, pocBits, separate, deltaAlwaysZero, nonRefOffset, topToBottomOffset, referenceOffsets };
+}
+export function parseAvcSpsDetails(nal: Uint8Array, aspectWitness = false) {
+  const { geometry, id, profileIdc, levelIdc, maxReferenceFrames, lumaBitDepth, chromaFormatIdc } = parseAvcSequence(nal, aspectWitness);
+  return { geometry, id, profileIdc, levelIdc, maxReferenceFrames, lumaBitDepth, chromaFormatIdc };
 }
 export function parseAvcSps(nal:Uint8Array,aspectWitness=false):AvcGeometry {
   return parseAvcSpsDetails(nal,aspectWitness).geometry;

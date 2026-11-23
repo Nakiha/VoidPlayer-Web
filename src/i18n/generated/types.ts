@@ -1162,6 +1162,9 @@ export interface Sources {
   "theme.invalidBase": "请输入有效的 HEX 基调色，例如 #EEE7DE";
   "toast.dismissNotification": "关闭通知";
   "tracks.accelerationRequest": "加速请求";
+  "tracks.annexBDefaultFps": "{fps} fps（默认）";
+  "tracks.annexBFrameRate": "裸码流播放帧率";
+  "tracks.annexBSourceFps": "{fps} fps（码流标称）";
   "tracks.audioAbsent": "确认无音频";
   "tracks.audioBlocked": "浏览器未允许音频，请关闭后再次点击喇叭";
   "tracks.audioChannels": "声道数";
@@ -2436,6 +2439,9 @@ export interface MessageParameters {
   "theme.invalidBase": {  };
   "toast.dismissNotification": {  };
   "tracks.accelerationRequest": {  };
+  "tracks.annexBDefaultFps": { "fps": string | number };
+  "tracks.annexBFrameRate": {  };
+  "tracks.annexBSourceFps": { "fps": string | number };
   "tracks.audioAbsent": {  };
   "tracks.audioBlocked": {  };
   "tracks.audioChannels": {  };

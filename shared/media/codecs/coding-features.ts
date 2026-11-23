@@ -66,8 +66,8 @@ function skipVvcSubpictures(b: ParameterBits, columns: number, rows: number) {
   const idBits = b.ue(15) + 1;
   if (b.read(1) && b.read(1)) b.skip(count * idBits);
 }
-function vvcSps(b: ParameterBits) {
-  const id = b.read(4); b.skip(4);
+export function vvcSps(b: ParameterBits) {
+  const id = b.read(4), vpsId = b.read(4);
   const sublayers = b.read(3), chromaFormatIdc = b.read(2), ctuSize = 2 ** (5 + b.read(2));
   const profile = b.read(1) ? readVvcProfile(b, sublayers) : undefined;
   b.skip(1); if (b.read(1)) b.skip(1); // GDR and reference picture resampling
@@ -75,7 +75,7 @@ function vvcSps(b: ParameterBits) {
   if (!width || !height || ctuSize > 128) throw Error('Invalid VVC picture geometry');
   if (b.read(1)) for (let i = 0; i < 4; i++) b.ue();
   if (b.read(1)) skipVvcSubpictures(b, Math.ceil(width / ctuSize), Math.ceil(height / ctuSize));
-  return { id, ...profile, chromaFormatIdc, ctuSize, lumaBitDepth: 8 + b.ue(8), wavefront: !!b.read(1), entryPointOffsets: !!b.read(1) };
+  return { id, vpsId, sublayers, ...profile, chromaFormatIdc, ctuSize, lumaBitDepth: 8 + b.ue(8), wavefront: !!b.read(1), entryPointOffsets: !!b.read(1) };
 }
 function tileCount(b: ParameterBits, explicit: number, remaining: number, max: number) {
   let size = 0;
@@ -123,7 +123,10 @@ export function readCodingFeatures(codec: string, description: Uint8Array, first
         const b = payload(nal, 1);
         fields = { id: b.ue(255), spsId: b.ue(31), entropyCoding: b.read(1) ? 'CABAC' : 'CAVLC' };
       } else if (codec === 'hevc') fields = kind === 'SPS' ? hevcSpsFeatures(nal) : hevcPps(payload(nal, 2));
-      else fields = kind === 'SPS' ? vvcSps(payload(nal, 2)) : vvcPps(payload(nal, 2));
+      else if (kind === 'SPS') {
+        const { vpsId: _vpsId, sublayers: _sublayers, ...features } = vvcSps(payload(nal, 2));
+        fields = features;
+      } else fields = vvcPps(payload(nal, 2));
       report.parameterSets.push({ kind, layer: n.layer, ...fields });
     } catch { report.unreadableParameterSets++; }
   }

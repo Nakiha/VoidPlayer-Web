@@ -4673,6 +4673,18 @@
     "source": "加速请求",
     "translation": "Acceleration request"
   },
+  "tracks.annexBDefaultFps": {
+    "source": "{fps} fps（默认）",
+    "translation": "{fps} fps (default)"
+  },
+  "tracks.annexBFrameRate": {
+    "source": "裸码流播放帧率",
+    "translation": "Elementary stream frame rate"
+  },
+  "tracks.annexBSourceFps": {
+    "source": "{fps} fps（码流标称）",
+    "translation": "{fps} fps (nominal bitstream rate)"
+  },
   "tracks.audioAbsent": {
     "source": "确认无音频",
     "translation": "No audio confirmed"

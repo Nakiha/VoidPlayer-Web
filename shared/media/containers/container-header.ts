@@ -1,4 +1,6 @@
-export type ContainerKind = 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
+import { annexBCodec } from './annex-b-header.ts';
+
+export type ContainerKind = 'annexb' | 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
 /** Routing hint, not validation: the selected demuxer still validates input.
  * No extension dispatch and no decoder initialization to recognize a format. */
 export function containerFromHeader(bytes: Uint8Array): ContainerKind {
@@ -14,5 +16,5 @@ export function containerFromHeader(bytes: Uint8Array): ContainerKind {
   for(const stride of [188,192,204])for(let start=0;start<stride&&start+stride*2<bytes.length;start++) {
     if([0,1,2].every(i=>bytes[start+stride*i]===0x47))return 'mpegts';
   }
-  return 'other';
+  return annexBCodec(bytes) ? 'annexb' : 'other';
 }

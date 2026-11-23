@@ -15,8 +15,10 @@ const evidence = path.join(root, '.run/sites-browser', engine);
 await mkdir(evidence, { recursive: true });
 const video = path.join(evidence, 'ci_h264_smoke.mp4');
 const software = path.join(evidence, 'local-ffv1.mkv');
+const raw = path.join(evidence, 'local-avc.h264');
 const avi = path.join(evidence, 'local-mjpeg.avi');
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=128x72:rate=10', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '10', '-bf', '0', video]);
+execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', video, '-c:v', 'copy', '-f', 'h264', raw]);
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=64x48:rate=10', '-t', '1', '-c:v', 'mjpeg', avi]);
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=64x48:rate=10', '-t', '1', '-c:v', 'ffv1', software]);
 await assert.rejects(access(path.join(dist, 'admin/index.html')));
@@ -122,15 +124,19 @@ try {
     assert.ok(remote.marks.includes(markId));
     // Real packet WASM and the FFmpeg container/FileReaderSync path both work without isolation.
     const decoders = [];
-    for (const file of [software, avi]) {
+    for (const file of [software, avi, raw]) {
       console.log('RUN Sites ' + engine + ' isolated=' + isolated + ' ' + path.basename(file));
       await page.evaluate(() => window.voidPlayer.removeTrack('A'));
       await page.locator('#file-A').setInputFiles(file);
       await page.waitForFunction(() => !window.voidPlayer.getState().busy && window.voidPlayer.getState().tracks[0]?.frame);
       const track = await page.evaluate(() => window.voidPlayer.getState().tracks[0]);
-      assert.equal(track.decoder, 'ffmpeg-wasm');
-      if (!isolated) assert.equal(track.coreVariant, 'single-thread');
+      if (file === raw) {
+        assert.equal(track.container, 'annexb');
+        assert.equal(track.annexBFrameRate.fps, 10);
+      } else assert.equal(track.decoder, 'ffmpeg-wasm');
+      if (!isolated && track.decoder === 'ffmpeg-wasm') assert.equal(track.coreVariant, 'single-thread');
       await page.evaluate(() => window.voidPlayer.step(1));
+      if (file === raw) assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks[0].frame.ptsUs), 100000);
       decoders.push({ name: track.name, decoder: track.decoder, coreVariant: track.coreVariant });
     }
     await page.waitForTimeout(1200); // One local sync tick must also stay off the network.

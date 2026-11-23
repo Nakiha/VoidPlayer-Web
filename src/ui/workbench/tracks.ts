@@ -108,6 +108,10 @@ export function createTracksPane(shared: WorkbenchShared) {
       : track.hardwareAcceleration === 'prefer-hardware' ? t(msg('tracks.preferHardwareActualHardwareUseUnverified', '硬件优先（实际硬件使用未验证）')) : t(msg('tracks.browserDefault', '浏览器自动选择'));
     return [
       [t(msg("tracks.codec", "编码")), track.codec], [t(msg("tracks.dimensions", "尺寸")), `${track.width} × ${track.height}`],
+      ...(track.annexBFrameRate ? [[t(msg('tracks.annexBFrameRate', '裸码流播放帧率')),
+        t(track.annexBFrameRate.source === 'default'
+          ? msg('tracks.annexBDefaultFps', '{fps} fps（默认）') : msg('tracks.annexBSourceFps', '{fps} fps（码流标称）'),
+        { fps: Number(track.annexBFrameRate.fps.toFixed(3)) })]] : []),
       ...(track.indexWarning ? [[t(msg("tracks.fileIntegrity", "文件完整性")), track.indexWarning]] : []),
       ...(track.indexState ? [[t(msg("tracks.frameIndex", "帧索引")), track.indexState === 'building' ? t(msg("tracks.durationCoversIndexedPortion", "{p0} · 时长为已索引范围"), { p0: indexProgressLabel(track) }) : track.indexState === 'error' ? t(msg("tracks.indexFailed", "索引失败：{p0}"), { p0: track.indexError ?? '' }) : track.indexSource === 'server' ? t(msg("tracks.reusedServerCache", "已复用服务器缓存")) : t(msg("tracks.complete", "已完成"))]] : []),
       [t(msg("tracks.duration", "时长")), formatTime(track.durationUs)], [t(msg("colorFlow.decode", "解码")), track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],

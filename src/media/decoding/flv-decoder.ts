@@ -6,7 +6,7 @@ import { checkedHeap } from '../../../shared/wasm/heap.ts';
 export { checkedHeap } from '../../../shared/wasm/heap.ts';
 import type {PacketDecodeIndex,PacketDecodePacket} from '../../../shared/media/indexing/packet-decode-index.ts';
 export type {PacketDecodeIndex,PacketDecodePacket} from '../../../shared/media/indexing/packet-decode-index.ts';
-import {isAnnexB} from '../../../shared/media/codecs/nal-framing.ts';
+import { isAnnexB, nalRanges } from '../../../shared/media/codecs/nal-framing.ts';
 import { avcHasIdr, avcGeometry, nativeAvcCompatible, avcInBandDescription } from '../../../shared/media/codecs/avc-geometry.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { videoFrameDescription } from './frame-resource.ts';
@@ -27,6 +27,13 @@ export interface PacketFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: im
 export type FlvFrame = PacketFrame;
 type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description' | 'codecParameters'>;
 function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | null {
+  if (index.codec === 'h264' && isAnnexB(index.description)) {
+    const bytes = index.description;
+    const sps = nalRanges('h264', bytes, bytes).find(nal => (bytes[nal.offset] & 31) === 7);
+    if (!sps || sps.size < 4) return null;
+    const profile = Array.from(bytes.subarray(sps.offset + 1, sps.offset + 4), byte => byte.toString(16).padStart(2, '0')).join('');
+    return { codec: `avc1.${profile}` };
+  }
   if(index.codec==='hevc'&&isAnnexB(index.description))return hevcAnnexBDecoderConfig(index.description);
   if(['ffv1','mpeg2video','mpeg4','mjpeg','prores'].includes(index.codec))return null;
   return index.codec === 'vp8' ? {codec:'vp8'} : index.codec === 'vp9' ? {codec:'vp09.00.10.08'} : flvDecoderConfig({...index,codec:index.codec as FlvIndex['codec']});
@@ -52,7 +59,8 @@ export const wasmPacketDecoder = wasmFlvDecoder;
 
 export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?: VideoDecoderConfig, diagnostic: (event: Record<string, unknown>) => void = () => {}): Promise<PacketDecoder | null> {
   if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description))){ diagnostic({ reason: 'avc-reorder-policy', codec: index.codec }); return null; }
-  const initialReorder = index.codec === 'hevc' ? hevcReorderFrames(index.description) : 0;
+  const initialReorder = index.codec === 'hevc' ? hevcReorderFrames(index.description)
+    : index.codec === 'h264' && isAnnexB(index.description) ? avcGeometry(index.description)?.maxReorderFrames ?? 0 : 0;
   if (initialReorder === null) { diagnostic({ reason: 'hevc-reorder-unknown', codec: index.codec }); return null; }
   const parsed = initialConfig ?? packetDecoderConfig(index);
   if (!parsed || typeof VideoDecoder === 'undefined') { diagnostic({ reason: !parsed ? 'no-native-config' : 'webcodecs-unavailable', codec: index.codec }); return null; }

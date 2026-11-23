@@ -11,7 +11,7 @@ export type MediaInfo = {
   jsIndexPacketsScanned?:number;
   demuxBackend?:string;
   indexBackend?:string;
-  container?: 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
+  container?: import('./containers/container-header.ts').ContainerKind;
   indexKind?: 'packet-offsets' | 'packet-locators' | 'timestamps' | 'container';
   seekStrategy?: 'packet-anchor' | 'demuxer-keyframe' | 'demuxer-timestamp' | 'browser';
   seekAnchorCount?: number;
@@ -31,7 +31,8 @@ export type MediaInfo = {
   indexIntegrity?: import('./indexing/index-integrity.ts').IndexIntegrity;
   indexTruncatedAt?: number;
   /** Explicit recovery provenance; original packet timestamps remain in the demux index. */
-  timelineSource?: 'hevc-poc';
+  timelineSource?: 'hevc-poc' | 'annex-b';
+  annexBFrameRate?: { fps: number; source: 'bitstream' | 'default' };
   id: string; name: string; size: number; lastModified: number;
   source?: { kind: 'library'; id: string; url: string };
   coreVariant?: 'single-thread' | 'multi-thread';

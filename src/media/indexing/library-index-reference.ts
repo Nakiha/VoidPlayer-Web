@@ -33,7 +33,7 @@ export async function loadLibraryPlaybackContainer(url: string, size: number, re
   const value = await response.json();
   const container: import('../../../shared/media/containers/container-header.ts').ContainerKind = value.container;
   if (value.id !== own.id || value.version !== own.version || value.size !== size
-    || !['flv', 'isobmff', 'mpegts', 'matroska', 'other'].includes(container))
+    || !['flv', 'isobmff', 'mpegts', 'matroska', 'annexb', 'other'].includes(container))
     throw new MediaOpenError('input', '服务端媒体信息与当前版本不一致。');
   return container;
 }

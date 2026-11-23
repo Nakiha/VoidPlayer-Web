@@ -40,7 +40,7 @@ function hevcSpsHeader(nal: Uint8Array) {
     if (reorder > buffering) throw new Error('invalid HEVC reorder bound');
     maxReorderFrames = Math.max(maxReorderFrames, reorder);
   }
-  return { b, id, profileSpace, highTier, profileIdc, levelIdc, chroma, lumaBitDepth, pocBits, maxReorderFrames, codedWidth, codedHeight, left, top, width, height };
+  return { b, id, profileSpace, highTier, profileIdc, levelIdc, chroma, separate, lumaBitDepth, pocBits, maxReorderFrames, codedWidth, codedHeight, left, top, width, height };
 }
 export function hevcSpsFeatures(nal: Uint8Array) {
   const { b, id, profileSpace, highTier, profileIdc, levelIdc, chroma, lumaBitDepth, maxReorderFrames, codedWidth, codedHeight } = hevcSpsHeader(nal);
@@ -48,7 +48,7 @@ export function hevcSpsFeatures(nal: Uint8Array) {
   if (ctuLog2 > 6) throw Error('Invalid HEVC CTU size');
   return { id, codedWidth, codedHeight, profileSpace, highTier, profileIdc, levelIdc, chromaFormatIdc: chroma, lumaBitDepth, maxReorderFrames, ctuSize: 2 ** ctuLog2 };
 }
-function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void,aspectWitness=false): HevcGeometry {
+function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void,aspectWitness=false,timing?:(rate:number)=>void): HevcGeometry {
   const { b, pocBits, codedWidth, codedHeight, left, top, width, height } = hevcSpsHeader(nal);
   for (let i = 0; i < 6; i++) b.ue(32);
   if (b.read(1) && b.read(1)) {
@@ -81,17 +81,31 @@ function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void,a
       else if (ratios[id]) [sarNum, sarDen] = ratios[id];
       else throw new Error('reserved aspect ratio');
     }
-    if(fieldSequence){
+    if(fieldSequence || timing){
       if(b.read(1))b.skip(1); // overscan
       if(b.read(1)){b.skip(4);if(b.read(1))b.skip(24);} // video signal / colour description
       if(b.read(1)){b.ue();b.ue();} // chroma locations
-      b.skip(1);fieldSequence(!!b.read(1)); // neutral_chroma_indication / field_seq_flag
+      b.skip(1);const fields=!!b.read(1);fieldSequence?.(fields); // neutral_chroma_indication / field_seq_flag
+      if(timing){
+        b.skip(1); // frame_field_info_present_flag
+        if (b.read(1)) for (let i = 0; i < 4; i++) b.ue(16384); // default display window
+        if(b.read(1)){
+          const units=b.read(32),scale=b.read(32),ticks=b.read(1)?b.ue()+1:1;
+          if(units&&scale)timing(scale/(units*ticks));
+        }
+      }
     }
   }else fieldSequence?.(false);
   if (!sarNum || !sarDen) throw new Error('invalid sample aspect ratio');
   return { codedWidth, codedHeight, x: left, y: top, width, height, sarNum, sarDen, ...(aspectWitness?{sarSpecified}:{}) };
 }
 export function parseHevcSpsGeometry(nal:Uint8Array,aspectWitness=false):HevcGeometry{return parseSpsGeometry(nal,undefined,aspectWitness);}
+export function hevcAnnexBSequence(nal: Uint8Array) {
+  const { id, pocBits, separate } = hevcSpsHeader(nal);
+  let interlaced = false, frameRate: number | undefined;
+  parseSpsGeometry(nal, value => { interlaced = value; }, false, rate => { frameRate = rate; });
+  return { id, pocBits, interlaced, separate, frameRate };
+}
 /** Raw SPS field syntax, independent of container keys and output dimensions. */
 export function hevcFieldPictures(description:Uint8Array){let fields=false;for(const sps of hevcSpses(description))parseSpsGeometry(sps,value=>{fields ||=value;});return fields;}
 function hevcSpses(description: Uint8Array) {

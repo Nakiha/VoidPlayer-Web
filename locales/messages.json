@@ -5033,6 +5033,22 @@
     "source": "加速请求",
     "params": {}
   },
+  "tracks.annexBDefaultFps": {
+    "source": "{fps} fps（默认）",
+    "params": {
+      "fps": "string | number"
+    }
+  },
+  "tracks.annexBFrameRate": {
+    "source": "裸码流播放帧率",
+    "params": {}
+  },
+  "tracks.annexBSourceFps": {
+    "source": "{fps} fps（码流标称）",
+    "params": {
+      "fps": "string | number"
+    }
+  },
   "tracks.audioAbsent": {
     "source": "确认无音频",
     "params": {}
