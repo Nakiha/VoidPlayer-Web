@@ -27,14 +27,18 @@ test('MP4 software admission preserves JS container/codec failures without a WAS
 });
 
 test('HTTP fallback probes bounded bytes then passes URL and metadata without a whole-file memory cap', async () => {
-  const meta = { name: 'test.mp4', size: 10 * 1024 ** 3, lastModified: 1 };
+  const meta = { name: 'test.mpg', size: 10 * 1024 ** 3, lastModified: 1 };
   const progress: string[] = [];
   const failure = new Error('WASM init 超时');
   let attempted = 0;
+  let probes = 0;
   const saved = globalThis.fetch;
   globalThis.fetch = async (_url, init) => {
-    assert.equal(new Headers(init?.headers).get('range'), 'bytes=0-4095');
-    return new Response(new Uint8Array(4096), { status: 206, headers: { 'content-range': `bytes 0-4095/${meta.size}` } });
+    probes++;
+    assert.equal(new Headers(init?.headers).get('range'), 'bytes=0-1023');
+    const header = new Uint8Array(1024);
+    header.set([0, 0, 1, 0xba]); // MPEG-PS pack start code selects the existing software fallback.
+    return new Response(header, { status: 206, headers: { 'content-range': `bytes 0-1023/${meta.size}` } });
   };
   try {
   await assert.rejects(openMediaFromUrl('http://127.0.0.1:1/video', meta, async (url, details) => {
@@ -43,6 +47,7 @@ test('HTTP fallback probes bounded bytes then passes URL and metadata without a 
     throw failure;
   }, stage => progress.push(stage)), error => error === failure);
   assert.equal(attempted, 1);
+  assert.equal(probes, 1);
   assert.deepEqual(progress, ['decode', 'decode']);
   } finally { globalThis.fetch = saved; }
 });
