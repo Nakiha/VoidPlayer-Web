@@ -122,10 +122,12 @@ export async function installOfflineControls(toasts: ToastStack, identityReady: 
     finally { prompting = false; render(); }
   }, options);
   onLanguageChange(render, lifetime.signal);
-  const manifest = document.createElement('link');
-  manifest.rel = 'manifest';
-  manifest.href = '/manifest.webmanifest';
-  document.head.append(manifest);
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const manifest = document.createElement('link');
+    manifest.rel = 'manifest';
+    manifest.href = '/manifest.webmanifest';
+    document.head.append(manifest);
+  }
   row.hidden = false;
   render();
   if (safari && !installed) void identityReady.then(() => {

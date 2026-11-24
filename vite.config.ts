@@ -138,6 +138,7 @@ export default defineConfig(({ mode }) => {
       // Fetch/compile only: bootstrap still selects the language before evaluating main.
       // The HTTP connection guide must never preload the player graph.
       return [{ tag: 'meta', attrs: { name: 'voidplayer-offline-shell', content: 'player' }, injectTo: 'head' },
+        ...(sites ? [{ tag: 'link', attrs: { rel: 'manifest', href: '/manifest.webmanifest' }, injectTo: 'head' as const }] : []),
         { tag: 'script', attrs: { 'data-startup-preload': '' }, injectTo: 'head',
         children: `if(globalThis.isSecureContext&&location.pathname!=='/connection'){for(const href of ${JSON.stringify(urls)}){const link=document.createElement('link');link.rel='modulepreload';link.crossOrigin='anonymous';link.href=href;document.head.append(link);}}` }];
     } },

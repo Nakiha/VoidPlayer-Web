@@ -23,6 +23,7 @@ execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=64x48:rate=10', '-t', '1', '-c:v', 'ffv1', software]);
 await assert.rejects(access(path.join(dist, 'admin/index.html')));
 await access(path.join(dist, 'sw.js'));
+assert.match(await readFile(path.join(dist, 'index.html'), 'utf8'), /rel="manifest" href="\/manifest\.webmanifest"/);
 const manifest = JSON.parse(await readFile(path.join(dist, 'manifest.webmanifest'), 'utf8'));
 assert.equal(manifest.display, 'standalone');
 assert.equal(manifest.file_handlers[0].action, '/?open=files');
@@ -65,6 +66,7 @@ try {
     const inputUrl = base + '/?workspace=00000000-0000-4000-8000-000000000000&annotation=unavailable&library=invalid';
     await page.goto(inputUrl);
     await page.waitForFunction(() => window.voidPlayer && !document.querySelector('#app').hasAttribute('data-initializing'));
+    assert.equal(await page.locator('link[rel="manifest"]').count(), 1);
     assert.equal(await page.evaluate(() => crossOriginIsolated), isolated);
     assert.equal(await page.locator('#identity-welcome').count(), 0);
     for (const selector of ['#workspace-share', '.connection-control', '#start-identity', '#copy-path-A', '#source-action-A'])
