@@ -29,13 +29,16 @@ const interInputs = { A: 'h266_10s_1920x1080.mp4', B: 'h265_10s_1920x1080.mp4' }
 if (!generatedOnly)
     for (const name of Object.values(interInputs)) await copyFile(path.join(repositoryRoot, 'fixtures/video', name), path.join(directory, name));
 const caseName = generatedOnly ? 'bitstream-geometry-generated' : 'bitstream-geometry';
-await withBrowserFixture({ caseName, engine, timeoutMs: engine==='chromium'?1200000:300000, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact, checkpoint }) => {
+await withBrowserFixture({ caseName, engine, roots: [directory],
+    pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact, checkpoint, phase }) => {
     await ready();
     page.setDefaultTimeout(45000);
     await page.addStyleTag({content:'.geometry-raw-capture .video-card:has(#stage-A){clip-path:none!important}.geometry-raw-capture .video-card:not(:has(#stage-A)),.geometry-raw-capture #bitstream-overlay-A,.geometry-raw-capture #bitstream-hover-A,.geometry-raw-capture #divider,.geometry-raw-capture .analysis-card{visibility:hidden!important}'});
     if (await page.locator('#identity-welcome').isVisible())
         await page.locator('#identity-welcome [data-guest]').click();
-    const call = (name, params = {}) => page.evaluate(async ({ name, params }) => window.voidPlayer.tools.find(t => t.name === name).execute(params), { name, params });
+    const call = (name, params = {}) => phase(name, () => page.evaluate(
+        async ({ name, params }) => window.voidPlayer.tools.find(t => t.name === name).execute(params), { name, params },
+    ), params);
     const library = await call('list_library'), rows = [];
     for (const input of ['local', 'library'])
         for (const decoding of ['browser', 'software'])
@@ -339,8 +342,10 @@ await withBrowserFixture({ caseName, engine, timeoutMs: engine==='chromium'?1200
         console.log(`PASS ${engine}: cropped and rotated frames, RGBA fallback and linked hover using generated fixtures`);
         return;
     }
-    await page.setViewportSize({width:1280,height:900});
-    await page.emulateMedia({colorScheme:'dark'});
+    await phase('restore-prediction-viewport', async () => {
+        await page.setViewportSize({width:1280,height:900});
+        await page.emulateMedia({colorScheme:'dark'});
+    });
     for (const slot of ['A', 'B']) await call('remove_review_track', {slot});
     for (const [slot, name] of Object.entries(interInputs)) {
         checkpoint('open-prediction-fixture', {slot, name});
