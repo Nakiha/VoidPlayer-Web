@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { analyzePicture, analyzeStream } from "../../shared/analysis/bitstream/runner.ts";
+import type { AnalysisBlock } from '../../shared/analysis/bitstream/contract.ts';
 import { assertReferenceBlock, withoutBitCount } from '../helpers/reference-block.ts';
 import { openAnalysisInput } from "../../shared/analysis/bitstream/input.ts";
 import { viewportAnalysisGops } from "../../shared/analysis/bitstream/stream.ts";
