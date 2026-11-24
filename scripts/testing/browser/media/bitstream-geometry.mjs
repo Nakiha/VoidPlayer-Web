@@ -29,8 +29,9 @@ const interInputs = { A: 'h266_10s_1920x1080.mp4', B: 'h265_10s_1920x1080.mp4' }
 if (!generatedOnly)
     for (const name of Object.values(interInputs)) await copyFile(path.join(repositoryRoot, 'fixtures/video', name), path.join(directory, name));
 const caseName = generatedOnly ? 'bitstream-geometry-generated' : 'bitstream-geometry';
-await withBrowserFixture({ caseName, engine, timeoutMs: engine==='chromium'?1200000:300000, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
+await withBrowserFixture({ caseName, engine, timeoutMs: engine==='chromium'?1200000:300000, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact, checkpoint }) => {
     await ready();
+    page.setDefaultTimeout(45000);
     await page.addStyleTag({content:'.geometry-raw-capture .video-card:has(#stage-A){clip-path:none!important}.geometry-raw-capture .video-card:not(:has(#stage-A)),.geometry-raw-capture #bitstream-overlay-A,.geometry-raw-capture #bitstream-hover-A,.geometry-raw-capture #divider,.geometry-raw-capture .analysis-card{visibility:hidden!important}'});
     if (await page.locator('#identity-welcome').isVisible())
         await page.locator('#identity-welcome [data-guest]').click();
@@ -342,16 +343,20 @@ await withBrowserFixture({ caseName, engine, timeoutMs: engine==='chromium'?1200
     await page.emulateMedia({colorScheme:'dark'});
     for (const slot of ['A', 'B']) await call('remove_review_track', {slot});
     for (const [slot, name] of Object.entries(interInputs)) {
+        checkpoint('open-prediction-fixture', {slot, name});
         if (slot === 'A') await page.locator('#file-A').setInputFiles(path.join(directory, name));
         else await call('load_library_item', {slot, id:library.entries.find(e => e.name === name).id});
         await page.waitForFunction(slot => {
             const state = window.voidPlayer.getState();
-            return !state.busy && state.tracks.some(t => t.slot === slot && t.frame && !t.failure);
+            const track = state.tracks.find(t => t.slot === slot);
+            if (track?.failure) throw new Error(JSON.stringify(track.failure));
+            return !state.busy && track?.frame;
         }, slot);
     }
     await call('seek_review', {ptsUs:66667});
     const inter = {};
     for (const slot of ['A', 'B']) {
+        checkpoint('load-inter-prediction', {slot});
         const answer = await call('request_bitstream_analysis', {slot, product:'prediction-inter'});
         const bytes = Uint8Array.from(Buffer.from(answer.payloadBase64, 'base64')), view = new DataView(bytes.buffer);
         assert.equal(bytes.length / predictionStride('prediction-inter'), answer.recordCount);
@@ -362,13 +367,15 @@ await withBrowserFixture({ caseName, engine, timeoutMs: engine==='chromium'?1200
         await page.locator(`#bitstream-overlay-${slot}`).waitFor({state:'visible'});
     }
     const drawer = page.locator('#bitstream-frame-inspector'), fold = page.locator('#bitstream-inspect-frame');
-    if (await drawer.isHidden()) await fold.evaluate(button => button.click());
+    if (await fold.getAttribute('aria-expanded') !== 'true') await fold.click();
+    await drawer.waitFor({state:'visible'});
     async function downloadFrame() {
         const [download] = await Promise.all([page.waitForEvent('download', {timeout:15000}), drawer.locator('[data-export]').click()]);
         return JSON.parse(await readFile(await download.path(), 'utf8'));
     }
     assert.equal(await drawer.locator('select, input[type="checkbox"]').count(), 0, 'frame inspector uses project menus without export toggles');
     for (const slot of ['A', 'B']) {
+        checkpoint('export-frame-with-inter-prediction', {slot});
         await drawer.locator('#bitstream-inspect-track').click();
         await page.locator(`#bitstream-inspect-track-menu:popover-open [data-value="${slot}"]`).click();
         if (slot === 'B') {
@@ -398,6 +405,7 @@ await withBrowserFixture({ caseName, engine, timeoutMs: engine==='chromium'?1200
     const labelOf = record => [record?.merge && 'Merge', record?.mmvd && 'MMVD', record?.ciip && 'CIIP',
         record?.gpmPartition != null && 'GPM'].filter(Boolean);
     for (const tool of ['MMVD', 'CIIP', 'GPM', 'Merge', null]) {
+        checkpoint('hover-inter-prediction', {tool});
         const record = inter.A.find(r => tool ? labelOf(r).at(-1) === tool : labelOf(r).length === 0);
         assert.ok(record, `${tool} prediction region on VVC fixture`);
         const dx = a.width * ((record.x + record.width / 2 - visible('A').x) / visible('A').width - .5);

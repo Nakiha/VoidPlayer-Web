@@ -19,9 +19,12 @@ jobs:
   cores:
     uses: ./.github/workflows/prepare-cores.yml
 
+  qa-media:
+    uses: ./.github/workflows/prepare-qa-media.yml
+
   diagrams:
     name: Diagnose analysis diagrams
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: macos-26
     timeout-minutes: 15
     steps:
@@ -39,6 +42,7 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
+      - uses: ./.github/actions/qa-media
       - run: brew install ffmpeg
       - run: npx playwright install --with-deps "$DIAGNOSTIC_ENGINE"
       - uses: ./.github/actions/browser-display
