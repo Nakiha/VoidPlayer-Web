@@ -15,7 +15,8 @@ export interface MatroskaPacketIndex extends Omit<TsPacketIndex,'schema'|'kind'|
 }
 export type JsPacketFormat = 'ts' | 'matroska' | 'annexb';
 export type JsPacketIndex = TsPacketIndex | MatroskaPacketIndex | AnnexBPacketIndex;
-export const jsPictureStream = (index: JsPacketIndex) => `${index.streamKey}:${'pid' in index ? index.pid : 0}@${index.build}`;
+export const jsPictureStream = (index: Pick<JsPacketIndex, 'streamKey' | 'build'> & { pid?: number }) =>
+  `${index.streamKey}:${index.pid ?? 0}@${index.build}`;
 export function parseMatroskaPacketIndex(value:unknown,version:string,size:number):MatroskaPacketIndex|undefined {
   if(!value||typeof value!=='object')return;const d=value as Partial<MatroskaPacketIndex>;
   if(d.schema!==1||d.kind!=='js-matroska-packets'||d.build!==MATROSKA_PACKET_BUILD||d.sourceVersion!==version||d.size!==size||d.streamKey!=='video:0'

@@ -53,10 +53,12 @@ interlaced AVC/HEVC, AVC slice groups and VVC gradual decoder refresh.
 The index separates compressed access units from their picture order. It assigns
 a playback timeline using nominal AVC/HEVC/VVC SPS timing when available and 30 fps
 otherwise. Track information shows the chosen rate and its origin. Raw PTS/DTS
-remain unknown. An independently read, sealed Annex-B index supplies the same
-playback clock and AU ordinals to analysis. The core receives the derived display
-time with unknown DTS, and matches output by AU and that display time. The analysis
-panel can also plot decode order on a separate clock derived from AU and the same
+remain unknown. Local files over 4 MiB can present the first random-access picture
+and continue scanning in the background. Only a validated complete document can
+be exported from the playback worker. An independently read, sealed Annex-B index
+supplies the same playback clock and AU ordinals to analysis. The core receives the
+derived display time with unknown DTS, and matches output by AU and that display
+time. The analysis panel can also plot decode order on a separate clock derived from AU and the same
 nominal rate. This coordinate is calculated from the current index, with the
 serialized source timing fields kept as unknown. Frame
 analysis still requires a verified single-picture layout and a closed anchor

@@ -175,14 +175,15 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | JsPacketFormat,
       return indexing;
     };
     let backgroundTimer: ReturnType<typeof setTimeout> | undefined;
+    const canUseIndexedPrefix = container === 'ts' || container === 'annexb';
     const ensureIndexed = async (ptsUs = Infinity) => {
       if (disposed) throw new Error('媒体已释放。');
-      if (info.indexState === 'error' && (container !== 'ts' || ptsUs >= info.durationUs)) throw new Error(info.indexError);
+      if (info.indexState === 'error' && (!canUseIndexedPrefix || ptsUs >= info.durationUs)) throw new Error(info.indexError);
       if (info.indexState !== 'building' || (ptsUs === 0 && !indexing)) return;
       void completeIndex().catch(() => {});
       while (!disposed && info.indexState === 'building' && ptsUs >= info.durationUs) await new Promise<void>(resolve => indexWaiters.add(resolve));
       if (disposed) throw new Error('媒体已释放。');
-      if ((info.indexState as string) === 'error' && (container !== 'ts' || ptsUs >= info.durationUs)) throw new Error(info.indexError);
+      if ((info.indexState as string) === 'error' && (!canUseIndexedPrefix || ptsUs >= info.durationUs)) throw new Error(info.indexError);
     };
     const toDecodedFrame = async (frame: PacketFrame): Promise<DecodedFrame> => {
       const position = floorIndex(times, frame.pts - info.firstPtsUs);

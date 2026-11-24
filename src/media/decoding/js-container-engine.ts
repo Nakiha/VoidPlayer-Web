@@ -6,7 +6,7 @@ import { TsPacketSource } from '../../../shared/media/containers/ts-packet-sourc
 import type { TsPlaybackPrefix } from '../../../shared/media/containers/ts-packet-source.ts';
 import {TsContainerPacketSource} from '../../../shared/media/containers/mpeg2-ts-packet-source.ts';
 import {MatroskaPacketSource} from '../../../shared/media/containers/matroska-packet-source.ts';
-import { AnnexBPacketSource } from '../../../shared/media/containers/annex-b-packet-source.ts';
+import { AnnexBPacketSource, type AnnexBPlaybackBatch } from '../../../shared/media/containers/annex-b-packet-source.ts';
 import type { JsPacketFormat, JsPacketIndex } from '../../../shared/media/containers/matroska-packet-index.ts';
 import {jsPictureStream} from '../../../shared/media/containers/matroska-packet-index.ts';
 import {jsDecodeIndex} from '../indexing/js-decode-index.ts';
@@ -44,6 +44,7 @@ export class JsContainerEngine {
   private createSoftware:typeof wasmPacketDecoder;
   private prefix?:Uint8Array;
   private startup?: TsPacketIndex;
+  private annexBStartup?: AnnexBPlaybackBatch['track'];
   private startupSource?: TsContainerPacketSource;
   private startupReader?: RangeReader;
   private firstPtsUs?: number;
@@ -57,7 +58,7 @@ export class JsContainerEngine {
   }
 
   private waitForGrowth = async () => {
-    if (!this.startup) return;
+    if (this.indexComplete) return;
     this.onIndexWaiting?.(true);
     await new Promise<void>(resolve=>this.waiters.add(resolve));
     this.onIndexWaiting?.(false);
@@ -65,7 +66,8 @@ export class JsContainerEngine {
   };
   private indexTask?: Promise<ReturnType<JsContainerEngine['completedTiming']>>;
   private singleSliceLayout = false;
-  get indexComplete() { return !this.startup; }
+  get indexComplete() { return !this.startup && !this.annexBStartup; }
+  get playbackSourceVersion() { return (this.document ?? this.annexBStartup)?.sourceVersion; }
   tuneVvc(axis?: import('../contract.ts').VvcTuningAxis) { return this.timeline?.decoder.tuneVvc?.(axis) ?? null; }
 
   private tsSource(reader: RangeReader, size = reader.size) {
@@ -120,13 +122,17 @@ export class JsContainerEngine {
 
   private updateStatistics(index: JsPacketIndex | Pick<JsPacketIndex, 'packets'>) {
     const frameRate = 'kind' in index && index.kind === 'js-annexb-packets' ? index.frameRate : null;
-    this.statistics = {packets: index.packets.map(packet=>({pts:packet.timing.pts===null&&this.format!=='annexb'?null:packet.ptsUs,
+    this.statistics = { packets: index.packets.map(packet => this.packetStatistics(packet, frameRate)) };
+  }
+
+  private packetStatistics(packet: JsPacketIndex['packets'][number], frameRate: number | null): PacketView {
+    return {pts:packet.timing.pts===null&&this.format!=='annexb'?null:packet.ptsUs,
       dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6*packet.timing.timebase[0]/packet.timing.timebase[1]),
-      ...(frameRate === null ? {} : {originalPts:null, derivedDts:annexBTime(packet.au, frameRate)}), size:packet.size,key:packet.key}))};
+      ...(frameRate === null ? {} : {originalPts:null, derivedDts:annexBTime(packet.au, frameRate)}), size:packet.size,key:packet.key};
   }
 
   private timing() {
-    const index = this.index!, document = this.document!, origin = this.firstPtsUs!;
+    const index = this.index!, document = (this.document ?? this.annexBStartup)!, origin = this.firstPtsUs!;
     return { firstPtsUs:origin,durationUs:index.firstPts+index.duration-origin,
       times:index.order.map(au=>index.packets[au].pts-origin),durations:index.durations,indexSource:this.indexOrigin,
       seekAnchorCount:index.packets.filter(packet=>packet.key).length,jsIndexPacketsScanned:this.indexPacketsScanned,
@@ -171,6 +177,7 @@ export class JsContainerEngine {
   }
   async completeIndex(publish?: (progress: IndexProgress)=>void) {
     this.check();
+    if (this.annexBStartup) return this.indexTask ??= this.completeAnnexBIndex(publish);
     if (!this.startup) return this.completedTiming();
     if (!this.indexTask) {
       const source = this.tsSource(this.reader);
@@ -203,6 +210,65 @@ export class JsContainerEngine {
     }
     return this.indexTask;
   }
+  async preparePlayback(onProgress?: (data: IndexProgress) => void) {
+    this.check();
+    if (!this.document && !this.annexBStartup && this.persistent && this.format === 'annexb' && 'file' in this.input
+        && this.reader.size > 4 * 1024 * 1024) {
+      const source = new AnnexBPacketSource(this.reader, this.sourceVersion, this.controller.signal);
+      this.source = source;
+      const batch = await source.preparePlayback(onProgress);
+      this.check();
+      this.annexBStartup = batch.track;
+      const description = Uint8Array.from(batch.track.configuration);
+      this.index = { codec: batch.track.codec, description, configurations: [description], packets: [], order: [],
+        durations: [], firstPts: 0, duration: 0 };
+      this.statistics = { packets: [] };
+      this.extendAnnexBPlayback(batch);
+    }
+    if (this.annexBStartup) return { sourceVersion: this.annexBStartup.sourceVersion, hasDts: true };
+    const index = await this.prepare(onProgress);
+    return { sourceVersion: index.sourceVersion, hasDts: index.kind === 'js-annexb-packets' || index.packets.some(p => p.timing.dts !== null) };
+  }
+
+  private extendAnnexBPlayback(batch: AnnexBPlaybackBatch) {
+    const index = this.index!, start = index.packets.length;
+    for (const p of batch.packets) {
+      index.packets.push({ sequenceNumber: p.au, configuration: p.configuration, offset: p.locator, size: p.size,
+        pts: p.ptsUs, dts: null, key: p.key, identityKnown: true });
+      this.statistics!.packets.push(this.packetStatistics(p, batch.track.frameRate));
+    }
+    for (const au of batch.order) {
+      index.order.push(au);
+      index.durations.push(batch.packets[au - start].durationUs);
+    }
+    index.duration = annexBTime(index.order.length, batch.track.frameRate);
+    this.wakeIndex();
+  }
+
+  private async completeAnnexBIndex(publish?: (progress: IndexProgress) => void) {
+    const source = this.source as AnnexBPacketSource;
+    let scannedBytes = 0;
+    const progress = (data: IndexProgress) => {
+      scannedBytes = Math.max(scannedBytes, data.scannedBytes);
+      publish?.({ ...data, scannedBytes, durationUs: this.index!.duration });
+    };
+    try {
+      this.document = await source.completePlayback(progress, batch => {
+        this.check();
+        this.extendAnnexBPlayback(batch);
+        const last = batch.packets.at(-1)!;
+        progress({ scannedBytes: last.locator + last.size, totalBytes: batch.track.size, packets: source.packetsRead });
+      });
+      this.check();
+      this.indexPacketsScanned = source.packetsRead;
+      this.annexBStartup = undefined;
+      return this.completedTiming();
+    } finally {
+      this.timeline?.setGrowth();
+      this.wakeIndex();
+    }
+  }
+
   constructor(input: RandomAccessInput, sourceVersion: string,
     decoders: {native?:typeof nativePacketDecoder;software?:typeof wasmPacketDecoder;persistent?:boolean} = {}, format: JsPacketFormat = 'ts') {
     this.format=format;this.reader = new RangeReader(input);
@@ -226,7 +292,8 @@ export class JsContainerEngine {
   private makeTimeline(decoder: PacketDecoder, read = (packet: PacketDecodeIndex['packets'][number]) => this.source!.readUnit(packet.sequenceNumber!)) {
     if (this.closed) { decoder.close(); this.check(); }
     return new PacketTimeline(this.index!, decoder, read,
-      true, () => !this.closed && this.indexComplete, jsPictureStream(this.document!));
+      true, () => !this.closed && (this.indexComplete || this.format === 'annexb'),
+      jsPictureStream((this.document ?? this.annexBStartup)!));
   }
   private async first(timeline: PacketTimeline, pts: number) {
     const frame = await timeline.at(pts);
@@ -271,40 +338,41 @@ export class JsContainerEngine {
     try {
       this.check();
       onProgress?.('index');
-      this.document = await this.prepare(onIndexProgress);
-      this.index ??= jsDecodeIndex(this.document);
-      const plan = await preparePacketThreads(this.index, this.indexComplete, threads, p => this.source!.readUnit(p.sequenceNumber!));
+      if (!this.document && !this.annexBStartup) await this.preparePlayback(onIndexProgress);
+      const index = this.index!;
+      const plan = await preparePacketThreads(index, this.indexComplete, threads, p => this.source!.readUnit(p.sequenceNumber!));
       this.singleSliceLayout = plan.singleSliceLayout;
       onProgress?.('decoder');
       let native:PacketDecoder|null=null;
-      if(!forceWasm)try{native=await this.createNative(this.index,this.source!.nativeConfig);}catch(error){
+      if(!forceWasm)try{native=await this.createNative(index,this.source!.nativeConfig);}catch(error){
         const codecFailure=error instanceof MediaOpenError&&error.stage==='decode'||error instanceof DOMException&&['NotSupportedError','EncodingError'].includes(error.name);
         if(!codecFailure)throw error;
       }
-      const decoder = native ?? await this.createSoftware(this.index, glueURL, wasmBinary, plan.budget);
+      const decoder = native ?? await this.createSoftware(index, glueURL, wasmBinary, plan.budget);
       this.timeline = this.makeTimeline(decoder, plan.read);
       onProgress?.('first-frame');
-      try { this.primed = await this.first(this.timeline, this.index.firstPts); }
+      try { this.primed = await this.first(this.timeline, index.firstPts); }
       catch (error) {
         const failed = this.timeline;
         this.timeline = undefined;
         failed?.close();
         if (decoder.kind !== 'webcodecs' || !(error instanceof MediaOpenError) || error.stage !== 'decode') throw error;
-        const software = await this.createSoftware(this.index, glueURL, wasmBinary, plan.budget);
+        const software = await this.createSoftware(index, glueURL, wasmBinary, plan.budget);
         this.timeline = this.makeTimeline(software, plan.read);
-        this.primed = await this.first(this.timeline, this.index.firstPts);
+        this.primed = await this.first(this.timeline, index.firstPts);
       }
       this.outputSize = { width: this.primed.width, height: this.primed.height };
       this.firstPtsUs = this.primed.pts;
-      if (this.startup) { this.timeline.replaceIndex(this.index); this.timeline.setGrowth(this.waitForGrowth); }
+      if (!this.indexComplete) { this.timeline.replaceIndex(index); this.timeline.setGrowth(this.waitForGrowth); }
       return { lightweight: plan.lightweight, codecFeatures: plan.features && { ...plan.features, firstPacket: this.timeline.firstPacket },
-        ...this.decoderInfo(),...this.timing(),indexState:this.startup?'building' as const:'complete' as const,
+        ...this.decoderInfo(),...this.timing(),indexState:this.indexComplete?'complete' as const:'building' as const,
         jsIndexReused:this.source!.indexReused };
     } catch (error) { this.close(); throw error; }
   }
   private decoderInfo() {
     const decoder = this.timeline!.decoder;
-    return { codec: this.document!.codec,demuxBackend:this.document!.kind,indexBackend:`js-${this.format}-packet-index`, decoder: decoder.kind, hardwareAcceleration: decoder.hardwareAcceleration,
+    const track = (this.document ?? this.annexBStartup)!;
+    return { codec: track.codec,demuxBackend:track.kind,indexBackend:`js-${this.format}-packet-index`, decoder: decoder.kind, hardwareAcceleration: decoder.hardwareAcceleration,
       width: this.outputSize!.width, height: this.outputSize!.height, ...decoder.metadata?.() };
   }
   private timed(frame: PacketFrame): PacketFrame {
@@ -322,7 +390,10 @@ export class JsContainerEngine {
     this.setPlaybackReadAhead(false);
     if (this.primed?.pts === pts) { const frame = this.primed; this.primed = null; return this.timed(frame); }
     this.primed?.frame?.close(); this.primed = null;
-    return this.timed(await this.timeline!.at(pts, recycle));
+    // A buffered decoder may need a drain to return the last verified picture.
+    // A seek inside that coverage can finish even if the scanner is stalled.
+    const withinPrefix = this.annexBStartup && pts < this.index!.duration;
+    return this.timed(await this.timeline!.at(pts, recycle, !withinPrefix));
   }
   async next(pts: number, recycle?: ArrayBuffer) {
     this.check();
@@ -356,7 +427,7 @@ export class JsContainerEngine {
     this.primed?.frame?.close(); this.timeline!.close();
     next.appendIndex(this.index!);
     this.timeline = next; this.primed = first;
-    if (this.startup) { next.replaceIndex(this.index!); next.setGrowth(this.waitForGrowth); }
+    if (!this.indexComplete) { next.replaceIndex(this.index!); next.setGrowth(this.waitForGrowth); }
     this.outputSize = { width: first.width, height: first.height };
   }
   async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1, replace = false, pts?: number) {
@@ -378,7 +449,7 @@ export class JsContainerEngine {
     // playback has a separate reader; do not turn background indexing into
     // speculative playback IO when its prefix becomes readable.
     this.startupReader?.setPlaybackReadAhead(enabled && this.source === this.startupSource);
-    this.reader.setPlaybackReadAhead(enabled && !this.startup);
+    this.reader.setPlaybackReadAhead(enabled && this.indexComplete);
   }
   close() {
     if (this.closed) return;
@@ -392,6 +463,7 @@ export class JsContainerEngine {
         this.startupSource = this.source = undefined;
         this.startupReader = undefined;
         this.startup = this.published = undefined;
+        this.annexBStartup = undefined;
         this.indexTask = undefined;
         this.reader.close();
       }

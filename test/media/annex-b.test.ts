@@ -135,6 +135,67 @@ test('Annex-B VVC summary stream delivers each AU with its indexed display time'
   assert.deepEqual(order, [...seen].sort((a, b) => a[1] - b[1]).map(([au]) => au));
 });
 
+test('local Annex-B VVC decodes and identifies the first frame while the remaining bytes are unavailable', { timeout: 10000 }, async () => {
+  const file = 'fixtures/video/h266_10s_1920x1080.mp4', fixture = await annexBFixture(file, 'vvc');
+  const firstWindow = 1024 * 1024;
+  let release!: () => void, reached!: () => void, held = false, furthest = 0;
+  const blocked = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { reached = resolve; });
+  class GatedBlob extends Blob {
+    override slice(start = 0, end = this.size, type?: string) {
+      furthest = Math.max(furthest, end);
+      const slice = super.slice(start, end, type), arrayBuffer = slice.arrayBuffer.bind(slice);
+      if (held && start >= firstWindow) slice.arrayBuffer = async () => { reached(); await blocked; return arrayBuffer(); };
+      return slice;
+    }
+  }
+  const input = new GatedBlob([withLeadingSei(fixture.bytes, 'vvc'), fixture.bytes]);
+  const engine = new JsContainerEngine({ file: input }, 'local-progressive-vvc', { persistent: true }, 'annexb');
+  const core = resolve('public/vendor/voidplayer-core');
+  let completed: ReturnType<JsContainerEngine['completeIndex']> | undefined;
+  let successor: ReturnType<JsContainerEngine['next']> | undefined;
+  try {
+    const opened = await engine.open(pathToFileURL(resolve(core, 'voidplayer-core.js')).href,
+      new Uint8Array(await readFile(resolve(core, 'voidplayer-core.wasm'))), true);
+    assert.equal(opened.indexState, 'building');
+    assert.equal(engine.packetIndex, undefined, 'a playback prefix cannot authorize exact whole-stream analysis');
+    assert.equal(furthest, firstWindow, 'the tail was not read before the decoder had a frame');
+    const first = await engine.at(0);
+    assert.equal(first.pts, 0);
+    assert.equal(first.packetPicture?.au, 0);
+    assert.equal((await engine.at(0)).packetPicture?.au, 0, 'revisiting a verified frame does not need the scan');
+    const waiting = new Promise<void>(resolve => { engine.onIndexWaiting = value => { if (value) resolve(); }; });
+    successor = engine.next(0);
+    await waiting;
+    const coverage: number[] = [];
+    held = true;
+    completed = engine.completeIndex(progress => { if (progress.durationUs !== undefined) coverage.push(progress.durationUs); });
+    await requested;
+    const next = await successor;
+    assert.equal(next?.pts, 16683, 'the step resumes from a closed group while the rest is still blocked');
+    assert.notEqual(next?.packetPicture?.au, 0);
+    const edge = coverage.at(-1)!;
+    const sought = await engine.at(edge - 1);
+    assert.ok(sought.durationUs);
+    assert.equal(sought.pts + sought.durationUs, edge, 'seek can drain at the verified edge before EOF');
+    release();
+    const timing = await completed;
+    assert.equal(engine.indexComplete, true);
+    assert.equal(timing.durationUs, 20020000);
+    assert.ok(coverage.some(duration => duration > opened.durationUs && duration < timing.durationUs), 'closed groups extend the live prefix');
+    const index = engine.packetIndex!;
+    assert.equal(index.packets.length, fixture.timestamps.length * 2);
+    const independent = new AnnexBPacketSource(new RangeReader({ file: input }), index.sourceVersion, new AbortController().signal);
+    try { assert.deepEqual(index, await independent.open()); }
+    finally { independent.close(); }
+  } finally {
+    held = false;
+    release();
+    engine.close();
+    await Promise.allSettled([completed, successor]);
+  }
+});
+
 test('Annex-B open rejects parameter sets without a picture and propagates source cancellation', async () => {
   const bytes = Uint8Array.of(0, 0, 0, 1, 0x67, 0);
   const controller = new AbortController();

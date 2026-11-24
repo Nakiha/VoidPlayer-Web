@@ -111,7 +111,10 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
    const opened=await rpc.call('init',{input,container:'matroska',sourceVersion:version,preparedTsSession:prepared.session,forceWasm:true,wasmBinary:new Uint8Array(await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm')),glueURL:pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href});
    assert.equal(inventoryReads,0,'opening a library index must not fetch the cached stream inventory');
    assert.equal(opened.jsIndexReused,true);assert.equal(opened.jsIndexPacketsScanned,0,'fresh consumer Worker does not re-enumerate 600 access units');assert.equal(opened.times.length,600);assert.equal(builds,0);
-   const frame=await rpc.call('extract',{position:560});assert.equal(frame?.packetPicture?.au,[...prepared.index.packets].sort((a,b)=>a.ptsUs-b.ptsUs)[560].au);frame?.frame?.close();
+   const index = await rpc.call('analysis-js-index', {});
+   const frame = await rpc.call('extract', { position: 560 });
+   assert.equal(frame?.packetPicture?.au, [...index.packets].sort((a, b) => a.ptsUs - b.ptsUs)[560].au);
+   frame?.frame?.close();
   }finally{rpc.terminate();}
   const damaged=structuredClone(documents.get('hevc.mkv')) as any;damaged.packets.splice(2,1);damaged.packets.forEach((p:any,i:number)=>p.au=i);damaged.completeness.packets=damaged.packets.length;
   const db=Reflect.get(library!.frameIndexes,'db');db.prepare("UPDATE media_index_batches SET payload=? WHERE media_id=? AND kind='js-matroska'").run(JSON.stringify(damaged),e.id);

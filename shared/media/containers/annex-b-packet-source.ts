@@ -107,8 +107,19 @@ export async function firstAnnexBPicture(reader: TsPacketReader) {
   return unsupported('未找到可播放画面。');
 }
 
+type AnnexBTrack = Omit<AnnexBPacketIndex, 'packets' | 'completeness'>;
+export interface AnnexBPlaybackBatch {
+  track: AnnexBTrack;
+  packets: AnnexBPacketRecord[];
+  order: number[];
+}
+
 export class AnnexBPacketSource {
   private index?: AnnexBPacketIndex;
+  private track?: AnnexBTrack;
+  private playbackPackets: AnnexBPacketRecord[] = [];
+  private scanProgress?: (progress: MediaIndexScanProgress) => void;
+  private scanner?: AsyncGenerator<AnnexBPlaybackBatch>;
   private closed = false;
   readonly nativeConfig = undefined;
   indexReused = false;
@@ -135,67 +146,129 @@ export class AnnexBPacketSource {
       }
     }
     if (required) throw new MediaOpenError('input', '服务端裸码流播放索引不可用。');
+    if (this.scanner) return this.completePlayback(onProgress);
+    this.scanProgress = onProgress;
+    for await (const _ of this.scan(false)) { /* finite consumers require the validated document */ }
+    return this.index!;
+  }
+
+  async preparePlayback(onProgress?: (progress: MediaIndexScanProgress) => void) {
+    this.scanProgress = onProgress;
+    this.scanner = this.scan(true);
+    const batch = await this.scanner.next();
+    if (batch.done) return unsupported('找不到可用的画面索引。');
+    return batch.value;
+  }
+
+  async completePlayback(onProgress?: (progress: MediaIndexScanProgress) => void, publish?: (batch: AnnexBPlaybackBatch) => void) {
+    if (this.index) return this.index;
+    this.scanProgress = onProgress;
+    try {
+      for await (const batch of this.scanner!) publish?.(batch);
+      this.playbackPackets = [];
+      return this.index!;
+    } finally {
+      this.scanner = undefined;
+      this.scanProgress = undefined;
+    }
+  }
+
+  private async *scan(progressive: boolean): AsyncGenerator<AnnexBPlaybackBatch> {
     const { size } = this.reader, packets: AnnexBPacketRecord[] = [], group: PictureRange[] = [];
-    let frameRate = ANNEX_B_DEFAULT_FPS, rank = 0, codec: AnnexBPacketIndex['codec'] | undefined;
-    let config: number[] | undefined, rateSource: AnnexBPacketIndex['rateSource'] = 'default';
+    let track: AnnexBTrack | undefined, keyPts = -1, published = 0;
+    let order: number[] = [];
+    const record = (picture: PictureRange, au: number, rank: number): AnnexBPacketRecord => {
+      const rate = track!.frameRate, ptsUs = annexBTime(rank, rate);
+      return { au, locator: picture.locator, size: picture.size, key: picture.key, configuration: 0,
+        ptsUs, durationUs: annexBTime(rank + 1, rate) - ptsUs,
+        timing: { pts: null, dts: null, timebase: [1, 1000000], origin: 'derived' } };
+    };
     const finish = () => {
+      const start = packets.length;
       const sorted = group.slice().sort((a, b) => a.poc - b.poc);
       const ranks = new Map<PictureRange, number>();
       for (const [i, picture] of sorted.entries()) {
         if (i && picture.poc === sorted[i - 1].poc) unsupported('画面顺序计数冲突。');
-        ranks.set(picture, rank++);
+        ranks.set(picture, start + i);
       }
+      const display = progressive ? new Array<number>(group.length) : undefined;
       for (const picture of group) {
-        const ordinal = ranks.get(picture)!;
-        const ptsUs = annexBTime(ordinal, frameRate);
-        packets.push({ au: packets.length, locator: picture.locator, size: picture.size, key: picture.key,
-          configuration: 0, ptsUs, durationUs: annexBTime(ordinal + 1, frameRate) - ptsUs,
-          timing: { pts: null, dts: null, timebase: [1, 1000000], origin: 'derived' } });
+        const rank = ranks.get(picture)!;
+        const p = record(picture, packets.length, rank);
+        if (p.size < 4 || (p.au === 0 && p.ptsUs !== 0) || (p.key && p.ptsUs <= keyPts)) unsupported('找不到可用的画面索引。');
+        if (p.key) keyPts = p.ptsUs;
+        if (display) display[rank - start] = p.au;
+        packets.push(p);
       }
+      if (display) for (const au of display) if (au >= published) order.push(au);
       group.length = 0;
     };
+    const publish = () => {
+      const batch = { track: track!, packets: packets.slice(published), order };
+      for (const packet of batch.packets) this.playbackPackets.push(packet);
+      published = packets.length;
+      order = [];
+      return batch;
+    };
     for await (const entry of accessUnits(this.reader, this.signal, scannedBytes => {
-      onProgress?.({ scannedBytes, totalBytes: size, packets: this.packetsRead });
+      this.scanProgress?.({ scannedBytes, totalBytes: size, packets: this.packetsRead });
     })) {
+      if (this.closed) throw new MediaOpenError('input', '裸码流已释放。');
       const { picture } = entry;
       if (!this.packetsRead) {
         if (!picture.key || !entry.config) unsupported('需要从随机访问画面开始。');
-        codec = entry.codec;
-        config = entry.config;
-        if (entry.rate !== undefined && entry.rate >= 1 && entry.rate <= 1000) {
-          frameRate = entry.rate;
-          rateSource = 'bitstream';
-        }
+        const rate = entry.rate !== undefined && entry.rate >= 1 && entry.rate <= 1000 ? entry.rate : undefined;
+        this.track = track = { schema: 1, kind: 'js-annexb-packets', build: ANNEX_B_PACKET_BUILD, streamKey: 'video:0',
+          sourceVersion: this.sourceVersion, size, codec: entry.codec, configuration: entry.config,
+          frameRate: rate ?? ANNEX_B_DEFAULT_FPS, rateSource: rate === undefined ? 'default' : 'bitstream' };
       }
       if (++this.packetsRead > ANNEX_B_MAX_PACKETS) throw new MediaOpenError('resource', '裸码流画面数量超出索引上限。');
-      if (!rank && group.length && picture.leading && picture.poc < group[0].poc) continue;
+      if (!packets.length && group.length && picture.leading && picture.poc < group[0].poc) continue;
       if (picture.reset) finish();
       group.push(picture);
+      if (progressive && this.packetsRead === 1) {
+        // Admission requires the starting RAP to have rank zero. Leading
+        // pictures before it are omitted by the same scan used at completion.
+        const packet = record(picture, 0, 0);
+        if (packet.size < 4) unsupported('找不到可用的画面索引。');
+        this.playbackPackets.push(packet);
+        published = 1;
+        yield { track: track!, packets: [packet], order: [0] };
+      } else if (progressive && packets.length - published >= 32) yield publish();
     }
     finish();
-    const document = parseAnnexBPacketIndex({ schema: 1, kind: 'js-annexb-packets', build: ANNEX_B_PACKET_BUILD,
-      streamKey: 'video:0', sourceVersion: this.sourceVersion, size, codec, configuration: config, packets, frameRate, rateSource,
+    const document = parseAnnexBPacketIndex({ ...track, packets,
       completeness: { state: 'complete', packets: packets.length } }, this.sourceVersion, size);
     if (!document) return unsupported('找不到可用的画面索引。');
-    return this.index = sealJsIndex(document);
+    this.index = sealJsIndex(document);
+    if (progressive && packets.length > published) yield publish();
   }
 
   async readUnit(au: number, includeConfiguration = true) {
     this.signal.throwIfAborted();
-    const packet = this.index?.packets[au];
+    const packet = (this.index?.packets ?? this.playbackPackets)[au];
     if (this.closed || !packet) throw new MediaOpenError('input', '裸码流画面索引无效或已释放。');
     const bytes = await this.reader.read(packet.locator, packet.size);
     this.signal.throwIfAborted();
+    if (this.closed) throw new MediaOpenError('input', '裸码流已释放。');
     if (!isAnnexB(bytes)) throw new MediaOpenError('input', '裸码流画面起始码与索引不一致。');
     if (!packet.key || !includeConfiguration) return bytes;
     // A later RAP can omit the original parameter sets. Supply them in-band
     // on every restart so native and software decoding receive the same bytes.
-    const configuration = this.index!.configuration;
+    const configuration = (this.index ?? this.track)!.configuration;
     const data = new Uint8Array(configuration.length + bytes.length);
     data.set(configuration);
     data.set(bytes, configuration.length);
     return data;
   }
 
-  close() { this.closed = true; this.index = undefined; this.reader.close(); }
+  close() {
+    this.closed = true;
+    this.index = this.track = undefined;
+    this.playbackPackets = [];
+    this.scanProgress = undefined;
+    void this.scanner?.return(undefined).catch(() => {});
+    this.scanner = undefined;
+    this.reader.close();
+  }
 }

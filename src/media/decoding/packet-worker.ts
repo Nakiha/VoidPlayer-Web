@@ -1,6 +1,6 @@
 import { serializeFlvIndex } from '../../../shared/media/indexing/flv-index-cache.ts';
 import { workerReply } from '../workers/worker-protocol.ts';
-import type { PacketCommands, WorkerRequest, WorkerMessage } from '../workers/worker-protocol.ts';
+import type { IndexProgress, PacketCommands, WorkerRequest, WorkerMessage } from '../workers/worker-protocol.ts';
 
 import { observeCoreStartup } from './core-loader.ts';
 import {JsContainerEngine} from './js-container-engine.ts';
@@ -98,9 +98,17 @@ async function start() {
           engine?.close(); engine = undefined; tsSession = undefined;
           const candidate = type==='prepare-ts'?new TsEngine(message.input,message.sourceVersion):new JsContainerEngine(message.input,message.sourceVersion,{persistent:message.persistent},message.format);
           try {
-            const index = await candidate.prepare(data => send({id,type:'index-progress',data})); engine = candidate; tsSession = randomUUID();
-            if(type==='prepare-ts'){if(index.kind!=='js-ts-packets')throw new MediaOpenError('input','TS index kind changed');send(reply(message,{admitted:true,session:tsSession,index}));}
-            else send(reply(message,{admitted:true,session:tsSession,index}));
+            const progress = (data: IndexProgress) => send({ id, type: 'index-progress', data });
+            tsSession = randomUUID();
+            if (type === 'prepare-ts') {
+              const index = await candidate.prepare(progress);
+              if (index.kind !== 'js-ts-packets') throw new MediaOpenError('input', 'TS index kind changed');
+              send(reply(message, { admitted: true, session: tsSession, index }));
+            } else {
+              const admission = await candidate.preparePlayback(progress);
+              send(reply(message, { admitted: true, session: tsSession, ...admission }));
+            }
+            engine = candidate;
           } catch (error) {
             candidate.close();
             if (!(error instanceof TsCombinationNotMigrated)) throw error;
@@ -115,7 +123,7 @@ async function start() {
         } else if (type === 'init') {
           const preparedTs = 'sourceVersion' in message && message.preparedTsSession !== undefined;
           if (preparedTs && (!(engine instanceof JsContainerEngine) || message.preparedTsSession !== tsSession
-            || engine.packetIndex?.sourceVersion !== message.sourceVersion || message.container !== engine.format)) throw new MediaOpenError('input','JS TS admission session changed');
+            || engine.playbackSourceVersion !== message.sourceVersion || message.container !== engine.format)) throw new MediaOpenError('input','JS TS admission session changed');
           if (!(engine instanceof FlvEngine && message.container === 'flv') && !preparedTs) {
             engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : 'sourceVersion' in message?new JsContainerEngine(message.input,message.sourceVersion,{persistent:message.persistent},message.container): new FlvEngine(message.input, 'prepared' in message?message.prepared:undefined);
           }

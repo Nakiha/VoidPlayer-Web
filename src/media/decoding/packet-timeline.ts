@@ -69,7 +69,7 @@ export class PacketTimeline {
     this.segmentStart=this.cursor;
     await this.configure(config);this.started=true;this.lastPts=-Infinity;
   }
-  private async pull(recycle?:ArrayBuffer,minimum=Number.MIN_SAFE_INTEGER):Promise<PacketFrame|null>{
+  private async pull(recycle?:ArrayBuffer,minimum=Number.MIN_SAFE_INTEGER,waitForGrowth=true):Promise<PacketFrame|null>{
     if(this.pending){const f=this.pending;this.pending=null;if(f.packetPicture&&!this.validPicture(f.pts,f.packetPicture))f.packetPicture=undefined;return f;}
     for(;;){
       // Count even frames below the seek threshold as progress while input is blocked.
@@ -95,7 +95,7 @@ export class PacketTimeline {
         continue;
       }
       const packet=this.index.packets[this.cursor];
-      if (!packet && this.growth) { await this.growth(); continue; }
+      if (!packet && waitForGrowth && this.growth) { await this.growth(); continue; }
       if(!packet||(packet.configuration??0)!==this.configuration||(packet.discontinuity&&this.cursor!==this.segmentStart)){
         if (!this.drained) {
           if (await this.decoder.drain() === false) {
@@ -138,7 +138,7 @@ export class PacketTimeline {
   }
   private anchor=0;
   private anchorIndex(){return this.anchor;}
-  async at(target:number,recycle?:ArrayBuffer):Promise<PacketFrame>{
+  async at(target:number,recycle?:ArrayBuffer,waitForGrowth=true):Promise<PacketFrame>{
     return this.run(target,async()=>{
       await this.start(target);this.anchor=this.cursor;
       // The finite MPEG-2 adapter proves one frame picture per PES with known
@@ -154,7 +154,7 @@ export class PacketTimeline {
       let previous:PacketFrame|null=null;
       try{
         for(;;){
-          const f=await this.pull(recycle,minimum);recycle=undefined;
+          const f=await this.pull(recycle,minimum,waitForGrowth);recycle=undefined;
           if(minimum!==Number.MIN_SAFE_INTEGER&&!previous&&(!f||f.pts>target)){
             // A decoder may omit an indexed picture. Re-decode without any
             // discard threshold to retain the actual preceding output, or the
@@ -166,7 +166,14 @@ export class PacketTimeline {
           if(f.pts>=target){if(f.pts===target||!previous){previous?.frame?.close();this.deliveredPts=f.pts;return f;}this.pending=f;this.deliveredPts=previous.pts;return previous;}
           previous?.frame?.close();previous=f;
         }
-      }catch(error){previous?.frame?.close();throw error;}
+      } catch (error) {
+        previous?.frame?.close();
+        throw error;
+      } finally {
+        // A finite seek into a growing index can drain at the verified edge.
+        // Start from a RAP on the next read so new packets reach an open decoder.
+        if (!waitForGrowth && this.drained) this.replaceIndex(this.index);
+      }
     });
   }
   async next(after:number,recycle?:ArrayBuffer):Promise<PacketFrame|null>{

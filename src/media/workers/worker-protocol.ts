@@ -70,7 +70,8 @@ type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: Dec
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
   'tune-vvc': Command<{ axis?: import('../contract.ts').VvcTuningAxis }, import('../contract.ts').VvcTuningState | null>;
-  'prepare-js':Command<{input:PacketInput;sourceVersion:string;format:import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketFormat;persistent?:boolean},{admitted:true;session:string;index:import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;
+  'prepare-js': Command<{ input: PacketInput; sourceVersion: string; format: import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketFormat; persistent?: boolean },
+    { admitted: true; session: string; sourceVersion: string; hasDts: boolean } | { admitted: false; reason: string }>;
   'analysis-js-index':Command<Empty,import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex>;
   'prepare-ts': Command<{input: PacketInput; sourceVersion: string},
     {admitted: true; session: string; index: import('../../../shared/media/indexing/ts-packet-index.ts').TsPacketIndex} | {admitted: false; reason: string}>;
