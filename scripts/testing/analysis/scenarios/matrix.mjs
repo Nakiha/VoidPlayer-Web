@@ -5,6 +5,7 @@ import path from "node:path";
 import { repositoryRoot } from "../../manifest.mjs";
 import { playbackBenchmarksEnabled, assertBenchmarkCorrectness, verifyPlaybackPresentation } from "../../playback-presentation.mjs";
 import { selectDiagrams } from '../controls.mjs';
+import { formatTime } from '../../../../shared/review/model.ts';
 
 
 export async function run(context) {
@@ -265,10 +266,13 @@ const { page, artifact, phase, engine, matrixRows, checkpointOnly, playbackProfi
           assert.deepEqual(await call('get_presented_frame', { slot: 'A' }), beforePick, 'selecting a block never seeks');
           await call("step_review", { direction: 1 });
           // Enabled overlays may automatically fill missing frame details; they never seek.
-          assert.equal((await call('get_presented_frame',{slot:'A'})).sourcePtsUs, (await call('get_review_session')).tracks[0].frame.sourcePtsUs);
-          assert.ok(await tooltip.isHidden(),'frame changes hide the hovered old block');
+          const next = await call('get_presented_frame', { slot: 'A' });
+          assert.notEqual(next.picture.au, beforePick.picture.au);
+          assert.equal(next.sourcePtsUs, (await call('get_review_session')).tracks[0].frame.sourcePtsUs);
+          // A stationary pointer can receive the next picture's block as soon as its overlay is ready.
+          const hoverTime = await tooltip.evaluate(card => card.hidden ? null : card.querySelector('[data-slot="A"] time')?.textContent);
+          if (hoverTime !== null) assert.equal(hoverTime, `${formatTime(next.normalizedMediaUs)} PTS`, 'visible details belong to the next picture');
           if (await overlay.isVisible()) {
-            const next = await call("get_presented_frame", { slot: "A" });
             assert.notEqual(next.picture.au, token.picture.au);
             assert.equal(
               await overlay.getAttribute("data-picture"),
