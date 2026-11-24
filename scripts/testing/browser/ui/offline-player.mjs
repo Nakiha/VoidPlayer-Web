@@ -465,10 +465,30 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       await offline.locator('#remove-track-B').click();
       await trackB.waitFor({ state: 'detached' });
       await offline.evaluate(() => caches.open('unrelated-cache'));
+      // Observe the waiting worker without opening another controlled page.
+      // A navigation before activation can itself become an old-worker client.
+      const updates = await Promise.all(context.serviceWorkers().map(async worker => ({
+        worker,
+        waiting: await worker.evaluate(() => self.serviceWorker.state === 'installed'),
+      })));
+      const updateWorker = updates.find(item => item.waiting)?.worker;
+      assert.ok(updateWorker, 'the update stays waiting while the old review window is open');
       await offline.close();
+      await updateWorker.evaluate(() => new Promise((resolve, reject) => {
+        const worker = self.serviceWorker;
+        const timeout = setTimeout(() => reject(new Error('Waiting worker did not activate after the last review window closed')), 15000);
+        const check = () => {
+          if (worker.state !== 'activated') return;
+          clearTimeout(timeout);
+          worker.removeEventListener('statechange', check);
+          resolve();
+        };
+        worker.addEventListener('statechange', check);
+        check();
+      }));
       const reopened = await context.newPage();
       await reopened.goto(base);
-      await reopened.waitForFunction(async old => !(await caches.keys()).includes(old), initial.cacheName);
+      await reopened.waitForFunction(async old => !(await caches.keys()).includes(old), initial.cacheName, {timeout:15000});
       assert.equal(await reopened.locator('meta[name=next-build]').count(), 1);
       assert.ok(await reopened.evaluate(() => caches.has('unrelated-cache')));
     }

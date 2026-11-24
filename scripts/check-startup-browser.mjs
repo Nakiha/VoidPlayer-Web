@@ -117,13 +117,13 @@ try {
     const builtErrors = [];
     built.on('pageerror', error => builtErrors.push(error.message));
     await built.route('**/assets/player-*.js', route => route.fulfill({status:504, headers:{'cache-control':'no-store'}, body:'Unavailable module'}));
-    await built.goto(builtBase);
-    assert.equal(await built.locator('head meta[name="darkreader-lock"]').count(), 1, 'native palette protection is present before player startup');
+    await built.goto(builtBase, {waitUntil:'commit'});
     await built.locator('#startup-fallback').waitFor({state:'visible', timeout:5000});
+    assert.equal(await built.locator('head meta[name="darkreader-lock"]').count(), 1, 'native palette protection is present before player startup');
     assert.equal(await built.locator('#app').isVisible(), false);
     for (const theme of ['dark', 'light']) {
       await built.emulateMedia({ colorScheme: theme });
-      await built.reload();
+      await built.reload({waitUntil:'commit'});
       await built.locator('#startup-fallback').waitFor({state:'visible'});
       assert.equal(await built.locator('html').getAttribute('data-theme'), theme);
       for (const width of [320, 1280]) {
@@ -137,7 +137,7 @@ try {
       }
     }
     await built.unroute('**/assets/player-*.js');
-    await built.reload();
+    await built.reload({waitUntil:'commit'});
     await built.locator('#settings-open').waitFor({state:'visible'});
     assert.equal(await built.locator('#startup-fallback').isVisible(), false);
     assert.deepEqual(builtErrors, []);
