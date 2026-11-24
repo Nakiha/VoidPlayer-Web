@@ -1,4 +1,4 @@
-import { containerFromHeader } from '../../shared/media/containers/container-header.ts';
+import { readPlaybackContainer } from '../../shared/media/containers/container-header.ts';
 import { VIDEO_EXTENSIONS } from '../../shared/media/containers/video-files.ts';
 import { msg, t } from '../i18n.ts';
 
@@ -25,7 +25,8 @@ async function fileKind(file: File): Promise<Rejection | undefined> {
   if (/^\.(mp3|wav|flac|aac|m4a|aiff?|opus|oga)$/.test(ext)) return 'audio';
   // Keep extensionless and misnamed videos usable without probing them with a decoder.
   try {
-    const bytes = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+    const read = async (at: number, length: number) => new Uint8Array(await file.slice(at, at + length).arrayBuffer());
+    const bytes = await read(0, 1024);
     const tag = (at:number) => String.fromCharCode(...bytes.subarray(at, at + 4));
     if (tag(0) === '\x89PNG' || bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff ||
         tag(0).startsWith('GIF8') || tag(0) === 'RIFF' && tag(8) === 'WEBP') return 'image';
@@ -34,12 +35,11 @@ async function fileKind(file: File): Promise<Rejection | undefined> {
       if (tag(8) === 'M4A ' || tag(8) === 'M4B ') return 'audio';
     }
     if (tag(0) === 'fLaC' || tag(0) === 'RIFF' && tag(8) === 'WAVE') return 'audio';
-    if (containerFromHeader(bytes) !== 'other') return;
     if (tag(0) === 'RIFF' && tag(8) === 'AVI ') return;
     if (bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0xba) return;
     // Recognized names still get the normal damaged-video diagnostics.
     if (VIDEO_EXTENSIONS.includes(ext) && !file.type.startsWith('text/')) return;
-    return 'unsupported';
+    return await readPlaybackContainer({ size: file.size, read }, undefined, bytes) === 'other' ? 'unsupported' : undefined;
   } catch { return 'unreadable'; }
 }
 

@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import { annexBFixture } from '../helpers/media/annex-b-fixture.ts';
+import { annexBFixture, withLeadingSei } from '../helpers/media/annex-b-fixture.ts';
 import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import {MediaLibraryIndex} from '../../server/library.ts';
 import {createMediaServer} from '../../server/app.ts';
@@ -47,7 +47,7 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
  const previousLocation=Object.getOwnPropertyDescriptor(globalThis,'location');t.after(()=>{if(previousLocation)Object.defineProperty(globalThis,'location',previousLocation);else Reflect.deleteProperty(globalThis,'location');});
  const temp=await mkdtemp(join(tmpdir(),'vp-js-container-store-')),root=join(temp,'media'),database=join(temp,'library.sqlite');const {mkdir,copyFile,readdir,writeFile}=await import('node:fs/promises');await mkdir(root);for(const name of await readdir('fixtures/js-container'))if(name.endsWith('.ts')||name.endsWith('.mkv')||name.endsWith('.webm'))await copyFile(join('fixtures/js-container',name),join(root,name));execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=32x32:rate=5:duration=1','-c:v','huffyuv','-pix_fmt','yuv422p',join(root,'uncompiled-huffyuv.mkv')]);
  const raw = await annexBFixture('fixtures/video/h264_9s_1920x1080.mp4', 'h264', 16);
- await writeFile(join(root, 'h264.h264'), raw.bytes);
+ await writeFile(join(root, 'h264.h264'), withLeadingSei(raw.bytes, 'h264'));
  const originalCore=process.env.VOIDPLAYER_WASM_CORE_DIR;let library:MediaLibraryIndex|undefined,server:ReturnType<typeof createMediaServer>|undefined;
  let builds=0, inventoryReads=0;
  const start=async()=>{
@@ -68,6 +68,9 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
   for(const name of names)documents.set(name,await read(name));assert.equal(builds,names.length);
   await stop();builds=0;base=await start();for(const name of names)assert.deepEqual(await read(name),documents.get(name));assert.equal(builds,0,'server restart uses stored source/build-bound complete indexes');
   const rawEntry = library!.browse().entries.find(e => e.name === 'h264.h264')!;
+  const responseContainer = await fetch(`${base}/api/media/${rawEntry.id}/container?v=${rawEntry.version}`);
+  assert.equal(responseContainer.status, 200);
+  assert.equal((await responseContainer.json()).container, 'annexb', 'library routing recognizes the delayed SPS');
   const ref = ownLibraryIndexReference(rawEntry.id, rawEntry.version!);
   const rawUrl = `${base}/api/media/${ref.id}/content?v=${ref.version}`;
   const rawIndex = await loadServerJsIndex(rawUrl, `${ref.id}@${ref.version}`, rawEntry.size, 'annexb', new AbortController().signal, undefined, ref);

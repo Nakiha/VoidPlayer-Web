@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../../../../server/config.ts';
 import { startService } from '../../../../server/runtime.ts';
-import { annexBFixture } from '../../../../test/helpers/media/annex-b-fixture.ts';
+import { annexBFixture, withLeadingSei } from '../../../../test/helpers/media/annex-b-fixture.ts';
 import { isPlayerAsset, writePlayerWorker } from '../../../pwa/build.mjs';
 
 export async function verifyOfflinePlayer(browser, engine, staticDir) {
@@ -142,8 +142,9 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     }
     const deliverFixture = async (name, file) => deliverBytes(name, await readFile(file));
     const raw = await annexBFixture(path.resolve('fixtures/video/h266_10s_1920x1080.mp4'), 'vvc', 16);
-    if (engine === 'chromium') await deliverBytes('offline-clip.h266', raw.bytes);
-    else await offline.locator('#file-A').setInputFiles({ name: 'offline-clip.h266', mimeType: 'video/h266', buffer: raw.bytes });
+    const rawWithSei = withLeadingSei(raw.bytes, 'vvc');
+    if (engine === 'chromium') await deliverBytes('offline-clip.h266', rawWithSei);
+    else await offline.locator('#file-A').setInputFiles({ name: 'offline-clip.h266', mimeType: 'video/h266', buffer: rawWithSei });
     await offline.waitForFunction(() => window.voidPlayer.getState().tracks.some(track => track.name === 'offline-clip.h266' && track.frame));
     assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].container), 'annexb');
     await offline.evaluate(() => window.voidPlayer.step(1));

@@ -3,7 +3,7 @@ import { REPORT_BODY_BYTES } from '../../shared/service/logging.ts';
 import { serverLog } from '../logging/logger.ts';
 import { requestAuthority } from '../http.ts';
 import { matchesEtag } from '../conditional.ts';
-import { containerFromHeader } from '../../shared/media/containers/container-header.ts';
+import { readPlaybackContainer } from '../../shared/media/containers/container-header.ts';
 import { openVersionedInput } from '../versioned-input.ts';
 import { serveProvider } from './provider-content.ts';
 import { handleMediaQueryRoutes } from './media-query.ts';
@@ -101,16 +101,19 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
       if (!source || !entry || entry.state !== 'ready') throw new AdminError(409, '媒体不可用或已改变。');
       const handle = await openVersionedInput(source,entry.size,library.fingerprint(id,version)!,false,controller.signal);
       try {
-        const bytes = new Uint8Array(Math.min(entry.size, 1024));
-        for (let read = 0; read < bytes.length;) {
-          const { bytesRead } = await handle.read(bytes, read, bytes.length - read, read);
-          if (!bytesRead) throw new AdminError(409, '媒体在识别期间截断。');
-          read += bytesRead;
-        }
+        const container = await readPlaybackContainer({ size: entry.size, async read(offset, length) {
+          const bytes = new Uint8Array(length);
+          for (let read = 0; read < length;) {
+            const { bytesRead } = await handle.read(bytes, read, length - read, offset + read);
+            if (!bytesRead) throw new AdminError(409, '媒体在识别期间截断。');
+            read += bytesRead;
+          }
+          return bytes;
+        } }, controller.signal);
         await handle.verify();
         if (typeof source === 'string' && !await library.resolve(id,version))
           throw new AdminError(409, '媒体在识别期间改变。');
-        sendJson(res, 200, { id, version, size: entry.size, container: containerFromHeader(bytes) });
+        sendJson(res, 200, { id, version, size: entry.size, container });
       } finally { await handle.close(); }
     } catch (error) {
       if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error));

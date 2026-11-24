@@ -1,4 +1,4 @@
-import { annexBCodec } from './annex-b-header.ts';
+import { annexBCodec, probeAnnexBCodec, type ContainerProbeReader } from './annex-b-header.ts';
 
 export type ContainerKind = 'annexb' | 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
 /** Routing hint, not validation: the selected demuxer still validates input.
@@ -17,4 +17,15 @@ export function containerFromHeader(bytes: Uint8Array): ContainerKind {
     if([0,1,2].every(i=>bytes[start+stride*i]===0x47))return 'mpegts';
   }
   return annexBCodec(bytes) ? 'annexb' : 'other';
+}
+
+/** Keep the small fast path for ordinary containers. Only plausible Annex-B
+ * prefixes continue into bounded reads to find delayed parameter sets. */
+export async function readPlaybackContainer(reader: ContainerProbeReader, signal?: AbortSignal, header?: Uint8Array): Promise<ContainerKind> {
+  signal?.throwIfAborted();
+  const bytes = header ?? await reader.read(0, Math.min(reader.size, 1024));
+  signal?.throwIfAborted();
+  const kind = containerFromHeader(bytes);
+  if (kind !== 'other') return kind;
+  return await probeAnnexBCodec(reader, signal, bytes) ? 'annexb' : 'other';
 }

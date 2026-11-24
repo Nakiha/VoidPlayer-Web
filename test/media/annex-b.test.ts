@@ -4,11 +4,12 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { AnnexBPacketSource } from '../../shared/media/containers/annex-b-packet-source.ts';
-import { containerFromHeader } from '../../shared/media/containers/container-header.ts';
+import { probeContainer } from '../../src/media/policy/container-probe.ts';
+import { selectVideoInputs } from '../../src/ui/video-input.ts';
 import { parseAnnexBPacketIndex } from '../../shared/media/indexing/annex-b-index.ts';
 import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { JsContainerEngine } from '../../src/media/decoding/js-container-engine.ts';
-import { annexBFixture } from '../helpers/media/annex-b-fixture.ts';
+import { annexBFixture, withLeadingSei } from '../helpers/media/annex-b-fixture.ts';
 import { nativeFrames, nativeVisibleFrameBytes, nativeVisibleHash } from '../helpers/media/native-pixels.ts';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 
@@ -22,8 +23,11 @@ for (const [codec, name, sampleFps] of samples) test(`Annex-B ${codec} indexes B
   const file = `fixtures/video/${name}`, fixture = await annexBFixture(file, codec);
   const count = fixture.timestamps.length;
   assert.ok(count > 72);
-  assert.equal(containerFromHeader(fixture.bytes.subarray(0, 1024)), 'annexb');
-  const engine = new JsContainerEngine({ file: new Blob([fixture.bytes]) }, name, {}, 'annexb');
+  const bytes = withLeadingSei(fixture.bytes, codec);
+  const local = new File([bytes], 'extensionless');
+  assert.equal(await probeContainer({ file: local }), 'annexb', 'leading prefix SEI may exceed the initial header');
+  assert.deepEqual(await selectVideoInputs([{ file: local }], error => assert.fail(error.message)), [{ file: local }]);
+  const engine = new JsContainerEngine({ file: local }, name, {}, 'annexb');
   const core = resolve('public/vendor/voidplayer-core');
   try {
     const opened = await engine.open(pathToFileURL(resolve(core, 'voidplayer-core.js')).href,
@@ -43,7 +47,7 @@ for (const [codec, name, sampleFps] of samples) test(`Annex-B ${codec} indexes B
     assert.ok(index.packets.every(p => p.timing.pts === null && p.timing.dts === null));
     const bad = structuredClone(index);
     bad.packets[1].locator = 0;
-    assert.equal(parseAnnexBPacketIndex(bad, name, fixture.bytes.length), undefined);
+    assert.equal(parseAnnexBPacketIndex(bad, name, bytes.length), undefined);
 
     const positions = [0, 1, 71, count - 1, 22];
     const first = await engine.at(0);

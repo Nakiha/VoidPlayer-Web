@@ -8,7 +8,7 @@ import {
 } from '../indexing/annex-b-index.ts';
 import type { MediaIndexScanProgress } from '../indexing/media-index-types.ts';
 import type { TsPacketReader } from './ts-packet-source.ts';
-import { annexBCodec } from './annex-b-header.ts';
+import { probeAnnexBCodec } from './annex-b-header.ts';
 
 function unsupported(message: string): never { throw new MediaOpenError('container', `Annex-B：${message}`); }
 
@@ -39,7 +39,7 @@ async function* nalLocations(reader: TsPacketReader, signal?: AbortSignal, progr
 type PictureRange = AnnexBPicture & { locator: number; size: number };
 
 async function* accessUnits(reader: TsPacketReader, signal?: AbortSignal, progress?: (bytes: number) => void) {
-  const codec = annexBCodec(await reader.read(0, Math.min(reader.size, 1024)));
+  const codec = await probeAnnexBCodec(reader, signal);
   if (!codec) return unsupported('未找到 AVC、HEVC 或 VVC 参数集。');
   const parser = annexBPictures(codec), sets = new Map<number, Uint8Array>();
   const parameters = annexBParameterTypes[codec], prefixes = annexBPrefixTypes[codec];

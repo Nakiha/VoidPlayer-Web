@@ -22,3 +22,11 @@ export async function annexBFixture(file: string, codec: AnnexBCodec, count = In
     return { bytes: Buffer.concat(parts), timestamps: packets };
   } finally { input.dispose(); reader.close(); }
 }
+
+/** user_data_unregistered SEI, with a payload spanning the probe's first block. */
+export function withLeadingSei(bytes: Uint8Array, codec: AnnexBCodec) {
+  const header = { h264: [6], hevc: [39 << 1, 1], vvc: [0, (23 << 3) | 1] }[codec];
+  const size = 300 * 1024, sizeField = Buffer.alloc(Math.floor(size / 255) + 1, 255);
+  sizeField[sizeField.length - 1] = size % 255;
+  return Buffer.concat([Buffer.from([0, 0, 0, 1, ...header, 5]), sizeField, Buffer.alloc(size, 0x55), Buffer.of(0x80), bytes]);
+}

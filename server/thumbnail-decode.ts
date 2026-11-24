@@ -3,7 +3,7 @@ import { closeSync, fstatSync, openSync, readSync, statSync } from 'node:fs';
 import { CustomSource, EncodedPacketSink, Input, MP4, QTFF, MATROSKA, WEBM, MPEG_TS } from 'mediabunny';
 import jpeg from 'jpeg-js';
 import { firstAnnexBPicture } from '../shared/media/containers/annex-b-packet-source.ts';
-import { containerFromHeader } from '../shared/media/containers/container-header.ts';
+import { readPlaybackContainer } from '../shared/media/containers/container-header.ts';
 import { scanFlv } from '../shared/media/containers/flv-demux.ts';
 import { matroskaFfv1Configuration, matroskaStructure } from '../shared/media/containers/matroska-clocks.ts';
 import type { PacketCodecParameters } from '../shared/media/containers/matroska-clocks.ts';
@@ -45,7 +45,7 @@ export async function decodeCover({core,heap}:Awaited<ReturnType<typeof loadServ
       return bytes;
     };
     const reader = {size,read:async (at:number,n:number)=>read(at,n),close(){}};
-    const format = containerFromHeader(read(0,Math.min(size,1024)));
+    const format = await readPlaybackContainer(reader);
     core._vp_set_threads(1);
     ctx = core._vp_create();
     if (!ctx) throw new Error('Decoder allocation failed');

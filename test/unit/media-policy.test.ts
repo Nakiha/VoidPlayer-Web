@@ -19,6 +19,29 @@ test('container routing is byte-based for local and remote inputs, including ren
   }} finally {globalThis.fetch=saved;}
 });
 
+test('Annex-B Range probing carries split start codes and headers across reads', async () => {
+  const size = 1024 * 1024, boundary = 256 * 1024, url = 'https://example.invalid/extensionless';
+  const saved = globalThis.fetch;
+  try {
+    for (const start of [boundary - 2, boundary - 4]) {
+      const bytes = new Uint8Array(size).fill(0x55);
+      bytes.set([0, 0, 1, 0, (23 << 3) | 1], 0); // VVC prefix SEI
+      bytes.set([0, 0, 1, 0, (15 << 3) | 1], start);
+      const ranges: string[] = [];
+      globalThis.fetch = async (_url, init) => {
+        const range = new Headers(init?.headers).get('range')!;
+        ranges.push(range);
+        const [, first, last] = /^bytes=(\d+)-(\d+)$/.exec(range)!;
+        return new Response(bytes.slice(Number(first), Number(last) + 1), {
+          status: 206, headers: { 'content-range': `bytes ${first}-${last}/${size}` },
+        });
+      };
+      assert.equal(await probeContainer({ url, size }), 'annexb');
+      assert.deepEqual(ranges, ['bytes=0-1023', 'bytes=1024-262143', 'bytes=262144-524287']);
+    }
+  } finally { globalThis.fetch = saved; }
+});
+
 function source(decoder='webcodecs') {
   let disposed=0;
   const value={info:{decoder},frameAt:async()=>{throw Error('unused');},framesAfter:async()=>[],async *framesFrom(){},dispose(){disposed++;}} as unknown as MediaSource;

@@ -44,7 +44,8 @@ migration matrices are not current support tables.
 ## Elementary streams
 
 The supported filename extensions are `.h264` / `.avc`, `.h265` / `.hevc` and
-`.h266` / `.vvc`. Detection uses Annex-B start codes and parameter-set headers.
+`.h266` / `.vvc`. Detection uses Annex-B start codes and parameter-set headers. When a leading
+SEI delays the parameter sets, probes scan in bounded chunks up to 32 MiB.
 The source must start with a random access picture and use a single layer and
 stable parameter sets. The parser rejects unsupported picture layouts such as
 interlaced AVC/HEVC, AVC slice groups and VVC gradual decoder refresh.
