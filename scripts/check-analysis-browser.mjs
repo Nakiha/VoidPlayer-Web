@@ -488,10 +488,11 @@ try {
   assert.ok(fl.x >= box.x - 1 && fl.x + fl.width <= box.x + box.width + 1, `卡片横向不出绘图区：${JSON.stringify(fl)}`);
   assert.ok(fl.y >= box.y + box.height - 4, `卡片应在横轴下方、不盖图表与轴数字：${JSON.stringify(fl)}`);
   assert.ok(Math.abs((fl.x + fl.width / 2) - mx) <= fl.width / 2 + 8, '卡片水平以鼠标为中心');
-  // 移出后顶层卡片隐藏（不占布局）。
-  await page.mouse.move(box.x + box.width * 0.5, box.y - 60);
-  await page.waitForTimeout(300);
-  assert.equal(await page.evaluate(() => window.__vpAnalysis.float), null, '移出后卡片隐藏');
+  // 图表顶部的间隔仍属于悬停区，移出整个分析面板才关闭卡片。
+  const panelBounds = await page.locator('#analysis-panel').boundingBox();
+  assert.ok(panelBounds && panelBounds.y > 4);
+  await page.mouse.move(panelBounds.x + panelBounds.width * 0.5, panelBounds.y - 4);
+  await page.waitForFunction(() => window.__vpAnalysis?.float === null);
   // 等待测试快照：布局 glyph 就绪。
   await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.length > 0, undefined, { timeout: 30000 });
   // 只开码率图：隐藏帧大小行，鼠标在曲线上仍能读两轨码率。
