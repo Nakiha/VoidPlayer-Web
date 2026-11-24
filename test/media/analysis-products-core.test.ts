@@ -20,8 +20,15 @@ function canonical({metrics:{elapsedMs,bytesRead,heapBytes,...metrics},...value}
 for(const [name,startUs,endUs,expected] of [['mhw_hevc_fullrange_bt709_3s.mp4',500000,700000,180],['h264_9s_1920x1080.mp4',500000,700000,30],['h266_10s_1920x1080.mp4',0,10000,49]] as const)
 test(`products ${name}: exact fields, summary queries, warm zero decoder`,async()=>{
  const input=await openAnalysisInput(await reader(name),new AbortController().signal), firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
+ let hasNonzeroBits = false;
  const target={mode:'stream' as const,sourceVersion:name,firstPtsUs,durationUs,window:{startUs,endUs,axis:'pts' as const}},oracle=new Map<number,AnalysisBlocks>(),original=new DiagramStore(),projected=new DiagramStore();
- await analyzeStream(await reader(name),target,factory,manifest.buildId,new AbortController().signal,async result=>{oracle.set(result.picture.au,packLegacy(result));original.put(result);},async()=>{});
+ await analyzeStream(await reader(name),target,factory,manifest.buildId,new AbortController().signal,async result=>{
+  assert.equal(result.capabilities.bits, 'ready');
+  assert.ok(result.blocks.every(block => Number.isInteger(block.bits) && block.bits! >= 0));
+  hasNonzeroBits ||= result.blocks.some(block => block.bits! > 0);
+  oracle.set(result.picture.au,packLegacy(result));original.put(result);
+ },async()=>{});
+ assert.ok(hasNonzeroBits, 'the decoder must supply bit counts for this fixture');
  if(name.startsWith('h264_'))assert.deepEqual(oracle.values().next().value!.sourceLayout,{provenance:'configuration-sps-v1',configuration:0,codedWidth:1920,codedHeight:1088,visibleRect:{x:0,y:0,width:1920,height:1080}});
  let bytes=0,products=0;
  await analyzeStream(await reader(name),{...target,product:'summary'},factory,manifest.buildId,new AbortController().signal,async(result:AnalysisOutput)=>{
@@ -32,7 +39,12 @@ test(`products ${name}: exact fields, summary queries, warm zero decoder`,async(
  for(const anchor of [null,0,1,10,48])assert.deepEqual(projected.query(name,anchor,500000),original.query(name,anchor,500000));
  const summaries=new Map<number,AnalysisSummary>();for(const au of oracle.keys()){const summary=projected.summaryAt(name,au);assert.ok(summary);summaries.set(au,summary);}
  let warm=0;await analyzeStream(await reader(name),{...target,product:'summary'},()=>{throw Error('warm request initialized decoder');},manifest.buildId,new AbortController().signal,async()=>{warm++;},async()=>{},undefined,async p=>summaries.get(p.au)??null);assert.equal(warm,expected);
- let packedBytes=0;
- await analyzeStream(await reader(name),{...target,product:'blocks'},factory,manifest.buildId,new AbortController().signal,async(result:AnalysisOutput)=>{assert.ok('product' in result && result.product==='blocks');validateProduct(result);assert.deepEqual(new Uint8Array(result.payload),new Uint8Array(oracle.get(result.picture.au)!.payload));assert.deepEqual(canonical(legacyOf(result)),canonical(legacyOf(oracle.get(result.picture.au)!)));packedBytes+=result.payload.byteLength+Buffer.byteLength(JSON.stringify({...result,payload:undefined}))+40;},async()=>{});
- if(expected===180)assert.ok(packedBytes<=50*1024*1024);
+ let packedBytes=0, additionalBitBytes=0;
+ await analyzeStream(await reader(name),{...target,product:'blocks'},factory,manifest.buildId,new AbortController().signal,async(result:AnalysisOutput)=>{assert.ok('product' in result && result.product==='blocks');validateProduct(result);assert.deepEqual(new Uint8Array(result.payload),new Uint8Array(oracle.get(result.picture.au)!.payload));assert.deepEqual(canonical(legacyOf(result)),canonical(legacyOf(oracle.get(result.picture.au)!)));const headerBytes = Buffer.byteLength(JSON.stringify({...result, payload:undefined}));
+  const {bits, ...baseCapabilities} = result.capabilities;
+  const baseHeaderBytes = Buffer.byteLength(JSON.stringify({...result, capabilities:baseCapabilities, encoding:'blocks-le12-v2', payload:undefined}));
+  packedBytes += result.payload.byteLength + headerBytes + 40;
+  additionalBitBytes += result.validatedBlockCount * 4 + headerBytes - baseHeaderBytes;},async()=>{});
+ // Keep the original compact budget for the existing fields and allow the exact new-field overhead.
+ if(expected===180)assert.ok(packedBytes - additionalBitBytes <= 50 * 1024 * 1024);
 });

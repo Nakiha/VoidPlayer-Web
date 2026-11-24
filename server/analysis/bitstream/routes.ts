@@ -99,7 +99,7 @@ export async function handleAnalysisRoutes(
         buildId:await scheduler.buildIdentity(),
         productSchema:PRODUCT_SCHEMA,
         products:{stream:["legacy","summary","blocks"],picture:["legacy","blocks","prediction-intra","prediction-inter"],range:["legacy"]},
-        encodings:['summary-json-v1', 'blocks-le12-v2', 'intra-le16-v1', 'inter-le32-v1'],
+        encodings:['summary-json-v1', 'blocks-le12-v2', 'blocks-le16-v3', 'intra-le16-v1', 'inter-le32-v1'],
         predictionProducts:{h264:['prediction-intra'],hevc:['prediction-intra','prediction-inter'],vvc:['prediction-intra','prediction-inter']},
         blockDepth: { hevc: "hevc-cu", vvc: "vvc-qt" },
         schema: 1,

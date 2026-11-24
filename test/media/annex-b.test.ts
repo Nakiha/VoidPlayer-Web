@@ -83,14 +83,15 @@ for (const [codec, name, sampleFps] of samples) test(`Annex-B ${codec} seeks to 
       assert.equal(result.sourcePtsUs, pts);
       assert.equal(result.sourceDtsUs, null);
       assert.equal(result.containerHeader?.box, 'annexb');
-      assert.ok(result.blocks.length > 0);
+      assert.equal(result.capabilities.bits, 'ready');
+      assert.ok(result.blocks.some(block => (block.bits ?? 0) > 0));
       const originalReader = new RangeReader({ file: new Blob([await readFile(file)]) });
       const original = await openAnalysisInput(originalReader, signal);
       try {
         const originalPacket = original.packets[au];
         const reference = await analyzePicture(originalReader, { sourceVersion: 'mp4-oracle', sourcePtsUs: originalPacket.pts,
           normalizedMediaUs: originalPacket.pts - original.packets[0].pts }, createCore, 'annexb-test', signal, { input: original });
-        assert.deepEqual(result.blocks, reference.blocks, 'raw and MP4 produce the same block geometry, modes and QP for this AU');
+        assert.deepEqual(result.blocks, reference.blocks, 'raw and MP4 produce the same block geometry, modes, QP and bit counts for this AU');
         assert.deepEqual(result.references, reference.references);
       } finally { original.close(); }
       assert.equal((await engine.next(pts))?.pts, opened.times[position + 1], 'analysis leaves playback cursor in place');

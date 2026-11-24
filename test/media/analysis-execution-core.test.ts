@@ -10,7 +10,7 @@ import {openAnalysisInput} from '../../shared/analysis/bitstream/input.ts';
 import {countCore,emptyCounters} from '../../shared/analysis/bitstream/counters.ts';
 import {RETRY_FULL} from '../../shared/analysis/bitstream/execution-error.ts';
 import {createThreadedAnalysisCore} from '../../shared/analysis/bitstream/core-memory.ts';
-import {isProduct,readBlock} from '../../shared/analysis/bitstream/products.ts';
+import {isProduct,blockStride, readBlock} from '../../shared/analysis/bitstream/products.ts';
 import type {AnalysisOutput} from '../../shared/analysis/bitstream/products.ts';
 const manifest=JSON.parse(await readFile('public/vendor/voidplayer-analysis/manifest.json','utf8'));
 const create=(await import(pathToFileURL(path.resolve('public/vendor/voidplayer-analysis/voidplayer-analysis.js')).href)).default;
@@ -20,7 +20,7 @@ const canonical=(r:AnalysisOutput)=>{const {metrics,...rest}=r;return rest;};
 const assertMain10=(r:AnalysisOutput)=>{
  assert.equal(r.qp.bitDepth,10);assert.equal(r.capabilities.qp,'ready');assert.ok(r.qp.mean! > 0 && r.qp.mean! <= 51);assert.deepEqual(r.reasonCodes,[]);
  assert.equal(r.confidence,'exact');assert.equal(r.capabilities.blocks,'ready');assert.equal(r.capabilities.modes,'ready');assert.equal(r.capabilities.motion,'unsupported');
- if(isProduct(r)){if(r.product==='blocks'){const view=new DataView(r.payload);for(let i=0;i<r.validatedBlockCount;i++)assert.ok(readBlock(view,i).qp! > 0);}}
+ if(isProduct(r)){if(r.product==='blocks'){const view=new DataView(r.payload);for(let i=0;i<r.validatedBlockCount;i++)assert.ok(readBlock(view,i,blockStride(r.encoding)).qp! > 0);}}
  else assert.ok(r.blocks.length>0&&r.blocks.every(b=>b.qp! > 0));
 };
 for(const name of ['normal','late-hash','late-grain','late-pps','main10','main10-late-hash','main10-late-grain','main10-late-pps','open-gop'] as const)

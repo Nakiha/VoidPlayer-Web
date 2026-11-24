@@ -39,7 +39,13 @@ export function validBlockDepth(kind: BlockDepth | undefined, depth: number | un
   if (!kind) return depth === undefined;
   return depth !== undefined && Number.isInteger(depth) && depth >= 0 && depth <= (kind === 'hevc-cu' ? 3 : 5);
 }
+export function validBlockBits(ready: boolean, bits: number | undefined) {
+  if (!ready) return bits === undefined;
+  return bits !== undefined && Number.isInteger(bits) && bits >= 0 && bits <= 0xffffffff;
+}
 export interface AnalysisBlock {
+  /** Bits attributed by the decoder to this block. Zero is a valid observation. */
+  bits?: number;
   depth?: number;
   x: number;
   y: number;
@@ -105,6 +111,7 @@ export interface AnalysisResult {
     qp: "ready" | "unsupported";
     modes: "ready" | "unsupported";
     motion: "unsupported";
+    bits?: "ready";
   };
   qp: {
     component: "luma";
@@ -265,6 +272,7 @@ export function validateMetadata(result: Omit<AnalysisResult, "blocks">): void {
     throw new AnalysisFailure("resource-limit", "Invalid analysis geometry");
   if (!result.capabilities || !['ready', 'unsupported'].includes(result.capabilities.blocks) ||
       !['ready', 'unsupported'].includes(result.capabilities.qp) || !['ready', 'unsupported'].includes(result.capabilities.modes) ||
+      (result.capabilities.bits !== undefined && (result.capabilities.bits !== 'ready' || result.confidence !== 'exact')) ||
       result.capabilities.motion !== 'unsupported' || !result.qp || result.qp.component !== 'luma' || result.qp.weighting !== 'pixel-area' ||
       !Number.isInteger(result.qp.bitDepth) || (result.qp.bitDepth < 8 && !(result.confidence === "partial" && result.qp.bitDepth === 0 && result.qp.mean === null)) || result.qp.bitDepth > 16 ||
       (result.qp.mean !== null && (!Number.isFinite(result.qp.mean) || result.qp.mean < 0 || result.qp.mean > (result.codec === 'vvc' ? 63 : 51))) ||
@@ -283,7 +291,10 @@ export function validateResult(result: AnalysisResult): void {
     throw new Error("Invalid analysis output geometry");
   if (w > 4096 || h > 2304 || blocks.length > BUDGET.blocks)
     throw new AnalysisFailure("resource-limit", "Analysis resource limit");
-  if (result.confidence !== "exact") return;
+  if (result.confidence !== "exact") {
+    if (blocks.some(block => block.bits !== undefined)) throw new Error('Unexpected block bit count');
+    return;
+  }
   if (
     !blocks.length ||
     w % 4 ||
@@ -300,6 +311,7 @@ export function validateResult(result: AnalysisResult): void {
   let area = 0, weightedQp=0;
   for (const b of blocks) {
     if (
+      !validBlockBits(result.capabilities.bits === 'ready', b.bits) ||
       !validBlockDepth(result.blockDepth, b.depth) || ![b.x, b.y, b.width, b.height].every(
         (n) => Number.isInteger(n) && n % 4 === 0,
       ) ||

@@ -79,6 +79,7 @@ if (process.env.CI && !core) throw new Error('CI releases require pinned decoder
 const analysis = JSON.parse(await readFile(path.join(out, 'dist/vendor/voidplayer-analysis/provenance.json'), 'utf8'));
 if (analysis.referenceAbi !== 1 || analysis.source.referenceAbi !== 1) throw new Error('Release requires analysis reference ABI 1.');
 if (analysis.predictionAbi !== 1 || analysis.source.predictionAbi !== 1) throw new Error('Release requires analysis prediction ABI 1.');
+if (analysis.blockBitsAbi !== 1 || analysis.source.blockBitsAbi !== 1) throw new Error('Release requires analysis block bits ABI 1.');
 if (analysis.dirty) throw new Error('Publish and pin the analysis core source before packaging a release; the local preview core has unpublished changes.');
 const coreSources = core ? `WASM build source: https://github.com/${core.source.repository}/tree/${core.source.revision}
 FFmpeg source: https://github.com/${core.source.ffmpegRepository}/tree/${core.source.ffmpegRevision}

@@ -1,7 +1,7 @@
 import type { AnalysisBlock, BlockDepth, ReadonlyAnalysisResult } from '../../../../shared/analysis/bitstream/contract.ts';
 import type { Slot } from '../../../../shared/review/model.ts';
 import { msg, t } from '../../../i18n.ts';
-import { blockColor, summarizeBlocks } from './block-display.ts';
+import { bitBandLabel, blockColor, summarizeBlocks } from './block-display.ts';
 import type { BlockFilter, Dimension } from './block-display.ts';
 
 export const depthLabel = (kind?: BlockDepth) => kind === 'vvc-qt' ? t(msg('bitstream.qtDepth', 'QT 深度')) :
@@ -109,7 +109,7 @@ export function installFrameInspector(drawer: HTMLElement, refresh: () => void, 
     const total = unit === 'count' ? summary.blockCount : summary.codedPixels;
     bins.replaceChildren(...summary.distributions[field].map(bin => {
       const button = document.createElement('button'); button.type = 'button'; button.dataset.key = bin.key;
-      const name = field === 'modes' ? predictionLabel(bin.key as AnalysisBlock['mode']) : bin.key;
+      const name = field === 'modes' ? predictionLabel(bin.key as AnalysisBlock['mode']) : field === 'bits' ? bitBandLabel(bin.key) : bin.key;
       const label = document.createElement('span'); label.textContent = name;
       const meter = document.createElement('span'); meter.className = 'bitstream-meter'; meter.setAttribute('aria-hidden', 'true');
       const bar = document.createElement('i'), percent = 100 * bin[unit] / total;

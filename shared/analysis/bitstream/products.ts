@@ -1,7 +1,7 @@
 import { isPredictionProduct, predictionStride, PREDICTION_BYTES, validatePredictions } from './predictions.ts';
 import type {PredictionProduct} from './predictions.ts';
 import {parseBudgetedJson} from './json-budget.ts';
-import { ANALYSIS_RECIPE, ANALYZER_VERSION, BUDGET, pictureId, validBlockDepth, validateMetadata, validateResult } from './contract.ts';
+import { ANALYSIS_RECIPE, ANALYZER_VERSION, BUDGET, pictureId, validBlockBits, validBlockDepth, validateMetadata, validateResult } from './contract.ts';
 import type { AnalysisBlock, AnalysisResult, SourcePictureKey } from './contract.ts';
 import { parseMediaIndexIdentity } from '../../media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../../media/indexing/media-index-identity.ts';
@@ -35,7 +35,7 @@ interface ProductMetadata extends FrameMetadata {
   productSchema: typeof PRODUCT_SCHEMA;
   indexIdentity: ProductIndexIdentity;
   validatedBlockCount: number;
-  encoding: 'summary-json-v1' | 'blocks-le12-v2' | 'intra-le16-v1' | 'inter-le32-v1';
+  encoding: 'summary-json-v1' | BlockEncoding | 'intra-le16-v1' | 'inter-le32-v1';
 }
 export interface AnalysisSummary extends ProductMetadata { product: 'summary'; encoding: 'summary-json-v1' }
 /** Validate a complete transport packet before publishing any of its pictures. */
@@ -59,14 +59,21 @@ export function validateSummaryPacket(packet: { cachedGop?: unknown; summaryBatc
   }
   return { results: batch as AnalysisSummary[], cached, cursor: packet.cursor as number };
 }
-export interface AnalysisBlocks extends ProductMetadata { product: 'blocks'; encoding: 'blocks-le12-v2'; payload: ArrayBuffer }
+type BlockEncoding = 'blocks-le12-v2' | 'blocks-le16-v3';
+export interface AnalysisBlocks extends ProductMetadata { product: 'blocks'; encoding: BlockEncoding; payload: ArrayBuffer }
+export const blockEncoding = (hasBits: boolean): BlockEncoding => hasBits ? 'blocks-le16-v3' : 'blocks-le12-v2';
+export function blockStride(encoding: BlockEncoding): 12 | 16 {
+  if (encoding === 'blocks-le12-v2') return 12;
+  if (encoding === 'blocks-le16-v3') return 16;
+  throw new Error('Unknown analysis block encoding');
+}
 export interface AnalysisPredictions extends ProductMetadata {
   product: PredictionProduct;
   encoding: 'intra-le16-v1' | 'inter-le32-v1';
   payload: ArrayBuffer;
 }
 export type AnalysisProduct = AnalysisSummary | AnalysisBlocks | AnalysisPredictions;
-export function productEncoding(product: AnalysisProduct['product']) {
+function productKeyEncoding(product: AnalysisProduct['product']) {
   return ({summary:'summary-json-v1', blocks:'blocks-le12-v2', 'prediction-intra':'intra-le16-v1', 'prediction-inter':'inter-le32-v1'} as const)[product];
 }
 export type AnalysisOutput = AnalysisResult | AnalysisProduct;
@@ -77,16 +84,22 @@ export const metadata = (value: AnalysisOutput): FrameMetadata => {
   const { blocks, ...frame } = value; return frame;
 };
 export function productKey(picture: SourcePictureKey, buildId: string, indexIdentity: ProductIndexIdentity | null, product: AnalysisProduct['product']) {
-  return JSON.stringify([pictureId(picture), buildId, ANALYSIS_RECIPE, ANALYZER_VERSION, PRODUCT_SCHEMA, product, productEncoding(product), analysisIndexIdentity(indexIdentity)]);
+  // Build IDs distinguish producer revisions. Preserve the lookup namespace for older block products.
+  return JSON.stringify([pictureId(picture), buildId, ANALYSIS_RECIPE, ANALYZER_VERSION, PRODUCT_SCHEMA, product, productKeyEncoding(product), analysisIndexIdentity(indexIdentity)]);
 }
 export function summaryOf(value: AnalysisOutput, indexIdentity: ProductIndexIdentity | null = null): AnalysisSummary {
   if (isProduct(value)) return { ...metadata(value), product: 'summary', productSchema: PRODUCT_SCHEMA, encoding: 'summary-json-v1', indexIdentity: value.indexIdentity, validatedBlockCount: value.validatedBlockCount };
   return { ...metadata(value), product: 'summary', productSchema: PRODUCT_SCHEMA, encoding: 'summary-json-v1', indexIdentity:analysisIndexIdentity(indexIdentity), validatedBlockCount: value.blocks.length };
 }
 const modes = [undefined, 'intra', 'inter', 'skip'] as const;
-export function readBlock(view: DataView, i: number): AnalysisBlock {
-  const at = i * 12, q = view.getInt16(at + 8, true), depthCode = view.getUint8(at + 11);
-  return { x: view.getUint16(at, true), y: view.getUint16(at + 2, true), width: view.getUint16(at + 4, true), height: view.getUint16(at + 6, true), qp: q === -32768 ? null : q, mode: modes[view.getUint8(at + 10)]!, ...(depthCode ? {depth: depthCode - 1} : {}) };
+export function readBlock(view: DataView, i: number, stride: 12 | 16): AnalysisBlock {
+  const at = i * stride, q = view.getInt16(at + 8, true), depthCode = view.getUint8(at + 11);
+  return {
+    x: view.getUint16(at, true), y: view.getUint16(at + 2, true), width: view.getUint16(at + 4, true), height: view.getUint16(at + 6, true),
+    qp: q === -32768 ? null : q, mode: modes[view.getUint8(at + 10)]!,
+    ...(depthCode ? {depth: depthCode - 1} : {}),
+    ...(stride === 16 ? {bits: view.getUint32(at + 12, true)} : {}),
+  };
 }
 /** Validate directly over bounded records, without a retained array of JS blocks. */
 export function validateRecords(frame: FrameMetadata, count: number, at: (i: number) => AnalysisBlock) {
@@ -102,8 +115,8 @@ export function validateRecords(frame: FrameMetadata, count: number, at: (i: num
   const aligned = (n: number) => Number.isInteger(n) && n % 4 === 0;
   let area = 0, sum = 0;
   for (let i = 0; i < count; i++) {
-    const { x, y, width, height, mode, qp, depth } = at(i);
-    if (!validBlockDepth(frame.blockDepth, depth) || !aligned(x) || !aligned(y) || !aligned(width) || !aligned(height) ||
+    const { x, y, width, height, mode, qp, depth, bits } = at(i);
+    if (!validBlockBits(frame.capabilities.bits === 'ready', bits) || !validBlockDepth(frame.blockDepth, depth) || !aligned(x) || !aligned(y) || !aligned(width) || !aligned(height) ||
         x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > w || y + height > h ||
         (mode !== 'intra' && mode !== 'inter' && mode !== 'skip') ||
         (qp === null ? qpRequired : !Number.isInteger(qp) || qp < (frame.qp.bitDepth === 10 ? 1 : 0) || qp > maxQp))
@@ -143,8 +156,10 @@ export function metadataBudgetBytes(value:unknown) {
 }
 export function validateProduct(value: AnalysisProduct) {
   metadataBudgetBytes(value);
-  if (!value || value.productSchema !== PRODUCT_SCHEMA || !['summary','blocks','prediction-intra','prediction-inter'].includes(value.product) || value.encoding !== productEncoding(value.product) || 'blocks' in value) throw new Error('Invalid analysis product');
+  if (!value || value.productSchema !== PRODUCT_SCHEMA || !['summary','blocks','prediction-intra','prediction-inter'].includes(value.product) || 'blocks' in value) throw new Error('Invalid analysis product');
   validateMetadata(value);
+  const encoding = value.product === 'blocks' ? blockEncoding(value.capabilities.bits === 'ready') : productKeyEncoding(value.product);
+  if (value.encoding !== encoding) throw new Error('Invalid analysis product encoding');
   if (value.confidence==='exact' && (value.reasons.length || value.capabilities.blocks!=='ready' || value.capabilities.modes!=='ready' || (value.capabilities.qp==='ready' && value.qp.mean===null)))throw Error('Invalid exact product quality');
   if (!Number.isSafeInteger(value.validatedBlockCount) || value.validatedBlockCount < 0 || value.validatedBlockCount > BUDGET.blocks || (value.confidence === 'exact' && !value.validatedBlockCount)) throw new Error('Invalid validated block count');
   if (!value.indexIdentity)throw Error('Missing analysis index version');
@@ -157,9 +172,12 @@ export function validateProduct(value: AnalysisProduct) {
     validatePredictions(value.product, payload, value);
     return;
   }
-  if (!(payload instanceof ArrayBuffer) || payload.byteLength !== value.validatedBlockCount * 12 || payload.byteLength + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new Error('Invalid packed payload length');
+  if (value.product !== 'blocks') throw new Error('Invalid analysis product');
+  const stride = blockStride(value.encoding);
+  if (!(payload instanceof ArrayBuffer) || payload.byteLength !== value.validatedBlockCount * stride ||
+      payload.byteLength + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new Error('Invalid packed payload length');
   const view = new DataView(payload);
-  const mean = validateRecords(value, value.validatedBlockCount, i => readBlock(view, i));
+  const mean = validateRecords(value, value.validatedBlockCount, i => readBlock(view, i, stride));
   if (mean !== value.qp.mean) throw new Error('Packed QP mismatch');
 }
 export function validateOutput(value: AnalysisOutput) { isProduct(value) ? validateProduct(value) : validateResult(value); }
@@ -168,17 +186,23 @@ export function packLegacy(value: AnalysisResult, indexIdentity: ProductIndexIde
 }
 function packValidatedLegacy(value:AnalysisResult,indexIdentity:ProductIndexIdentity|null):AnalysisBlocks {
   const summary=summaryOf(value,indexIdentity);metadataBudgetBytes(summary);
-  const payload = new ArrayBuffer(value.blocks.length * 12), view = new DataView(payload);
-  value.blocks.forEach((b, i) => writeBlock(view, i, b));
-  return { ...summary, product: 'blocks', encoding: 'blocks-le12-v2', payload };
+  const encoding = blockEncoding(value.capabilities.bits === 'ready'), stride = blockStride(encoding);
+  const payload = new ArrayBuffer(value.blocks.length * stride), view = new DataView(payload);
+  value.blocks.forEach((b, i) => writeBlock(view, i, b, stride));
+  return { ...summary, product: 'blocks', encoding, payload };
 }
-export function writeBlock(view: DataView, i: number, b: AnalysisBlock) {
-  const at = i * 12;
+function writeBlock(view: DataView, i: number, b: AnalysisBlock, stride: 12 | 16) {
+  const at = i * stride;
   [b.x,b.y,b.width,b.height].forEach((v,j) => view.setUint16(at + j * 2, v, true)); view.setInt16(at + 8, b.qp === null ? -32768 : b.qp, true); view.setUint8(at + 10, modes.indexOf(b.mode)); view.setUint8(at + 11, b.depth === undefined ? 0 : b.depth + 1);
+  if (stride === 16) view.setUint32(at + 12, b.bits!, true);
 }
 export function legacyOf(value: AnalysisBlocks): AnalysisResult {
-  validateProduct(value); const view = new DataView(value.payload);
-  return { ...structuredClone(metadata(value)), blocks: Array.from({length: value.validatedBlockCount}, (_, i) => readBlock(view, i)) };
+  validateProduct(value);
+  return unpackBlocks(value);
+}
+function unpackBlocks(value: AnalysisBlocks): AnalysisResult {
+  const view = new DataView(value.payload), stride = blockStride(value.encoding);
+  return { ...structuredClone(metadata(value)), blocks: Array.from({length: value.validatedBlockCount}, (_, i) => readBlock(view, i, stride)) };
 }
 /** Cache ownership never escapes; iteration produces independent records. */
 const OWNED_VALIDATION=Symbol("private validated block ownership");
@@ -189,18 +213,21 @@ export class OwnedBlocks {
   get byteLength() { return this.#value.payload.byteLength + JSON.stringify(metadata(this.#value)).length * 2; }
   copy() { return structuredClone(this.#value); }
   view(): import('./contract.ts').ReadonlyAnalysisResult {
-    const view = new DataView(this.#value.payload), count = this.#value.validatedBlockCount;
+    const view = new DataView(this.#value.payload), count = this.#value.validatedBlockCount, stride = blockStride(this.#value.encoding);
     // A frozen sparse array facade preserves the legacy read-only surface while
     // decoding each requested record into an independent frozen object.
     const blocks = new Proxy(Object.freeze(new Array<AnalysisBlock>(count)), {
-      get(target, key, receiver) { if(key===Symbol.iterator)return function*(){for(let i=0;i<count;i++)yield Object.freeze(readBlock(view,i));}; if (typeof key === 'string' && /^(0|[1-9][0-9]*)$/.test(key)) return Number(key) < count ? Object.freeze(readBlock(view,Number(key))) : undefined; return Reflect.get(target,key,receiver); },
+      get(target, key, receiver) { if(key===Symbol.iterator)return function*(){for(let i=0;i<count;i++)yield Object.freeze(readBlock(view,i,stride));}; if (typeof key === 'string' && /^(0|[1-9][0-9]*)$/.test(key)) return Number(key) < count ? Object.freeze(readBlock(view,Number(key),stride)) : undefined; return Reflect.get(target,key,receiver); },
       has(target,key) { return typeof key === 'string' && /^(0|[1-9][0-9]*)$/.test(key) && Number(key) < count || Reflect.has(target,key); },
     });
     const freeze = (v:any):any => { if(v && typeof v === 'object') { Object.values(v).forEach(freeze); Object.freeze(v); } return v; };
     return Object.freeze({...freeze(structuredClone(metadata(this.#value))), blocks});
   }
-  legacy():AnalysisResult { const view=new DataView(this.#value.payload);return {...structuredClone(metadata(this.#value)),blocks:Array.from({length:this.#value.validatedBlockCount},(_,i)=>readBlock(view,i))}; }
-  *[Symbol.iterator]() { const view = new DataView(this.#value.payload); for (let i = 0; i < this.#value.validatedBlockCount; i++) yield readBlock(view, i); }
+  legacy(): AnalysisResult { return unpackBlocks(this.#value); }
+  *[Symbol.iterator]() {
+    const view = new DataView(this.#value.payload), stride = blockStride(this.#value.encoding);
+    for (let i = 0; i < this.#value.validatedBlockCount; i++) yield readBlock(view, i, stride);
+  }
 }
 /** Checksum covers the canonical serialized header and every payload byte. */
 export async function encodeProduct(value: AnalysisProduct): Promise<Uint8Array> {
@@ -221,7 +248,7 @@ export async function decodeProduct(bytes: Uint8Array): Promise<AnalysisProduct>
   if (!checksum.every((b,i) => b === bytes[end+i])) throw new Error('Analysis checksum mismatch');
   const header = parseBudgetedJson(new TextDecoder('utf-8', {fatal:true}).decode(bytes.subarray(8,8+length))) as AnalysisProduct;
   if (header.product === 'blocks') {
-    if (!Number.isSafeInteger(header.validatedBlockCount) || header.validatedBlockCount < 0 || header.validatedBlockCount > BUDGET.blocks || end - 8 - length !== header.validatedBlockCount * 12) throw new Error('Invalid analysis payload budget');
+    if (!Number.isSafeInteger(header.validatedBlockCount) || header.validatedBlockCount < 0 || header.validatedBlockCount > BUDGET.blocks || end - 8 - length !== header.validatedBlockCount * blockStride(header.encoding)) throw new Error('Invalid analysis payload budget');
     header.payload = bytes.slice(8+length,end).buffer;
   } else if (header.product === 'prediction-intra' || header.product === 'prediction-inter') {
     const size = end - 8 - length;

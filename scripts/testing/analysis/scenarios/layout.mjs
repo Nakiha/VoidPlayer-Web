@@ -250,7 +250,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         const fold = async (button, expanded) => {
           if (await button.getAttribute('aria-expanded') !== String(expanded)) await button.press('Enter');
         };
-        assert.deepEqual(await page.locator('#bitstream-mode button').allTextContents(), ['块划分','预测类型','QP 热图','树深度']);
+        assert.deepEqual(await page.locator('#bitstream-mode button').allTextContents(), ['块划分','预测类型','QP 热图','树深度','编码大小']);
         assert.ok(await page.locator('#bitstream-mode [data-mode="depth"]').isDisabled(), 'AVC macroblocks have no tree depth');
         await setMode('modes');
         assert.deepEqual(await page.locator('#bitstream-prediction-key span').allTextContents(), ['帧内','帧间','跳过']);
@@ -266,6 +266,17 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.deepEqual(await readOverlay(), predictionColors, 'folding both sections preserves the prediction overlay');
         await setMode('qp');
         assert.ok(await page.locator('#bitstream-qp-key').isVisible());
+        const bitsMode = page.locator('#bitstream-mode [data-mode="bits"]');
+        await bitsMode.click();
+        assert.equal(await bitsMode.getAttribute('aria-pressed'), 'true');
+        assert.ok(await page.locator('#bitstream-bits-key').isVisible());
+        const bitColors = await readOverlay();
+        assert.ok(bitColors.visible > 0);
+        assert.notEqual(bitColors.checksum, predictionColors.checksum);
+        await fold(frameToggle, true);
+        assert.ok((await drawer.locator('[data-bins] button > :first-child').allTextContents()).every(label => label.endsWith(' bit')));
+        assert.ok(await drawer.locator('[data-bins] button').count());
+        await fold(frameToggle, false);
         await setMode('modes');
         assert.equal(await display.getAttribute('aria-expanded'), 'false', 'the prediction settings remember their folded state');
         await fold(display, true);
@@ -315,7 +326,13 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.ok(await drawer.isHidden());
         const boxWithoutDrawing = await page.locator('#bitstream-overlay-A').boundingBox();
         await page.locator('#stage-A').dispatchEvent('pointermove', { clientX: boxWithoutDrawing.x + boxWithoutDrawing.width / 2, clientY: boxWithoutDrawing.y + boxWithoutDrawing.height / 2 });
-        await page.locator('.bitstream-hit-tooltip:visible').waitFor();
+        const pointTip = page.locator('.bitstream-hit-tooltip:visible');
+        await pointTip.waitFor();
+        const tooltipText = await pointTip.innerText(), coords = /PTS\s+(\d+), (\d+)/.exec(tooltipText);
+        assert.ok(coords, tooltipText);
+        const block = report.blocks.find(value => value.x === Number(coords[1]) && value.y === Number(coords[2]));
+        assert.ok(Number.isInteger(block?.bits));
+        assert.ok(tooltipText.includes(`${block.bits} bit · ${block.bits / 8} B · ${(block.bits / 8192).toFixed(4)} KiB`));
         const analysisAfterDisplay = await Promise.all(['A', 'B'].map(slot => call('get_bitstream_analysis_state', { slot })));
         const displayRequestEvidence = assertCachedDisplayReuse(requests, requestsBeforeDisplay, page.url(), analysisBeforeDisplay, analysisAfterDisplay);
         assert.ok(displayRequestEvidence.health.length >= 1, 'the injected health poll must be observed inside the guarded display window');

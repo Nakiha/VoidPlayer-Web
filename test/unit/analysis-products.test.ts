@@ -78,6 +78,31 @@ test('packed transport preserves null, checksums header and payload, owns buffer
   const summary = summaryOf(original); assert.throws(() => validateProduct({...summary, blocks: []} as any));
 });
 
+test('coded size preserves zero and unsigned counts through packed transport and cache', async () => {
+  const frame = result(), base = frame.blocks[0];
+  frame.capabilities.bits = 'ready';
+  frame.blocks = [{...base, width: 8, bits: 0}, {...base, x: 8, width: 8, bits: 0xffffffff}];
+  const packed = packLegacy(frame);
+  assert.equal(packed.encoding, 'blocks-le16-v3');
+  assert.equal(packed.payload.byteLength, 32);
+  const decoded = await decodeProduct(await encodeProduct(packed));
+  assert.equal(decoded.product, 'blocks');
+  if (decoded.product !== 'blocks') throw Error('Missing packed blocks');
+  const owned = new OwnedBlocks(decoded);
+  assert.deepEqual(owned.legacy(), frame);
+  assert.deepEqual([...owned].map(block => block.bits), [0, 0xffffffff]);
+  const bins = summarizeBlocks(owned.view()).distributions.bits;
+  assert.deepEqual(bins.map(({count, pixels}) => ({count, pixels})), [{count: 1, pixels: 128}, {count: 1, pixels: 128}]);
+  assert.notEqual(blockColor('bits', bins[0].key, 'h264'), blockColor('bits', bins[1].key, 'h264'));
+  assert.deepEqual(summarizeBlocks(legacyOf(packLegacy(result()))).distributions.bits, []);
+  assert.throws(() => validateProduct({...packed, capabilities: result().capabilities}), /encoding/);
+  assert.throws(() => validateProduct({...packed, payload: packed.payload.slice(0, 24)}), /payload length/);
+  for (const bad of [undefined, -1, 0.5, 0x100000000]) {
+    frame.blocks[0].bits = bad;
+    assert.throws(() => packLegacy(frame), /Invalid analysis block/);
+  }
+});
+
 test('frame inspection keeps coded area, rectangular dimensions, depth zero and unavailable QP distinct', () => {
   const original = result(), base = original.blocks[0];
   const frame: AnalysisResult = {...original, codec: 'vvc', blockDepth: 'vvc-qt', width: 12, height: 8,

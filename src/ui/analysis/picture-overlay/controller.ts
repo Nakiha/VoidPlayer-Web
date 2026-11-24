@@ -145,7 +145,8 @@ export function createAnalysisOverlay(
       }
       if (boundaries) ctx.rect(x, y, w, h);
       if (labels && h >= 18) {
-        const text = fill === 'none' ? blockKey(b, 'sizes') : fill === 'modes' ? modeLabels[b.mode] : key;
+        const text = fill === 'none' ? blockKey(b, 'sizes') : fill === 'modes' ? modeLabels[b.mode] :
+          fill === 'bits' && b.bits !== undefined ? `${b.bits} bit` : key;
         if (text) {
           let textWidth = textWidths.get(text);
           if (textWidth === undefined) { textWidth = ctx.measureText(text).width; textWidths.set(text, textWidth); }

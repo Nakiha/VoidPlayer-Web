@@ -1980,6 +1980,16 @@
     "translation": "Close analysis overlay controls",
     "needsReview": false
   },
+  "bitstream.codedSize": {
+    "source": "编码大小",
+    "translation": "Coded size",
+    "needsReview": false
+  },
+  "bitstream.codedSizeHint": {
+    "source": "解码时估算的块码量，共用语法开销不计入单块",
+    "translation": "Decoder estimate for each block. Shared syntax contributes to the packet size.",
+    "needsReview": false
+  },
   "bitstream.cuDepth": {
     "source": "CU 深度",
     "translation": "CU depth"
@@ -1995,6 +2005,11 @@
   "bitstream.enableTrack": {
     "source": "请开启一个轨道遮罩",
     "translation": "Enable a track overlay"
+  },
+  "bitstream.estimatedCodedSize": {
+    "source": "估算编码大小",
+    "translation": "Estimated coded size",
+    "needsReview": false
   },
   "bitstream.exportFrame": {
     "source": "导出当前帧",

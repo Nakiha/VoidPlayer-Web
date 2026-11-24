@@ -193,7 +193,7 @@ summary 与 blocks 是独立判别联合，不使用空 blocks 数组冒充完�
 
 summary 的 exact 表示 producer 完成了完整几何/覆盖校验，并不表示消费者持有块。面积加权 luma QP、null / unsupported、NAL/config、POC、帧类型和 active-list 候选边保持原语义；motion 仍 unsupported。`DiagramStore` 是逐帧摘要唯一拥有者，原有粗桶可在 raw 记录淘汰后继续显示，但 detailMissing 与实际可读摘要独立。完整摘要被驱逐就必须按需补算；块 LRU 驱逐不会使已保留摘要失效。同 source 的 build / index / stream epoch 变化会清除旧 raw / bins / seen 和精确块；暖复用先重新读取当前 manifest 或受源版本校验的服务端 capabilities。
 
-blocks 使用 12-byte LE 记录：四个 uint16 几何值、int16 QP（-32768 为 null）、uint8 mode、uint8 深度码（0 表示未提供，正数为原生深度加一）。producer 直接遍历 WASM 记录完成范围、模式、QP、重叠和完整覆盖校验，summary 不构造全帧块对象数组。需要 blocks 时在 take/grow 前复制至独立 buffer；只转移这个 buffer，绝不转移 WASM heap。缓存通过私有字段拥有 payload；只读稀疏数组访问器逐块生成独立冻结记录，旧公开 API 返回独立对象数组。相同私有拥有者内的验证证明用不可伪造的模块私有 symbol 传递，不信任 serialized validated 标记。
+`blocks-le12-v2` 使用 12 字节 LE 记录，依次为四个 uint16 几何值、int16 QP（-32768 为 null）、uint8 mode 和 uint8 深度码（0 表示未提供，正数为原生深度加一）。分析 core 的 block bits ABI 1 可在打开解码器前启用 16 字节记录。`blocks-le16-v3` 在原记录末尾追加 uint32 `bits`。具有 `capabilities.bits: "ready"` 的精确帧为每块提供估算码量，0 是有效值。旧结果仍按 12 字节读取，省略该能力和块字段。producer 直接遍历 WASM 记录完成范围、模式、QP、重叠和完整覆盖校验，summary 不构造全帧块对象数组。需要 blocks 时在 take/grow 前复制至独立 buffer；只转移这个 buffer，绝不转移 WASM heap。缓存通过私有字段拥有 payload；只读稀疏数组访问器逐块生成独立冻结记录，旧公开 API 返回独立对象数组。相同私有拥有者内的验证证明用不可伪造的模块私有 symbol 传递，不信任 serialized validated 标记。
 
 产品二进制响应以固定 VAP1 magic、uint32 header 长度、UTF-8 JSON header、可选块 payload 和 SHA-256 组成；checksum 覆盖 magic 到 payload 的全部内容。保留旧 JSON 缓存入口，不把旧 JSON 识别为新 summary。读取使用 fd.stat 和小型格式前缀，在 body 分配前选择限额；长度、count、版本、checksum 和几何均在使用前验证。响应逐段读取，Content-Length 超限、短读、长读和未知格式明确失败，不引入压缩解压路径。
 
@@ -234,9 +234,11 @@ Legacy JSON 的显式外部 indexIdentity 同时进入 single work key 和逐帧
 
 ### 遮罩的填色与边界
 
-视口 control bar 的「分析遮罩」浮层容纳全部遮罩操作。块边界独立开关；填色可选无、QP、预测分类、块尺寸及原生树深度。HEVC 为 CU 深度，VVC 为 QT 深度，AVC 宏块没有树深度。文字和鼠标悬停随填色或数据能力提供实际值。变换单元尚无已发布的导出。色度预测区域和 HEVC 运动矢量由下述逐帧预测接口单独提供。
+视口 control bar 的「分析遮罩」浮层容纳全部遮罩操作。块边界独立开关；填色可选无、QP、预测分类、块尺寸、原生树深度及编码大小。HEVC 为 CU 深度，VVC 为 QT 深度，AVC 宏块没有树深度。文字和鼠标悬停随填色或数据能力提供实际值。变换单元尚无已发布的导出。色度预测区域和 HEVC 运动矢量由下述逐帧预测接口单独提供。
 
-浮层内的「当前帧」折叠区在暂停时读取所选已开启轨道的精确上屏块。面板提供模式、尺寸、QP、树深度分布；百分比可按块数或 coded 面积（包含编码边缘 padding）。点击分布项以黄色突出命中块，再点即可清除。折叠保留当前帧的高亮，切换模式、轨道、帧或关闭浮层会清除。QP 均值固定按面积加权。「导出当前帧」生成含帧身份、QP、能力、统计的 JSON，勾选可附带块明细。播放中、缓存缺失或换片时清除旧帧读数。统计、导出和显示切换均复用已取得的当前帧，不提交分析任务。
+浮层内的「当前帧」折叠区在暂停时读取所选已开启轨道的精确上屏块。面板提供模式、尺寸、QP、树深度、编码大小分布；百分比可按块数或 coded 面积（包含编码边缘 padding）。点击分布项以黄色突出命中块，再点即可清除。折叠保留当前帧的高亮，切换模式、轨道、帧或关闭浮层会清除。QP 均值固定按面积加权。「导出当前帧」生成含帧身份、QP、能力、统计的 JSON，勾选可附带块明细。播放中、缓存缺失或换片时清除旧帧读数。统计、导出和显示切换均复用已取得的当前帧，不提交分析任务。
+
+编码大小按固定的非等宽位数区间填色，悬停显示块的估算 bit、B 和 KiB，开启块内文字时显示 bit。H.264 CAVLC 使用位游标差，H.264 CABAC、HEVC、VVC 使用熵解码字节读取游标差。CABAC 会提前读取字节，个别块的估算值可以为零。参数集、SEI、片头、共用划分语法及 VVC 单独的色度树没有摊入所显示的亮度块，因此块的位数之和可能与整帧包大小不同。
 
 边界绘制保留所有真实块，包括投影到不足 2 CSS px 的小块，不再按投影宽高丢弃整块边线。所有边线合并为一次描边，保持原始分块位置、当前显示区域裁剪与旋转映射，避免细分密集区域在缩小后出现局部空洞。
 

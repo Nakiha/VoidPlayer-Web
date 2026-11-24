@@ -13,13 +13,13 @@ import { progressRingMarkup } from './progress-ring.ts';
 import { installFilterGestures } from './analysis/filter-gestures.ts';
 import { installFloatingPanelAvoidance } from './floating-panels.ts';
 import { depthLabel, installFrameInspector, predictionLabel } from './analysis/picture-overlay/frame-inspector.ts';
-import { blockColor } from './analysis/picture-overlay/block-display.ts';
+import { bitBandColors, blockColor } from './analysis/picture-overlay/block-display.ts';
 import type { BlockFilter, Dimension, FillMode } from './analysis/picture-overlay/block-display.ts';
 import './bitstream-controls.css';
 
 type State = ReturnType<ReviewSession['getState']>;
-const modes = ['sizes', 'modes', 'qp', 'depth'] as const;
-const modeIcons = { sizes: 'analysisOverlay', modes: 'shareNetwork', qp: 'gauge', depth: 'stack' } as const;
+const modes = ['sizes', 'modes', 'qp', 'depth', 'bits'] as const;
+const modeIcons = { sizes: 'analysisOverlay', modes: 'shareNetwork', qp: 'gauge', depth: 'stack', bits: 'storage' } as const;
 type Entry = {
   sourceId: string;
   overlay?: import('./analysis/picture-overlay/controller.ts').ReturnOverlay;
@@ -61,6 +61,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       <label id="bitstream-size-style"><input id="bitstream-size-fill" type="checkbox"><span></span></label>
       <div id="bitstream-prediction-key" class="bitstream-legend" hidden></div>
       <div id="bitstream-qp-key" class="bitstream-legend" hidden><span></span><i></i><span></span></div>
+      <div id="bitstream-bits-key" class="bitstream-legend" hidden><span></span><i></i><span></span></div>
       <div class="bitstream-layer-buttons">
         <button id="bitstream-boundaries" type="button" aria-pressed="true">${icon('analysisOverlay')}<span></span></button>
         <button id="bitstream-labels" type="button" aria-pressed="false">${icon('text')}<span></span></button>
@@ -98,6 +99,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     $('bitstream-size-style').hidden = mode !== 'sizes';
     $('bitstream-prediction-key').hidden = mode !== 'modes';
     $('bitstream-qp-key').hidden = mode !== 'qp';
+    $('bitstream-bits-key').hidden = mode !== 'bits';
     frameToggle.querySelector('span')!.textContent = t(msg('bitstream.frameDistribution', '当前帧 · {metric}分布'), {
       metric: mode === 'sizes' ? t(msg('bitstream.blockSize', '块尺寸')) : mode === 'qp' ? 'QP' : modeTitle(mode),
     });
@@ -210,7 +212,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }
   function supports(entry: Entry, value: Dimension) {
     if (value === 'depth') return !!entry.blockDepth;
-    const key = value === 'sizes' ? 'blocks' : value === 'modes' ? 'modes' : 'qp';
+    const key = value === 'sizes' ? 'blocks' : value;
     return entry.capabilities?.[key] === 'ready';
   }
   function updateDisplay() {
@@ -228,6 +230,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (key === 'sizes') return t(msg('bitstream.partitions', '块划分'));
     if (key === 'modes') return t(msg('bitstream.predictionTypes', '预测类型'));
     if (key === 'qp') return t(msg('bitstream.qp', 'QP 热图'));
+    if (key === 'bits') return t(msg('bitstream.codedSize', '编码大小'));
     return depthLabel();
   }
   function localize() {
@@ -247,6 +250,13 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     }));
     const qpEnds = $('bitstream-qp-key').querySelectorAll('span');
     qpEnds[0].textContent = t(msg('bitstream.lowQp', '低 QP')); qpEnds[1].textContent = t(msg('bitstream.highQp', '高 QP'));
+    const bitsKey = $('bitstream-bits-key'), bitsEnds = bitsKey.querySelectorAll('span');
+    bitsKey.title = t(msg('bitstream.codedSizeHint', '解码时估算的块码量，共用语法开销不计入单块'));
+    bitsEnds[0].textContent = '0 bit';
+    bitsEnds[1].textContent = '≥ 4 KiB';
+    bitsKey.querySelector('i')!.style.background = `linear-gradient(to right,${bitBandColors.join(',')})`;
+    const bitsButton = modeButtons.find(button => button.dataset.mode === 'bits')!;
+    bitsButton.title = bitsKey.title;
     $('bitstream-opacity-label').textContent = opacityLabel;
     $('bitstream-opacity').setAttribute('aria-label', opacityLabel);
     $('bitstream-boundaries').querySelector('span')!.textContent = edges;
@@ -371,7 +381,10 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       if (!block) return;
       const token=session.getPresentedFrame(slot);
       const text = `${slot} · ${formatTime(token?.normalizedMediaUs ?? 0)} · PTS\n${block.x}, ${block.y} · ${block.width}×${block.height} · ${predictionLabel(block.mode)} · QP ${block.qp ?? '—'}`;
-      const value = block.depth === undefined ? text : `${text} · ${depthLabel(entry.blockDepth)} ${block.depth}`;
+      const depth = block.depth === undefined ? '' : ` · ${depthLabel(entry.blockDepth)} ${block.depth}`;
+      const bits = block.bits === undefined ? '' :
+        `\n${t(msg('bitstream.estimatedCodedSize', '估算编码大小'))} · ${block.bits} bit · ${block.bits / 8} B · ${(block.bits / 8192).toFixed(4)} KiB`;
+      const value = text + depth + bits;
       if (entry.tooltip.textContent !== value) entry.tooltip.textContent = value;
       const viewport=panel.closest('.viewport-surface')!.getBoundingClientRect(), tip=entry.tooltip.getBoundingClientRect();
       let x=event.clientX-viewport.left+12, y=event.clientY-viewport.top+12;

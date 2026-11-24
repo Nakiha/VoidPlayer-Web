@@ -10,3 +10,12 @@ export function validateAnalysisCore(core: Record<string, any>) {
   if (typeof core._vpa_feed_known !== 'function')
     throw new AnalysisFailure('internal-error', 'Analysis core ABI mismatch: known timestamp feed is required; update analysis assets to match the player build');
 }
+
+/** Older cores omit the optional extension and keep the 12-byte records. */
+export function hasBlockBitsExtension(core: Record<string, any>) {
+  if (core._vpa_block_bits_abi === undefined && core._vpa_block_bits_enable === undefined) return false;
+  if (typeof core._vpa_block_bits_abi !== 'function' || core._vpa_block_bits_abi() !== 1 ||
+      typeof core._vpa_block_bits_enable !== 'function')
+    throw new AnalysisFailure('internal-error', 'Analysis core ABI mismatch: invalid block bits extension');
+  return true;
+}

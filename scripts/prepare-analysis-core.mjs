@@ -2,7 +2,7 @@ import {analysisFiles} from './core-artifacts.mjs';
 import {verifyCoreCapabilities} from './core-capabilities.mjs';
 import { pathToFileURL } from 'node:url';
 import { checkPredictionAbi } from '../shared/analysis/bitstream/predictions.ts';
-import { validateAnalysisCore } from '../shared/analysis/bitstream/core-abi.ts';
+import { hasBlockBitsExtension, validateAnalysisCore } from '../shared/analysis/bitstream/core-abi.ts';
 import { readFile, mkdir, cp, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -25,7 +25,7 @@ for (const key of [
   "ffmpegRevision",
   "abi",
   "semanticVersion",
-  "referenceAbi", "predictionAbi", "demuxAbi", "qualityAbi", 'qualityInputAbi', 'xpsnrInputAbi',
+  "referenceAbi", "predictionAbi", "blockBitsAbi", "demuxAbi", "qualityAbi", 'qualityInputAbi', 'xpsnrInputAbi',
 ])
   assert.equal(manifest[key], lock[key], `Analysis provenance ${key}`);
 assert.ok(
@@ -37,6 +37,7 @@ const create = (await import(pathToFileURL(path.join(source, 'voidplayer-analysi
 const core=await create({wasmBinary:await readFile(path.join(source,'voidplayer-analysis.wasm'))});
 validateAnalysisCore(core);
 checkPredictionAbi(core);
+assert.ok(hasBlockBitsExtension(core), 'Analysis block bits ABI');
 await verifyCoreCapabilities(source,lock,'analysis','',core);
 assert.equal(typeof core._vpa_feed_known,'function','Known timestamp feed ABI');
 const threaded = JSON.parse(await readFile(path.join(source, 'threading.json'), 'utf8'));
@@ -47,6 +48,7 @@ assert.equal(threaded.ffmpegRevision, lock.threadedFfmpegRevision);
 assert.equal(threaded.buildId, lock.revision + ':mt-' + threadedDigest.slice(0, 16));
 assert.equal(threaded.abi, lock.threadingAbi);
 assert.equal(threaded.predictionAbi, lock.predictionAbi);
+assert.equal(threaded.blockBitsAbi, lock.blockBitsAbi);
 assert.equal(threaded.heapMaxBytes, lock.threadedHeapMaxBytes);
 assert.equal(threaded.maxThreads, lock.maxThreads);
 const createThreaded = (await import(pathToFileURL(path.join(source, 'voidplayer-analysis-mt.js')).href)).default;
@@ -54,6 +56,7 @@ const threadCore = await createThreaded({ wasmBinary: threadedWasm, analysisThre
 try {
   validateAnalysisCore(threadCore);
   checkPredictionAbi(threadCore);
+  assert.ok(hasBlockBitsExtension(threadCore), 'Threaded analysis block bits ABI');
   assert.equal(threadCore._vpa_configure_threads(1, 1), 0);
   assert.equal(threadCore._vpa_configure_threads(2, 2), 0);
   assert.ok(threadCore._vpa_configure_threads(1, 2) < 0);
@@ -78,6 +81,7 @@ await writeFile(
       dirty: manifest.dirty ?? false,
       referenceAbi: manifest.referenceAbi ?? null,
       predictionAbi: manifest.predictionAbi,
+      blockBitsAbi: manifest.blockBitsAbi,
       files: hashes,
     },
     null,

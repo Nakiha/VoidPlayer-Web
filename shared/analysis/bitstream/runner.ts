@@ -8,10 +8,10 @@ import {avcGeometry} from '../../media/codecs/avc-geometry.ts';
 import {hevcGeometry} from '../../media/codecs/hevc-geometry.ts';
 import { makeDemandPlan } from './demand.ts';
 import type { DemandPlan } from './demand.ts';
-import { analysisIndexIdentity, isProduct, validateOutput, validateRecords, PRODUCT_LIMIT, PRODUCT_SCHEMA, metadataBudgetBytes } from './products.ts';
+import { blockEncoding, blockStride, analysisIndexIdentity, isProduct, validateOutput, validateRecords, PRODUCT_LIMIT, PRODUCT_SCHEMA, metadataBudgetBytes } from './products.ts';
 import type { AnalysisOutput, AnalysisProduct, AnalysisSummary, FrameMetadata } from './products.ts';
 import {isAnnexB} from '../../media/codecs/nal-framing.ts';
-import { validateAnalysisCore } from './core-abi.ts';
+import { hasBlockBitsExtension, validateAnalysisCore } from './core-abi.ts';
 import { readNalus, readContainerHeader } from "./diagrams.ts";
 import {
   ANALYSIS_RECIPE,
@@ -73,7 +73,7 @@ async function runPictureAttempt(
   const started = performance.now(),
     input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity}));
   core = coreForInput(core, input.codec);
-  let opened = false, selectedPrediction = false;
+  let opened = false, selectedPrediction = false, collectBits = false;
   try {
     const firstPacket=input.packets[0];
     const cachedAnchor=(hit: AnalysisOutput | null | undefined, packet: typeof firstPacket) =>
@@ -118,6 +118,9 @@ async function runPictureAttempt(
       if (typeof core === 'function') core = await core();
       signal.throwIfAborted();
       validateAnalysisCore(core);
+      collectBits = hasBlockBitsExtension(core);
+      if (collectBits && core._vpa_block_bits_enable() !== 0)
+        throw new AnalysisFailure('internal-error', 'Analysis block bits selection rejected');
       if (isPredictionProduct(target.product)) {
         checkPredictionAbi(core);
         if (input.codec === 'h264' && target.product === 'prediction-inter')
@@ -246,7 +249,8 @@ async function runPictureAttempt(
     const take = (): AnalysisOutput | null => {
       const au = core._vpa_ordinal(),
         n = core._vpa_count(),
-        bytes = n * 12;
+        stride = blockStride(blockEncoding(collectBits)),
+        bytes = n * stride;
       if (
         !Number.isInteger(n) ||
         n < 0 ||
@@ -274,7 +278,7 @@ async function runPictureAttempt(
           ptr = core._vpa_blocks(),
           width = core._vpa_width(),
           height = core._vpa_height();
-        if (ptr < 0 || ptr + bytes > core.HEAPU8.length)
+        if (ptr < 0 || (n > 0 && ptr === 0) || ptr + bytes > core.HEAPU8.length)
           throw new Error("Invalid analysis output pointer");
         const view = new DataView(core.HEAPU8.buffer, ptr, bytes);
         // The HEVC callback clamps signed QpY to an unsigned byte. A positive
@@ -283,17 +287,21 @@ async function runPictureAttempt(
         if (!invalid && input.codec === 'hevc' && depth === 10 && n > 0) {
           qpReady = true;
           for (let i = 0; i < n; i++) {
-            if (view.getInt16(i * 12 + 8, true) === 0) { qpReady = false; break; }
+            if (view.getInt16(i * stride + 8, true) === 0) { qpReady = false; break; }
           }
         }
         const blockDepth = invalid || input.codec === 'h264' ? undefined : input.codec === 'hevc' ? 'hevc-cu' : 'vvc-qt';
-        const blockAt = (i: number): AnalysisBlock => ({
-          x: view.getUint16(i*12, true), y: view.getUint16(i*12+2, true),
-          width: view.getUint16(i*12+4, true), height: view.getUint16(i*12+6, true),
-          ...(blockDepth ? {depth: view.getUint8(i * 12 + 11)} : {}),
-          qp: qpReady ? view.getInt16(i*12+8,true) : null,
-          mode: ({1:'intra',2:'inter',3:'skip'} as const)[view.getUint8(i*12+10) as 1|2|3],
-        });
+        const blockAt = (i: number): AnalysisBlock => {
+          const offset = i * stride;
+          return {
+            x: view.getUint16(offset, true), y: view.getUint16(offset + 2, true),
+            width: view.getUint16(offset + 4, true), height: view.getUint16(offset + 6, true),
+            ...(blockDepth ? {depth: view.getUint8(offset + 11)} : {}),
+            ...(collectBits ? {bits: view.getUint32(offset + 12, true)} : {}),
+            qp: qpReady ? view.getInt16(offset + 8, true) : null,
+            mode: ({1:'intra',2:'inter',3:'skip'} as const)[view.getUint8(offset + 10) as 1|2|3],
+          };
+        };
         if(!sourceLayouts.has(selected.configuration))sourceLayouts.set(selected.configuration,input.codec==='h264'?avcGeometry(input.configurations[selected.configuration]):input.codec==='hevc'?hevcGeometry(input.configurations[selected.configuration]):null);
         const layout=sourceLayouts.get(selected.configuration);
         let frame: FrameMetadata = {
@@ -333,6 +341,7 @@ async function runPictureAttempt(
             qp: invalid || !qpReady ? "unsupported" : "ready",
             modes: invalid ? "unsupported" : "ready",
             motion: "unsupported",
+            ...(!invalid && collectBits ? {bits: "ready" as const} : {}),
           },
           qp: {
             component: "luma",
@@ -360,7 +369,7 @@ async function runPictureAttempt(
         }
         if (target.product) {
           const summary: AnalysisSummary = { ...frame, product:'summary', productSchema:PRODUCT_SCHEMA, encoding:'summary-json-v1', indexIdentity:analysisIndexIdentity(target.indexIdentity), validatedBlockCount:blockCount };
-          options.reserve?.(au, () => metadataBudgetBytes(summary) + 40 + (target.product === 'blocks' ? blockCount * 12 : 0));
+          options.reserve?.(au, () => metadataBudgetBytes(summary) + 40 + (target.product === 'blocks' ? blockCount * stride : 0));
           if (target.product === 'summary') { result = summary; validateOutput(result); }
           else if (isPredictionProduct(target.product)) {
             if (frame.confidence !== 'exact') throw new AnalysisFailure('unsupported-picture-layout', 'Incomplete base picture for prediction analysis');
@@ -368,16 +377,16 @@ async function runPictureAttempt(
             result = {...summary, product:target.product, encoding:target.product === 'prediction-intra' ? 'intra-le16-v1' : 'inter-le32-v1', payload};
             validateOutput(result);
           } else {
-            if (blockCount*12 + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new AnalysisFailure('resource-limit','Packed analysis allocation budget exceeded');
+            if (blockCount * stride + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new AnalysisFailure('resource-limit','Packed analysis allocation budget exceeded');
             // Copy the validated little-endian records before the core frees
             // them. The wire format uses a null QP sentinel and depth + 1 (zero is unavailable).
-            const payload = new Uint8Array(view.buffer, view.byteOffset, blockCount * 12).slice().buffer;
+            const payload = new Uint8Array(view.buffer, view.byteOffset, blockCount * stride).slice().buffer;
             const packed = new DataView(payload);
-            for (let offset = 0; offset < payload.byteLength; offset += 12) {
+            for (let offset = 0; offset < payload.byteLength; offset += stride) {
               if (!qpReady) packed.setInt16(offset + 8, -32768, true);
               packed.setUint8(offset + 11, blockDepth ? packed.getUint8(offset + 11) + 1 : 0);
             }
-            result = {...summary,product:'blocks',encoding:'blocks-le12-v2',payload};
+            result = {...summary,product:'blocks',encoding:blockEncoding(frame.capabilities.bits === 'ready'),payload};
             // Producer already checked geometry directly in the WASM view.
           }
         } else { if(blockCount*128+metadataBudgetBytes(frame)>BUDGET.resultBytes)throw new AnalysisFailure('resource-limit','Legacy analysis allocation budget exceeded');options.reserve?.(au, () => metadataBudgetBytes(frame) + 40 + blockCount * 128);result = {...frame,blocks:Array.from({length:blockCount},(_,i)=>blockAt(i))}; validateMetadata(result); }

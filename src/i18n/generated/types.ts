@@ -491,10 +491,13 @@ export interface Sources {
   "bitstream.byCount": "按块数";
   "bitstream.cancelled": "分析已取消";
   "bitstream.closeOverlay": "关闭分析遮罩";
+  "bitstream.codedSize": "编码大小";
+  "bitstream.codedSizeHint": "解码时估算的块码量，共用语法开销不计入单块";
   "bitstream.cuDepth": "CU 深度";
   "bitstream.displayTab": "画面显示";
   "bitstream.editOpacity": "编辑不透明度";
   "bitstream.enableTrack": "请开启一个轨道遮罩";
+  "bitstream.estimatedCodedSize": "估算编码大小";
   "bitstream.exportFrame": "导出当前帧";
   "bitstream.fieldUnavailable": "此轨当前帧没有该模式的数据";
   "bitstream.frameDistribution": "当前帧 · {metric}分布";
@@ -1768,10 +1771,13 @@ export interface MessageParameters {
   "bitstream.byCount": {  };
   "bitstream.cancelled": {  };
   "bitstream.closeOverlay": {  };
+  "bitstream.codedSize": {  };
+  "bitstream.codedSizeHint": {  };
   "bitstream.cuDepth": {  };
   "bitstream.displayTab": {  };
   "bitstream.editOpacity": {  };
   "bitstream.enableTrack": {  };
+  "bitstream.estimatedCodedSize": {  };
   "bitstream.exportFrame": {  };
   "bitstream.fieldUnavailable": {  };
   "bitstream.frameDistribution": { "metric": string | number };

@@ -12,6 +12,7 @@
   display:flex; align-items:center; gap:5px;
 }
 #bitstream-mode button { background:var(--surface-control); }
+#bitstream-mode button[data-mode=bits] { grid-column:1 / -1; }
 #bitstream-mode button[aria-pressed=true] { color:var(--accent); background:var(--annotation-toolbar-selected); font-weight:600; }
 #bitstream-mode svg,.bitstream-layer-buttons svg,#bitstream-retries svg { width:16px; height:16px; }
 .bitstream-fold {
@@ -36,7 +37,8 @@
 .bitstream-legend,.bitstream-legend span { display:flex; align-items:center; gap:5px; }
 .bitstream-legend { gap:12px; color:var(--text-secondary); }
 #bitstream-prediction-key i { width:9px; height:9px; border-radius:2px; }
-#bitstream-qp-key i { height:5px; flex:1; border-radius:3px; background:linear-gradient(to right,#0b0bf2,#0bf2f2,#0bf20b,#f2f20b,#f20b0b); }
+#bitstream-qp-key i,#bitstream-bits-key i { height:5px; flex:1; border-radius:3px; }
+#bitstream-qp-key i { background:linear-gradient(to right,#0b0bf2,#0bf2f2,#0bf20b,#f2f20b,#f20b0b); }
 .bitstream-distribution { display:flex; align-items:center; justify-content:space-between; color:var(--text-secondary); }
 .bitstream-layer-buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
 .bitstream-layer-buttons button { justify-content:center; gap:6px; background:var(--surface-control); }
