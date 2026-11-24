@@ -1166,7 +1166,7 @@ try {
     const toggle=page.locator('#bitstream-labels');
     assert.equal(await toggle.getAttribute('aria-pressed'),'false','block labels start off');
     assert.deepEqual(await page.locator('#bitstream-display .bitstream-layer-buttons button').evaluateAll(items=>items.map(el=>el.id)),
-      ['bitstream-boundaries','bitstream-labels'], 'display groups the two independent block overlays');
+      ['bitstream-size-fill', 'bitstream-boundaries', 'bitstream-labels'], 'display groups the three independent block controls');
     const requestsBeforeLabels=analysisRequests,positionBeforeLabels=await page.evaluate(()=>window.voidPlayer.getState().positionUs);
     for(const mode of ['qp','modes']) {
       await page.locator(`#bitstream-mode [data-mode="${mode}"]`).click();
@@ -1934,11 +1934,15 @@ try {
         if (!overlay.hit(8+offsetX+150*scale,8+offsetY+66*scale)) throw Error('Hover must remain available without visible boundaries');
         for(const fill of ['qp','modes']) {
           overlay.setDisplay({fill,boundaries:false,labels:false});
-          const center=pixel(8+offsetX+152*scale,8+offsetY+68*scale);
-          // Both fixture fills have little blue, while boundary strokes are
-          // cyan. Fill alpha is now intentionally opaque before CSS opacity.
-          if(!center[3] || center[2]>=100) throw Error('Independent fill should contain no cyan boundary strokes');
-          if(scale>=.5 && pixel(8+offsetX+8*scale,8+offsetY+8*scale)[3]!==255) throw Error('Fill interiors must be opaque before toolbar opacity');
+          const edge = () => [...pixel(8 + offsetX + 152 * scale, 8 + offsetY + 68 * scale)];
+          const fillOnly = edge();
+          const interior = pixel(8 + offsetX + 8 * scale, 8 + offsetY + 8 * scale);
+          if (!fillOnly[3]) throw Error('Fill remains visible independently of boundaries');
+          if (scale >= .5 && interior[3] !== 255) throw Error('Fill interiors must be opaque before toolbar opacity');
+          overlay.setDisplay({ fill, boundaries: true, labels: false });
+          if (edge().every((value, i) => value === fillOnly[i])) throw Error('Enabling boundaries must draw the known edge');
+          overlay.setDisplay({ fill, boundaries: false, labels: false });
+          if (edge().some((value, i) => value !== fillOnly[i])) throw Error('Disabling boundaries must restore exactly the fill-only pixel');
         }
         overlay.setDisplay({fill:'none',boundaries:true,labels:false});
         rows.push({scale,dpr,blocks:blocks.length,metrics:canvas.analysisMetrics});
