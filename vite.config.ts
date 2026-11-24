@@ -158,8 +158,8 @@ export default defineConfig(({ mode }) => {
         }
       }
       if (sites) {
-        await rm(resolve(outputDirectory, 'manifest.webmanifest'), { force: true });
         await rm(resolve(outputDirectory, webSrLicenseFile), { force: true });
+        await writePlayerWorker(outputDirectory, playerAssets, (await productionBuildInfo).coreAssetDigests);
         return;
       }
       const { lock } = await readWebSrAssets(import.meta.dirname);

@@ -22,12 +22,17 @@ execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', video, '-c:v', 'copy', '-f', 
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=64x48:rate=10', '-t', '1', '-c:v', 'mjpeg', avi]);
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=64x48:rate=10', '-t', '1', '-c:v', 'ffv1', software]);
 await assert.rejects(access(path.join(dist, 'admin/index.html')));
-await assert.rejects(access(path.join(dist, 'sw.js')));
-await assert.rejects(access(path.join(dist, 'manifest.webmanifest')));
+await access(path.join(dist, 'sw.js'));
+const manifest = JSON.parse(await readFile(path.join(dist, 'manifest.webmanifest'), 'utf8'));
+assert.equal(manifest.display, 'standalone');
+assert.equal(manifest.file_handlers[0].action, '/?open=files');
+const extensions = Object.values(manifest.file_handlers[0].accept).flat();
+for (const extension of ['.h264', '.h265', '.h266']) assert.ok(extensions.includes(extension));
 assert.deepEqual(JSON.parse(await readFile(path.join(dist, '../.openai/hosting.json'), 'utf8')), { static: { directory: 'dist' } });
 let isolated = false;
 const apiRequests = [], failures = [];
-const mimes = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const mimes = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost');
@@ -72,7 +77,7 @@ try {
     for (const tab of ['caches', 'logs', 'performance', 'about', 'appearance']) {
       await page.locator('#settings-tab-' + tab).click();
       if (tab === 'logs') assert.equal(await page.locator('[data-action="upload"]').isVisible(), false);
-      if (tab === 'about') assert.equal(await page.locator('#web-app').isVisible(), false);
+      if (tab === 'about') assert.equal(await page.locator('#web-app').isVisible(), true);
     }
     await page.locator('#settings-close').click();
     await page.locator('#file-A').setInputFiles(video);
@@ -140,9 +145,32 @@ try {
       decoders.push({ name: track.name, decoder: track.decoder, coreVariant: track.coreVariant });
     }
     await page.waitForTimeout(1200); // One local sync tick must also stay off the network.
+    await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+    await page.locator('#web-app[data-offline="ready"]').waitFor({ state: 'attached', timeout: 45000 });
+    await context.setOffline(true);
+    const offline = await context.newPage();
+    if (engine === 'chromium') await offline.addInitScript(encoded => {
+      // Provide a launch payload during bootstrap, as desktop Chromium does for installed handlers.
+      Object.defineProperty(window, 'launchQueue', { value: { setConsumer(consume) {
+        const bytes = Uint8Array.from(atob(encoded), char => char.charCodeAt(0));
+        const file = new File([bytes], 'offline-launch.h264');
+        consume({ files: [{ kind: 'file', name: file.name, getFile: async () => file }] });
+      } } });
+    }, (await readFile(raw)).toString('base64'));
+    const navigation = await offline.goto(base + (engine === 'chromium' ? manifest.file_handlers[0].action : '/'));
+    assert.ok(navigation.fromServiceWorker(), 'offline launch comes from the versioned player cache');
+    await offline.locator('#settings-open').waitFor({ state: 'visible' });
+    if (engine === 'webkit') await offline.locator('#file-A').setInputFiles(raw);
+    await offline.waitForFunction(() => window.voidPlayer?.getState().tracks[0]?.frame, null, { timeout: 45000 });
+    const offlineTrack = await offline.evaluate(() => window.voidPlayer.getState().tracks[0]);
+    assert.equal(offlineTrack.name, engine === 'chromium' ? 'offline-launch.h264' : path.basename(raw));
+    assert.equal(offlineTrack.container, 'annexb');
+    assert.equal(offlineTrack.frame.ptsUs, 0);
+    await offline.evaluate(() => window.voidPlayer.step(1));
+    assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].frame.ptsUs), 100000);
     assert.deepEqual(apiRequests, [], 'no startup, UI, restore or background task calls /api/');
     assert.deepEqual(failures, [], 'no browser exceptions');
-    rows.push({ isolated, decoders, uriState: true, annotation: true, apiRequests: 0 });
+    rows.push({ isolated, decoders, uriState: true, annotation: true, offlineFirstFrame: true, apiRequests: 0 });
     await context.close();
     console.log('PASS Sites ' + engine + ' isolated=' + isolated);
   }

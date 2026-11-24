@@ -6,8 +6,8 @@ import { verifyCoreArtifact, playbackFiles, analysisFiles } from './core-artifac
 import { readReleaseIdentity, verifyFrontendIdentity } from './release-version.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
-await access(path.join(root, 'artifacts/sites/dist/index.html'));
 const directory = path.join(root, 'artifacts/sites');
+for (const file of ['index.html', 'manifest.webmanifest', 'sw.js']) await access(path.join(directory, 'dist', file));
 const receipt = JSON.parse(await readFile(path.join(directory, 'sites-build.json'), 'utf8'));
 const frontend = JSON.parse(await readFile(path.join(directory, 'dist/build-info.json'), 'utf8'));
 const identity = await readReleaseIdentity(root);

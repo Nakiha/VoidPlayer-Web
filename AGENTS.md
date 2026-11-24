@@ -6,7 +6,7 @@ VoidPlayer Web 用于在浏览器中同步播放多路视频，逐帧对比不�
 
 - 使用 Node.js 24+ 和 `npm ci`。按[开发说明](README.md)准备本机配置与媒体目录。`npm run dev` 启动 Vite 和媒体 API；`npm run serve` 提供已发布的完整版前端。
 - 播放和分析是两个独立 core。用 `bash scripts/sync-wasm-core.sh` 和 `bash scripts/sync-analysis-core.sh` 同步上游产物，来源目录可分别用 `WASM_CORE_DIR` 和 `ANALYSIS_CORE_DIR` 指定。产物位于被 Git 忽略的 `public/vendor/voidplayer-core/` 和 `public/vendor/voidplayer-analysis/`。WASM 构建与裁剪在上游仓库进行。
-- Sites 使用 `npm run dev:sites` 或 `npm run build:sites`。能力由 `src/services/build-profile.ts` 在构建时确定；勿按请求失败或 URL 参数切换模式。Sites 不调用媒体 API，不装配服务器身份、媒体库、分享、日志上传、stdio 页面桥或 PWA。须支持无跨源隔离的本地单线程路径。详见 [Sites 分发](deploy/sites.md)。
+- Sites 使用 `npm run dev:sites` 或 `npm run build:sites`。能力由 `src/services/build-profile.ts` 在构建时确定；勿按请求失败或 URL 参数切换模式。Sites 不调用媒体 API，不装配服务器身份、媒体库、分享、日志上传或 stdio 页面桥。生产静态构建支持 PWA 安装、离线启动和系统文件打开。须支持无跨源隔离的本地单线程路径。详见 [Sites 分发](deploy/sites.md)。
 - 默认在 `src/`、`server/`、`shared/` 查实现，在 `test/`、`scripts/` 的代码文件中查回归。按需查大 JSON 样本和 `docs/evidence/`。从[文档导航](docs/README.md)找契约；历史报告仅代表对应修订与环境。
 
 ## 容器与解码

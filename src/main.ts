@@ -710,7 +710,7 @@ const api = {
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 // Capture the temporary host marker before the bridge consumes its document credential.
-if (!localOnly && import.meta.env.PROD && window.top === window && !document.querySelector('meta[name="voidplayer-page-bridge"]')) {
+if (import.meta.env.PROD && window.top === window && !document.querySelector('meta[name="voidplayer-page-bridge"]')) {
   window.addEventListener('voidplayer:startup-ready', () => { void installOfflineControls(toasts, identitySettings.ready); }, { once: true });
 }
 if (!localOnly) installPageBridge(session,api.tools,uiEvents.signal);

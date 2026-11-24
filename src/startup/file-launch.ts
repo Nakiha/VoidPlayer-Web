@@ -1,5 +1,4 @@
 import { captureDecodeConfiguration, type DecodeConfiguration } from '../media/policy/color-mode.ts';
-import { localOnly } from '../services/build-profile.ts';
 import type { FsFileHandle } from '../services/file-handles.ts';
 import type { FileLaunchOpener, prepareFirstFile } from './prepare-file.ts';
 
@@ -29,7 +28,7 @@ type Request = { files: readonly FsFileHandle[]; inspected?: ReturnType<typeof i
 export let startupFileLaunch: ReturnType<typeof createFileLaunch> | undefined;
 
 export function initializeFileLaunch() {
-  if (localOnly || !import.meta.env.PROD || window.top !== window || location.pathname !== '/' || location.search !== '?open=files'
+  if (!import.meta.env.PROD || window.top !== window || location.pathname !== '/' || location.search !== '?open=files'
       || document.querySelector('meta[name="voidplayer-page-bridge"]')) return;
   const queue = (window as Window & { launchQueue?: FileLaunchQueue }).launchQueue;
   if (queue) startupFileLaunch = createFileLaunch(queue);
