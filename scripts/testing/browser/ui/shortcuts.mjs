@@ -4,6 +4,19 @@ import { waitForDialogClosed } from '../../browser-contracts.mjs';
 const name=process.argv[2]??'webkit';
 await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {viewport:{width:1280,height:800}} }, async ({ page, ready, artifact }) => {
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(() => {
+    // Headless pages cannot toggle the desktop app's native title bar.
+    const matchMedia = window.matchMedia.bind(window);
+    const media = '(display-mode: window-controls-overlay)';
+    const overlay = matchMedia(media);
+    let matches = overlay.matches;
+    Object.defineProperty(overlay, 'matches', { get: () => matches });
+    window.matchMedia = query => query === media ? overlay : matchMedia(query);
+    window.setTestWindowControlsOverlay = enabled => {
+      matches = enabled;
+      overlay.dispatchEvent(new Event('change'));
+    };
+  });
   await ready();
   await page.waitForFunction(() => window.voidPlayer);
   await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
@@ -12,6 +25,7 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   const beforeFocus=await page.locator('#stage-A').boundingBox();
   const beforeView=await page.evaluate(()=>window.voidPlayer.getViewport());
   const topbar = page.locator('.topbar');
+  const imageHeight = () => page.locator('#image-A').evaluate(image => image.getBoundingClientRect().height);
   const toolbarBottom = await topbar.evaluate(bar => bar.getBoundingClientRect().bottom);
   const waitForTopbar = collapsed => page.waitForFunction(({ collapsed, toolbarBottom }) => {
     const bar = document.querySelector('.topbar');
@@ -52,6 +66,7 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await waitForTopbar(true);
   assert.ok(await topbar.evaluate(bar => parseFloat(getComputedStyle(bar).transitionDuration) > 0), 'the toolbar slides when motion is allowed');
   const expandedStage = await page.locator('#stage-A').boundingBox();
+  const expandedImageHeight = await imageHeight();
   assert.equal(expandedStage.y, beforeFocus.y - toolbarBottom, 'the viewport reclaims the topbar space');
   assert.equal(expandedStage.height, beforeFocus.height + toolbarBottom, 'the viewport grows to fill that space');
   for (const [id, shortcut] of [['inspector', 'Backquote'], ['analysis', '1'], ['subtracks', '2'], ['sources', '3']]) {
@@ -98,6 +113,44 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await page.locator('#toggle-chrome').dispatchEvent('keydown',{key:'f',code:'KeyF',isComposing:true});
   await page.keyboard.press('Control+f');
   assert.equal(await focused(),'false','IME and modified F do not toggle focus mode');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const setOverlay = enabled => page.evaluate(enabled => window.setTestWindowControlsOverlay(enabled), enabled);
+  const sampleOverlaySwitch = enabled => page.evaluate(async enabled => {
+    const bar = document.querySelector('.topbar'), stage = document.querySelector('#stage-A');
+    const image = document.querySelector('#image-A');
+    const sample = () => ({ bottom: bar.getBoundingClientRect().bottom, stageTop: stage.getBoundingClientRect().top,
+      imageHeight: image.getBoundingClientRect().height });
+    window.setTestWindowControlsOverlay(enabled);
+    const frames = [sample()];
+    for (let i = 0; i < 4; i++) {
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      frames.push(sample());
+    }
+    return frames;
+  }, enabled);
+  await setOverlay(true);
+  await page.keyboard.press('f');
+  assert.equal(await focused(), 'true');
+  assert.equal(await topbar.evaluate(bar => bar.inert), false, 'focus mode keeps the overlay toolbar interactive');
+  await waitForTopbar(false);
+  assert.deepEqual(await page.locator('#stage-A').boundingBox(), beforeFocus, 'focus mode keeps the overlay toolbar space');
+  const normalImageHeight = await imageHeight();
+  assert.equal(await page.locator('.transport').evaluate(bar => bar.inert), true, 'focus mode still hides playback controls');
+  const settingsButton = page.locator('#settings-open');
+  await settingsButton.focus();
+  assert.equal(await settingsButton.evaluate(button => document.activeElement === button), true, 'overlay toolbar accepts keyboard focus');
+  assert.deepEqual(await sampleOverlaySwitch(false), Array(5).fill({ bottom: 0, stageTop: expandedStage.y, imageHeight: expandedImageHeight }),
+    'showing Chrome’s title bar collapses the app toolbar and fits the image before the first frame');
+  await waitForTopbar(true);
+  assert.equal(await focusButton.evaluate(button => document.activeElement === button), true, 'collapsing returns focus to the exit button');
+  const firstOverlayLayout = { bottom: toolbarBottom, stageTop: beforeFocus.y, imageHeight: normalImageHeight };
+  assert.deepEqual(await sampleOverlaySwitch(true), Array(5).fill(firstOverlayLayout),
+    'hiding Chrome’s title bar restores the app toolbar and fits the image before the first frame');
+  await waitForTopbar(false);
+  assert.equal(await focused(), 'true', 'switching the overlay preserves focus mode');
+  await page.keyboard.press('f');
+  await setOverlay(false);
+  await waitForTopbar(false);
   // Real key down/up: Space must not generate a click on the focused action.
   for (const id of ['previous','next','fullscreen','toggle-chrome','timeline','play']) {
     await page.locator(`#${id}`).focus();

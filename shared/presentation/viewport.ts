@@ -283,12 +283,12 @@ export function splitPixelGeometry(fraction: number, width: number, left: number
 export type OverlayBounds = { left: number; right: number; top: number; bottom: number };
 /** Reserve visible overlay bands for fit/centering only. The stage remains full
  * size so zoomed video can still pass underneath the translucent controls. */
-export function unobscuredFitArea(width: number, height: number, overlays: OverlayBounds[], gap = 4) {
+export function unobscuredFitArea(width: number, height: number, overlays: OverlayBounds[]) {
   let top = 0, bottom = height;
   for (const box of overlays) {
     if (box.right <= 0 || box.left >= width || box.bottom <= 0 || box.top >= height) continue;
-    if ((box.top + box.bottom) / 2 <= height / 2) top = Math.max(top, Math.min(height, box.bottom + gap));
-    else bottom = Math.min(bottom, Math.max(0, box.top - gap));
+    if ((box.top + box.bottom) / 2 <= height / 2) top = Math.max(top, Math.min(height, box.bottom));
+    else bottom = Math.min(bottom, Math.max(0, box.top));
   }
   const available = Math.max(1, bottom - top);
   return { width: Math.max(1, width), height: available, centerY: (top + bottom) / 2 - height / 2 };

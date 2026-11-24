@@ -37,6 +37,7 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     assert.equal(manifest.mime, 'application/manifest+json');
     assert.equal(manifest.start_url, '/');
     assert.equal(manifest.display, 'standalone');
+    assert.deepEqual(manifest.display_override, ['window-controls-overlay']);
     assert.deepEqual(manifest.icons.filter(icon => icon.purpose === 'any').map(icon => icon.sizes), ['192x192', '512x512']);
     for (const icon of manifest.icons) {
       const url = new URL(icon.src, base);

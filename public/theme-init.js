@@ -10,6 +10,7 @@ try {
     document.documentElement.dataset.accent = 'custom';
   }
 } catch {}
+
 let preference;
 try { preference = localStorage.getItem('voidplayer.theme'); } catch {}
 document.documentElement.dataset.theme = preference === 'light' || preference === 'dark'
@@ -24,3 +25,11 @@ try {
     for (const token of tokens) document.documentElement.style.setProperty(`--custom-theme-${token}`, base.colors[token]);
   }
 } catch {}
+
+const windowTheme = document.getElementById('app-window-theme');
+if (windowTheme) {
+  const root = document.documentElement;
+  const defaultColor = document.querySelector(`meta[name="theme-color"][media="(prefers-color-scheme: ${root.dataset.theme})"]`);
+  const surface = root.style.getPropertyValue('--custom-theme-surface') || defaultColor?.content;
+  if (surface) windowTheme.content = surface;
+}

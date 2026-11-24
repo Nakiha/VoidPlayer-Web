@@ -12,13 +12,15 @@ export function installTopbarCompact(topbar: HTMLElement, signal: AbortSignal) {
   ] as const;
   let frame = 0, microtask = false, lastInput = '';
   const sync = () => {
+    if (frame) cancelAnimationFrame(frame);
     frame = 0;
     if (signal.aborted) return;
     const style = getComputedStyle(topbar);
     const controls = [...topbar.querySelectorAll<HTMLElement>('button, input')];
     const input = JSON.stringify([topbar.clientWidth, topbar.textContent, style.font, style.columnGap,
       style.paddingInlineStart, style.paddingInlineEnd, style.getPropertyValue('--button-size'),
-      ['--control-padding-inline', '--control-gap', '--text-sm', '--zoom-control-width', '--icon-size'].map(name => style.getPropertyValue(name)),
+      ['--control-padding-inline', '--control-gap', '--text-sm', '--zoom-control-width', '--icon-size', '--toolbar-drag-width']
+        .map(name => style.getPropertyValue(name)),
       controls.map(control => [control.hasAttribute('disabled'), control.hidden, getComputedStyle(control).font])]);
     if (input === lastInput) return;
     lastInput = input;
@@ -27,7 +29,8 @@ export function installTopbarCompact(topbar: HTMLElement, signal: AbortSignal) {
     try {
       const children = [...topbar.children].filter(child => getComputedStyle(child).display !== 'none');
       const number = (value: string) => Number.parseFloat(value) || 0;
-      let required = number(style.paddingLeft) + number(style.paddingRight) + Math.max(0, children.length - 1) * number(style.columnGap);
+      let required = number(style.paddingLeft) + number(style.paddingRight) + number(style.getPropertyValue('--toolbar-drag-width'))
+        + Math.max(0, children.length - 1) * number(style.columnGap);
       for (const child of children) {
         if (child.classList.contains('toolbar-spacer')) continue;
         const childStyle = getComputedStyle(child);
@@ -59,24 +62,32 @@ export function installTopbarCompact(topbar: HTMLElement, signal: AbortSignal) {
     // The zoom control has a fixed width. Its numeric label changes throughout a pinch.
     if (records.every(record => record.type !== 'attributes' && zoomControl?.contains(record.target))) return;
     if (microtask) return; microtask = true;
-    queueMicrotask(() => { microtask = false; if (frame) cancelAnimationFrame(frame); sync(); });
+    queueMicrotask(() => { microtask = false; sync(); });
   });
   content.observe(topbar, { subtree: true, childList: true, characterData: true, attributes: true,
     attributeFilter: ['disabled', 'data-disabled', 'hidden'] });
-  const resize = new ResizeObserver(update);
-  resize.observe(topbar);
-  if (primary) resize.observe(primary);
-  if (utility) resize.observe(utility);
-  // Zoom / pixel-size / channel labels fill in after a source loads and widen
-  // this group without resizing the topbar itself. Measure it directly so the
-  // settings button is not pushed past the viewport.
-  if (view) resize.observe(view);
+  // Chrome can change the title bar's CSS width after animation-frame callbacks.
+  // Reconcile the outer width before paint. Changes to the action groups can
+  // also be caused by compaction itself, so keep them on the deferred path.
+  const barResize = new ResizeObserver(sync);
+  barResize.observe(topbar);
+  const actionsResize = new ResizeObserver(update);
+  if (primary) actionsResize.observe(primary);
+  if (utility) actionsResize.observe(utility);
+  if (view) actionsResize.observe(view);
+  // Toggling the overlay can also change the drag reserve without resizing the bar.
+  matchMedia('(display-mode: window-controls-overlay)').addEventListener('change', sync, { signal });
   window.addEventListener('resize', update, { signal });
   window.addEventListener('load', update, { signal });
   // Late font metrics can also change label widths without a resize event.
   const fontsChanged = () => { lastInput = ''; update(); };
   void document.fonts.ready.then(fontsChanged, () => {});
   document.fonts.addEventListener('loadingdone', fontsChanged, { signal });
-  signal.addEventListener('abort', () => { resize.disconnect(); content.disconnect(); if (frame) cancelAnimationFrame(frame); }, { once: true });
+  signal.addEventListener('abort', () => {
+    barResize.disconnect();
+    actionsResize.disconnect();
+    content.disconnect();
+    if (frame) cancelAnimationFrame(frame);
+  }, { once: true });
   update();
 }

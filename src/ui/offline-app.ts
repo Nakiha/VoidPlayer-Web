@@ -46,8 +46,8 @@ export async function installOfflineControls(toasts: ToastStack, identityReady: 
   const lifetime = new AbortController();
   const options = { signal: lifetime.signal };
   window.addEventListener('pagehide', event => { if (!event.persisted) lifetime.abort(); }, options);
-  const standalone = matchMedia('(display-mode: standalone)');
-  const inApp = () => standalone.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const appWindow = matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)');
+  const inApp = () => appWindow.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
   let installed = inApp(), prompting = false;
   let dismissHint: (() => void) | undefined;
   let deferred: InstallPrompt | undefined;
@@ -102,7 +102,7 @@ export async function installOfflineControls(toasts: ToastStack, identityReady: 
     void prepare();
   }
   window.addEventListener('appinstalled', didInstall, options);
-  standalone.addEventListener('change', () => { if (inApp()) didInstall(); }, options);
+  appWindow.addEventListener('change', () => { if (inApp()) didInstall(); }, options);
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
     deferred = event as InstallPrompt;

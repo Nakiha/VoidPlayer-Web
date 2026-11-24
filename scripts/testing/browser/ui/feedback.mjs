@@ -86,6 +86,24 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
  assert.equal(await page.locator('#arrangement path').first().getAttribute('d'),originalPath('squares-four'));
  await page.emulateMedia({reducedMotion:'no-preference'});
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
+ // Native title bar geometry changes the toolbar width without resizing the window.
+ // Sample the first layout notification, before a second animation frame can hide a transient layout.
+ const topbar = page.locator('.topbar');
+ await page.locator('#brand-about').waitFor({ state: 'visible' });
+ for (const [width, brandVisible] of [['720px', false], ['', true]]) {
+   const firstLayout = await topbar.evaluate((bar, width) => new Promise(resolve => {
+     const observer = new ResizeObserver(() => {
+       observer.disconnect();
+       const settings = bar.querySelector('#settings-open').getBoundingClientRect();
+       resolve({ brandVisible: getComputedStyle(bar.querySelector('#brand-about')).display !== 'none',
+         rightOverflow: settings.right - bar.getBoundingClientRect().right });
+     });
+     observer.observe(bar);
+     bar.style.width = width;
+   }), width);
+   assert.equal(firstLayout.brandVisible, brandVisible, 'Brand uses the new title bar width in the first layout');
+   assert.ok(firstLayout.rightOverflow <= 1, `Settings fits in the first layout (overflow ${firstLayout.rightOverflow}px)`);
+ }
  // Fit is unobscured, but the full stage remains available beneath glass at zoom.
  await page.setViewportSize({width:1280,height:520});
  await page.evaluate(()=>window.voidPlayer.setViewport({zoom:1,offsetX:0,offsetY:0}));
@@ -93,10 +111,12 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
  const fitted=await page.evaluate(()=>{
    const image=document.querySelector('#image-A').getBoundingClientRect();
    const stage=document.querySelector('#stage-A').getBoundingClientRect();
-   const bars=[...document.querySelectorAll('.card-heading,.transport')].filter(e=>e.getBoundingClientRect().width>0&&!e.hidden).map(e=>e.getBoundingClientRect());
-   return {height:stage.height,overlap:bars.some(b=>image.left<b.right&&image.right>b.left&&image.top<b.bottom&&image.bottom>b.top)};
+   const heading=document.querySelector('[data-slot=A] .card-heading').getBoundingClientRect();
+   const transport=document.querySelector('.transport-dock').getBoundingClientRect();
+   return {height:stage.height,topGap:image.top-heading.bottom,bottomGap:transport.top-image.bottom};
  });
- assert.equal(fitted.overlap,false,'the fitted image is entirely outside overlay bands');
+ assert.ok(Math.abs(fitted.topGap)<=.02,`height-limited video reaches the title edge (gap ${fitted.topGap}px)`);
+ assert.ok(Math.abs(fitted.bottomGap)<=.02,`height-limited video reaches the playback bar edge (gap ${fitted.bottomGap}px)`);
  await page.evaluate(()=>window.voidPlayer.setViewport({zoom:4}));
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  const enlarged=await page.evaluate(()=>({height:document.querySelector('#stage-A').getBoundingClientRect().height,image:document.querySelector('#image-A').getBoundingClientRect().height}));

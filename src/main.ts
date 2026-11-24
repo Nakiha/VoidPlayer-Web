@@ -183,7 +183,8 @@ const identitySettings = localOnly ? { ready: Promise.resolve(), dispose() {} } 
 const drawingEditor = installDrawingEditor(session, canvases);
 const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => drawingEditor.active());
 const notify = (message: string) => { toasts.show(message); };
-const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'), topbar);
+const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!,
+  $<HTMLButtonElement>('toggle-chrome'), topbar, () => fitAll());
 const workbench = installWorkbench(session, act, openMarkDialog, notify, viewportChrome.setPanelOpen);
 const enhancement = localOnly ? undefined : installEnhancement(canvases, uiEvents.signal);
 $('toggle-annotations').onclick = () => {

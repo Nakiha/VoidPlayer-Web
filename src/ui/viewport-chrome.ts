@@ -3,8 +3,9 @@ import { icon } from './icons.ts';
 import { shortcutTooltip } from './shortcuts.ts';
 
 /** Coordinates focus-mode controls and the toolbar with the current panel layout. */
-export function installViewportChrome(root: HTMLElement, button: HTMLButtonElement, topbar: HTMLElement) {
+export function installViewportChrome(root: HTMLElement, button: HTMLButtonElement, topbar: HTMLElement, refit: () => void) {
   const lifecycle = new AbortController(), events = { signal: lifecycle.signal };
+  const titlebarOverlay = matchMedia('(display-mode: window-controls-overlay)');
   let focused = false;
   let panelOpen = false;
   let idleTimer: number | undefined;
@@ -20,8 +21,11 @@ export function installViewportChrome(root: HTMLElement, button: HTMLButtonEleme
     button.removeAttribute('data-tooltip-suppressed');
     scheduleHide();
   }
-  function syncTopbar() {
-    const collapsed = focused && !panelOpen;
+  function syncTopbar(animate: boolean) {
+    // The native title bar already changes the content bounds. Sliding the app
+    // toolbar during that switch would move the viewport a second time.
+    if (!animate) topbar.classList.remove('topbar-slide');
+    const collapsed = focused && !panelOpen && !titlebarOverlay.matches;
     if (topbar.inert === collapsed) return;
     if (collapsed) {
       let returnFocus = topbar.contains(document.activeElement);
@@ -33,6 +37,7 @@ export function installViewportChrome(root: HTMLElement, button: HTMLButtonEleme
       }
       if (returnFocus) button.focus({ preventScroll: true });
     }
+    if (animate) topbar.classList.add('topbar-slide');
     topbar.inert = collapsed;
     topbar.classList.toggle('topbar-collapsed', collapsed);
   }
@@ -47,7 +52,7 @@ export function installViewportChrome(root: HTMLElement, button: HTMLButtonEleme
     button.setAttribute('aria-pressed', String(focused));
     button.setAttribute('aria-label', t(msg("shell.focusMode", "专注模式")));
     button.dataset.tooltip = shortcutTooltip(t(msg("shell.focusMode", "专注模式")), 'focusMode');
-    syncTopbar();
+    syncTopbar(true);
     reveal();
   }
   const pointerActivity = () => { if (focused) reveal(); };
@@ -58,16 +63,21 @@ export function installViewportChrome(root: HTMLElement, button: HTMLButtonEleme
   button.addEventListener('focusin', reveal, events);
   button.addEventListener('keydown', reveal, events);
   button.addEventListener('focusout', scheduleHide, events);
+  titlebarOverlay.addEventListener('change', () => {
+    syncTopbar(false);
+    // Use the new viewport bounds before the resize observer schedules its next frame.
+    refit();
+  }, events);
   return {
     setFocused,
-    setPanelOpen(open: boolean) { panelOpen = open; syncTopbar(); },
+    setPanelOpen(open: boolean) { panelOpen = open; syncTopbar(true); },
     update(loaded: boolean) { button.hidden = !loaded; if (!loaded && focused) setFocused(false); },
     dispose() {
       window.clearTimeout(idleTimer);
       lifecycle.abort();
       button.removeAttribute('data-tooltip-suppressed');
       topbar.inert = false;
-      topbar.classList.remove('topbar-collapsed');
+      topbar.classList.remove('topbar-collapsed', 'topbar-slide');
     },
   };
 }

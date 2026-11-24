@@ -7,6 +7,7 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay"],
   "background_color": "#212121",
   "theme_color": "#212121",
   "launch_handler": { "client_mode": "navigate-new" },

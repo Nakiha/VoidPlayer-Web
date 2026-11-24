@@ -43,8 +43,10 @@ test('grid selection uses source aspect ratio, pixel density policy and a stable
   const mixed = hd.map((track, index) => index < 4 ? track : { width: 720, height: 1280 });
   assert.equal(gridArrangement(800, 900, mixed, 'uniform', 32, 36).direction, 'vertical');
   assert.equal(gridArrangement(800, 900, mixed, 'fill', 32, 36).direction, 'horizontal');
+  // The horizontal cell width fits the same density as the control-limited vertical cell.
+  const nearTieWidth = Math.round(4 * (900 / 4 - 32 - 36) * 1920 / 1080);
   for (const direction of ['horizontal', 'vertical'] as const) {
-    assert.equal(gridArrangement(1088, 900, hd, 'uniform', 32, 36, direction).direction, direction, 'near ties retain direction');
+    assert.equal(gridArrangement(nearTieWidth, 900, hd, 'uniform', 32, 36, direction).direction, direction, 'near ties retain direction');
   }
   assert.equal(gridArrangement(1250, 900, hd, 'uniform', 32, 36, 'vertical').direction, 'horizontal');
 });
@@ -264,15 +266,15 @@ test('wipe seam and opaque stroke share physical pixel boundaries at fractional 
 });
 
 
-test('fit reserves header/transport bands and centers tall video between unequal overlays', () => {
+test('height-limited fit meets the header and transport edges between unequal overlays', () => {
   const area = unobscuredFitArea(800, 600, [
     { left: 0, right: 800, top: 0, bottom: 40 },
     { left: 0, right: 800, top: 520, bottom: 590 },
   ]);
-  assert.equal(area.height, 472); assert.equal(area.centerY, -20);
+  assert.equal(area.height, 480); assert.equal(area.centerY, -20);
   const fit = fitContain(area.width, area.height, 720, 1280);
   const top = 300 + area.centerY - fit.height / 2;
-  assert.ok(top >= 44); assert.ok(top + fit.height <= 516);
+  assert.equal(top, 40); assert.equal(top + fit.height, 520);
 });
 
 test('only physically intersecting chrome reserves space in grid and split cells', () => {
@@ -281,12 +283,12 @@ test('only physically intersecting chrome reserves space in grid and split cells
     { left: 0, right: 1000, top: 510, bottom: 580 },
     { left: 500, right: 1000, top: 0, bottom: 40 },
   ]);
-  assert.equal(upper.height, 256); assert.equal(upper.centerY, 22);
+  assert.equal(upper.height, 260); assert.equal(upper.centerY, 20);
   const lower = unobscuredFitArea(500, 300, [
     { left: 0, right: 500, top: 260, bottom: 300 },
     { left: 0, right: 1000, top: 190, bottom: 250 },
   ]);
-  assert.equal(lower.height, 186); assert.equal(lower.centerY, -57);
+  assert.equal(lower.height, 190); assert.equal(lower.centerY, -55);
 });
 
 test('uniform fit respects every safe area for mixed portrait and landscape video', () => {

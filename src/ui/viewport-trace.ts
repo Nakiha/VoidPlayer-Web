@@ -34,7 +34,8 @@ export function installViewportTrace(session: ReviewSession, viewport: Viewport,
   function snapshot() {
     const state = session.getState();
     return { buildId: buildInfo?.buildId, browser: navigator.userAgent, dpr: devicePixelRatio, width: innerWidth, height: innerHeight,
-      standalone: matchMedia('(display-mode: standalone)').matches, viewport: viewport.snapshot(), wheelBehavior: wheelBehavior(), playing: state.playing,
+      standalone: matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)').matches,
+      viewport: viewport.snapshot(), wheelBehavior: wheelBehavior(), playing: state.playing,
       tracks: state.tracks.map(({ slot, width, height, visible, decoder }) => {
         const canvas = document.querySelector<HTMLCanvasElement>(`#canvas-${slot}`);
         return { slot, width, height, visible, decoder, colorExecutor: canvas?.dataset.colorExecutor,

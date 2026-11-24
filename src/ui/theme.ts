@@ -1,6 +1,6 @@
 import type { ToastStack } from './toast.ts';
 import { t, onLanguageChange, msg } from '../i18n.ts';
-import { ACCENTS, BASE_COLORS, customAccent, customTheme } from './appearance.ts';
+import { ACCENTS, BASE_COLORS, customAccent, customTheme, surfaceWithBackdrop } from './appearance.ts';
 type ThemePreference = 'system' | 'light' | 'dark' | 'custom';
 const KEY = 'voidplayer.theme';
 const ACCENT_KEY = 'voidplayer.accent';
@@ -17,6 +17,16 @@ function readPreference(): ThemePreference {
   return 'system';
 }
 
+function syncAppWindowTheme() {
+  const windowTheme = document.querySelector<HTMLMetaElement>('#app-window-theme');
+  if (!windowTheme) return;
+  const style = getComputedStyle(document.documentElement);
+  const surface = style.getPropertyValue('--surface').trim();
+  const color = document.querySelector('#settings[open]')
+    ? surfaceWithBackdrop(surface, style.getPropertyValue('--backdrop').trim()) : surface;
+  if (color && color !== windowTheme.content) windowTheme.content = color;
+}
+
 function applyRoot(preference: ThemePreference, accent: string, custom: ReturnType<typeof readCustom>, base: ReturnType<typeof readBase>) {
   document.documentElement.dataset.theme = preference === 'custom' ? (base.dark ? 'dark' : 'light') : preference === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : preference;
   document.documentElement.dataset.accent = accent;
@@ -29,6 +39,7 @@ function applyRoot(preference: ThemePreference, accent: string, custom: ReturnTy
   if (preference === 'custom') document.documentElement.dataset.customTheme = '';
   else delete document.documentElement.dataset.customTheme;
   for (const [token, value] of Object.entries(base.colors)) document.documentElement.style.setProperty(`--custom-theme-${token}`, value);
+  syncAppWindowTheme();
 }
 /** Companion pages share appearance without mounting the player's settings UI. */
 export function observeTheme() {
@@ -43,6 +54,10 @@ export function observeTheme() {
 export function installThemeControls(toasts: ToastStack) {
   const system = matchMedia('(prefers-color-scheme: dark)');
   const life = new AbortController();
+  const settings = document.getElementById('settings')!;
+  const modal = new MutationObserver(syncAppWindowTheme);
+  modal.observe(settings, { attributes: true, attributeFilter: ['open'] });
+  life.signal.addEventListener('abort', () => modal.disconnect(), { once: true });
   const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]')];
   let preference = readPreference();
   let accent = readAccent(); let custom = readCustom(); let base = readBase();

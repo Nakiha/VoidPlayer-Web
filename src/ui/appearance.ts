@@ -61,6 +61,13 @@ export function customAccent(value: string) {
 const channels = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
 const asHex = (rgb: number[]) => '#' + rgb.map(c => Math.round(c).toString(16).padStart(2, '0')).join('');
 const mix = (a: string, b: string, amount: number) => asHex(channels(a).map((c, i) => c + (channels(b)[i] - c) * amount));
+/** Native window chrome takes an opaque color, so composite the theme's translucent backdrop first. */
+export function surfaceWithBackdrop(surface: string, backdrop: string) {
+  const rgba = /^#[\da-f]{4}$/i.test(backdrop) ? '#' + [...backdrop.slice(1)].map(c => c + c).join('') : backdrop;
+  if (!/^#[\da-f]{8}$/i.test(rgba) || !/^#[\da-f]{6}$/i.test(surface)) return surface;
+  return mix(surface, rgba.slice(0, 7), parseInt(rgba.slice(7), 16) / 255);
+}
+
 const luminance = (hex: string) => channels(hex).reduce((sum, n, i) => {
   const c = n / 255;
   return sum + (c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4) * [.2126, .7152, .0722][i];

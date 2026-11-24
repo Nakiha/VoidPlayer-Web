@@ -13,16 +13,30 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  const choose=async value=>{await page.locator('#settings-open').click();await page.locator(`[data-theme-choice=${value}]`).click();await page.locator('#settings-close').click();await waitForDialogClosed(page);};
  const settleAppearance=()=>phase('settle-appearance',()=>waitForAppearance(page));
  const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
+ const windowColor = (p = page) => p.locator('#app-window-theme').getAttribute('content');
  assert.equal(await theme(),'light');
+ assert.equal(await windowColor(), '#f5f5f7');
+ await page.locator('#settings-open').click();
+ assert.equal(await windowColor(), '#bcbec2', 'the app window matches the light settings backdrop');
+ await page.locator('[data-theme-choice=dark]').click();
+ assert.equal(await windowColor(), '#0d0d0d', 'the native backdrop follows a theme change while settings are open');
+ await page.keyboard.press('Escape');
+ await waitForDialogClosed(page);
+ assert.equal(await windowColor(), '#212121', 'closing settings restores the current theme color');
+ await choose('system');
  await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+ assert.equal(await windowColor(), '#212121');
  assert.equal(await page.locator('[data-theme-choice=system]').getAttribute('aria-checked'),'true');
  await choose('light');assert.equal(await theme(),'light');
+ assert.equal(await windowColor(), '#f5f5f7', 'the app window follows the explicit light theme over the dark OS preference');
  await page.emulateMedia({colorScheme:'light'});await page.emulateMedia({colorScheme:'dark'});assert.equal(await theme(),'light');
  // Keep the render-blocking theme bootstrap, but prevent the player module from running.
  const playerModule=await page.locator('script[type=module][src]').first().evaluate(script=>script.src);
  const boot=await context.newPage();await boot.emulateMedia({colorScheme:'dark'});
  await boot.route(playerModule,route=>route.abort());await boot.goto(base);
- assert.equal(await boot.locator('html').getAttribute('data-theme'),'light');await boot.close();
+ assert.equal(await boot.locator('html').getAttribute('data-theme'),'light');
+ assert.equal(await windowColor(boot), '#f5f5f7', 'the app window has the selected color before the player module loads');
+ await boot.close();
  await page.reload();assert.equal(await theme(),'light');
  // Reload resolves before bootstrap's dynamic main import necessarily publishes the tools.
  // Keep the first-paint assertion above, then wait for the API before using it again.
@@ -156,7 +170,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  assert.equal(await baseHex.inputValue(),'#18304A');
  await baseHex.fill('#445566');await baseHex.press('Enter');
  assert.equal(await page.locator('[data-base-choice][aria-checked=true]').count(),0,'arbitrary base colors clear the preset selection');
- for(const [color,mode] of [['#EEE7DE','light'],['#18304A','dark']]) {
+ for(const [color,mode,dimmed] of [['#EEE7DE','light','#b6b3af'],['#18304A','dark','#0a131e']]) {
   await baseHex.fill(color);await baseHex.press('Enter');
   assert.equal(await theme(),mode);assert.equal(await page.locator('html').getAttribute('data-custom-theme'),'');
   assert.equal(await page.locator('html').getAttribute('data-accent'),accentPreference);
@@ -164,8 +178,10 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
   await peer.waitForFunction(color=>document.querySelector('#theme-base-hex').value===color,color);
   assert.deepEqual(await evidence(),customBefore,'base edits preserve video pixels, marks and layout');
   const colors=await page.locator('html').evaluate(e=>{const style=getComputedStyle(e);return ['--surface','--surface-panel','--text','--accent'].map(token=>style.getPropertyValue(token).trim());});
+  assert.equal(await windowColor(), dimmed, 'the native backdrop uses the custom theme surface');
   const early=await context.newPage();await early.route(playerModule,route=>route.abort());await early.goto(base);
   assert.equal(await early.locator('html').getAttribute('data-custom-theme'),'');
+  assert.equal(await windowColor(early), colors[0], 'the cached custom palette sets the same window color before startup');
   assert.deepEqual(await early.locator('html').evaluate(e=>{const style=getComputedStyle(e);return ['--surface','--surface-panel','--text','--accent'].map(token=>style.getPropertyValue(token).trim());}),colors,'custom palette matches before app modules load');await early.close();
   await page.locator('#settings').screenshot({path:artifact(`voidplayer-custom-base-${mode}-${name}.png`)});
   await page.setViewportSize({width:390,height:700});
