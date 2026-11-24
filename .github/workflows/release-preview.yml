@@ -64,7 +64,7 @@ jobs:
 
   analysis-browser:
     name: Verify analysis panel (${{ matrix.engine }})
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: macos-26
     timeout-minutes: 30
     strategy:
@@ -89,6 +89,7 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
+      - uses: ./.github/actions/qa-media
       - name: Install analysis fixture tools
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
@@ -102,6 +103,8 @@ jobs:
       - run: node scripts/run-tests.mjs --prepare
       - name: Verify analysis panel on ${{ matrix.engine }}
         run: node scripts/run-tests.mjs ci-analysis-ui --engine ${{ matrix.engine }} --prepared
+      - name: Verify block geometry and prediction tools
+        run: node scripts/run-tests.mjs --case browser-bitstream-geometry-${{ matrix.engine }} --prepared
       - uses: actions/upload-artifact@v7
         if: always()
         with:

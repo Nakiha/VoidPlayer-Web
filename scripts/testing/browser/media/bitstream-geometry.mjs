@@ -6,6 +6,7 @@ import { withBrowserFixture } from '../../browser-fixture.mjs';
 import { repositoryRoot } from '../../manifest.mjs';
 import { predictionStride, readPrediction } from '../../../../shared/analysis/bitstream/predictions.ts';
 const engine = process.argv[2] ?? 'webkit';
+const generatedOnly = process.argv.includes('--generated-only');
 const directory = path.join(repositoryRoot, '.run/analysis-geometry', engine);
 await mkdir(directory, { recursive: true });
 const ff = args => execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...args]);
@@ -25,8 +26,10 @@ for (const [width, height] of [[128, 96], [64, 48]]) ff([
     '-x264-params', 'bframes=0:keyint=5', path.join(directory, `hover-${width}.mp4`),
 ]);
 const interInputs = { A: 'h266_10s_1920x1080.mp4', B: 'h265_10s_1920x1080.mp4' };
-for (const name of Object.values(interInputs)) await copyFile(path.join(repositoryRoot, 'fixtures/video', name), path.join(directory, name));
-await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: engine==='chromium'?1200000:300000, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
+if (!generatedOnly)
+    for (const name of Object.values(interInputs)) await copyFile(path.join(repositoryRoot, 'fixtures/video', name), path.join(directory, name));
+const caseName = generatedOnly ? 'bitstream-geometry-generated' : 'bitstream-geometry';
+await withBrowserFixture({ caseName, engine, timeoutMs: engine==='chromium'?1200000:300000, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
     await ready();
     await page.addStyleTag({content:'.geometry-raw-capture .video-card:has(#stage-A){clip-path:none!important}.geometry-raw-capture .video-card:not(:has(#stage-A)),.geometry-raw-capture #bitstream-overlay-A,.geometry-raw-capture #bitstream-hover-A,.geometry-raw-capture #divider,.geometry-raw-capture .analysis-card{visibility:hidden!important}'});
     if (await page.locator('#identity-welcome').isVisible())
@@ -330,6 +333,11 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
     }), 'narrow cards keep the time on the header line without overflowing the viewport');
     await card.screenshot({path:artifact('block-hover-narrow-light.png')});
     rows.push({input:'local-and-library', kind:'linked-hover', uniform, fill, compact});
+    if (generatedOnly) {
+        await writeFile(artifact('geometry.json'), JSON.stringify(rows, null, 2));
+        console.log(`PASS ${engine}: cropped and rotated frames, RGBA fallback and linked hover using generated fixtures`);
+        return;
+    }
     await page.setViewportSize({width:1280,height:900});
     await page.emulateMedia({colorScheme:'dark'});
     for (const slot of ['A', 'B']) await call('remove_review_track', {slot});

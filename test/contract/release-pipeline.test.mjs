@@ -686,7 +686,8 @@ test('daily and release sample consumers share one verified QA media artifact', 
   assert.doesNotMatch(mediaFixtures, /lfs: true|sync-samples/);
   for (const [name, consumers] of [
     ['checks', ['unit']],
-    ['release-preview', ['analysis-matrix', 'unit', 'playback', 'cache-browser', 'uncovered-regressions', 'hevc-browser', 'native-release']],
+    ['release-preview', ['analysis-browser', 'analysis-matrix', 'unit', 'playback', 'cache-browser', 'uncovered-regressions', 'hevc-browser',
+      'native-release']],
   ]) {
     const workflow = await read(name);
     const jobs = workflowJobs(workflow);
