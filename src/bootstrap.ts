@@ -1,5 +1,7 @@
 import { initializeLanguage, t, msg } from './i18n.ts';
 import { localOnly } from './services/build-profile.ts';
+import { restoreStartupDecode } from './startup/decode-preferences.ts';
+import { initializeFileLaunch, startupFileLaunch } from './startup/file-launch.ts';
 export {};
 function revealApp() {
   const app = document.getElementById('app')!;
@@ -28,6 +30,8 @@ try {
     let shellReady!: () => void;
     const shell = new Promise<void>(resolve => { shellReady = resolve; });
     window.addEventListener('voidplayer:shell-ready', () => shellReady(), { once: true });
+    restoreStartupDecode();
+    initializeFileLaunch();
     disposeLanguage = await initializeLanguage();
     const loaded = import('./main.ts');
     await Promise.race([shell, loaded]);
@@ -35,6 +39,7 @@ try {
     await loaded;
   }
 } catch (error) {
+  startupFileLaunch?.dispose();
   console.error('播放器初始化失败。', error);
   const app = document.getElementById('app')!;
   const fallback = document.getElementById('startup-fallback')!;

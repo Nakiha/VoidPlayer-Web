@@ -8,7 +8,6 @@ import { t as tr, getLocale, onLanguageChange, msg } from './i18n.ts';
 import { isHdrTransfer } from './presentation/presentation-color.ts';
 import { updateColorFlow } from './ui/color-flow.ts';
 import { configureFrameResourceDemand } from './media/policy/frame-resources.ts';
-import { setColorMode, setReferenceDecode } from './media/policy/color-mode.ts';
 import { setColorOutput } from '../shared/color/color-output.ts';
 import { hdrDisplayAvailable } from './presentation/display-capabilities.ts';
 import { initializeGpuPresentation, keepNativeGpuResource } from './presentation/webgpu-presenter.ts';
@@ -67,7 +66,10 @@ import { formatTime } from '../shared/review/model.ts';
 import type { Slot } from '../shared/review/model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
 import {installPageBridge} from './agent/page-bridge.ts';
-import { bindFileDrop, bindFileLaunch, type LocalFileActions } from './ui/file-drop.ts';
+import { bindFileDrop, type LocalFileActions } from './ui/file-drop.ts';
+import { startupFileLaunch } from './startup/file-launch.ts';
+import type { FileLaunchOpener } from './startup/prepare-file.ts';
+import { savedStartupColorMode } from './startup/decode-preferences.ts';
 import { installFileDropFeedback } from './ui/file-drop-feedback.ts';
 import { handleKey, saveFileHandle } from './services/file-handles.ts';
 import type { FsFileHandle } from './services/file-handles.ts';
@@ -99,18 +101,6 @@ const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about
   () => settings.openPane('about', $<HTMLElement>('brand-about')));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 try{const saved=localStorage.getItem('voidplayer.color-output');if(saved)setColorOutput(JSON.parse(saved));}catch{}
-try {
-  const saved = localStorage.getItem('voidplayer.reference-decode');
-  if (saved) {
-    const { depth } = JSON.parse(saved);
-    setReferenceDecode({ decoder: 'hardware', depth });
-    localStorage.setItem('voidplayer.reference-decode', JSON.stringify({ depth }));
-  }
-} catch {}
-let savedColorMode:'reference'|'browser'='browser';
-try{if(localStorage.getItem('voidplayer.color-mode')==='reference')savedColorMode='reference';}catch{}
-// Explicit diagnostic URLs retain their original backend-selection semantics.
-if(!new URLSearchParams(location.search).has('colorPipeline'))setColorMode(savedColorMode);
 // Finish WebGPU preparation before exposing load/restore actions. The shell
 // remains usable on unsupported systems; video commands report the stored error.
 configureFrameResourceDemand(keepNativeGpuResource);
@@ -137,7 +127,7 @@ const depthMenu = installChoiceMenu('hardware-buffer-depth', () => [1,2,4,8].map
 });
 let flowKey = '';
 const renderColorMode=()=>{
-  const state=session.getState(), mode=state.colorMode??savedColorMode, decoder=state.referenceDecode.decoder;
+  const state=session.getState(), mode=state.colorMode??savedStartupColorMode, decoder=state.referenceDecode.decoder;
   for(const button of colorButtons){button.setAttribute('aria-pressed',String(button.dataset.colorMode===mode));button.setAttribute('aria-disabled',String(state.busy));}
   for(const button of decoderButtons){button.setAttribute('aria-pressed',String(button.dataset.referenceDecoder===decoder));button.setAttribute('aria-disabled',String(state.busy));}
   $('reference-decode-settings').hidden=mode!=='reference';
@@ -463,14 +453,17 @@ for (const slot of SLOTS) $(`remove-track-${slot}`).onclick = async () => {
   if (remaining) document.querySelector<HTMLElement>(`.card-heading [data-drag-surface="${remaining.slot}"]`)?.focus();
   else $('open').focus();
 };
-async function importFiles(files: File[], handles?: (FsFileHandle | undefined)[]) {
+async function importFiles(files: File[], handles?: (FsFileHandle | undefined)[], openFirst?: FileLaunchOpener) {
   dropSlots(files.length, session.getState().tracks.map(track => track.slot));
   const context = operationContext();
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
     if (revision !== importRevision) throw new DOMException(tr(msg("player.fileImportWasSupersededByANewer", "文件导入已被新的请求取代")), 'AbortError');
     const slot = dropSlots(files.length - i, session.getState().tracks.map(track => track.slot))[0];
-    await withLogContext(context, () => session.load(slot, (signal, progress, configuration) => openMedia(files[i], undefined, progress, signal, configuration), files[i].name));
+    const file = files[i];
+    const open: FileLaunchOpener = (i === 0 ? openFirst : undefined)
+      ?? ((signal, progress, configuration) => openMedia(file, undefined, progress, signal, configuration));
+    await withLogContext(context, () => session.load(slot, open, file.name));
     workbench.rememberFile(files[i]);
     // Remember drop-time handles so history rows can reopen without a picker.
     // Plain <input> files have no handle; those rows bootstrap one on reselect.
@@ -485,12 +478,17 @@ const fileActions: LocalFileActions = {
   error: error => { if (!(error instanceof LocalInputError)) log.warn('ui', '打开本地文件失败', {error}); showError(error); },
 };
 const unbindDrop = bindFileDrop(document.body, { ...fileActions, hover: (slots, nonVideo) => dropFeedback.show(slots, nonVideo) });
-if (!localOnly && import.meta.env.PROD && window.top === window && location.pathname === '/' && location.search === '?open=files'
-    && !document.querySelector('meta[name="voidplayer-page-bridge"]')) {
-  openingFileLaunch = bindFileLaunch(fileActions, identitySettings.ready, uiEvents.signal, opening => {
-    openingFileLaunch = opening;
-    render();
-  });
+if (startupFileLaunch) {
+  openingFileLaunch = startupFileLaunch.bind(
+    (files, handles, openFirst) => {
+      log.info('ui', '接收系统打开的文件', { files });
+      return act(() => importFiles(files, handles, openFirst), 'files.launch', { files });
+    },
+    fileActions.error, opening => {
+      openingFileLaunch = opening;
+      render();
+    }, uiEvents.signal,
+  );
 }
 for (const slot of SLOTS) {
   $<HTMLInputElement>(`file-${slot}`).onchange = event => {

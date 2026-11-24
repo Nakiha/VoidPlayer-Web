@@ -57,7 +57,7 @@ function rejectionMessage(rejected: Rejected[]) {
   }
 }
 
-export async function selectVideoInputs<T extends {file:File}>(items: (T | NonFile)[], report: (error: LocalInputError) => void) {
+export async function inspectVideoInputs<T extends {file:File}>(items: (T | NonFile)[]) {
   const accepted: T[] = [], rejected: Rejected[] = [];
   for (const item of items) {
     if ('directory' in item) {
@@ -69,6 +69,13 @@ export async function selectVideoInputs<T extends {file:File}>(items: (T | NonFi
       if (kind) rejected.push({name:item.file.name, kind}); else accepted.push(item);
     }
   }
-  if (rejected.length) report(new LocalInputError(rejectionMessage(rejected)));
+  return { accepted, reportRejections(report: (error: LocalInputError) => void) {
+    if (rejected.length) report(new LocalInputError(rejectionMessage(rejected)));
+  } };
+}
+
+export async function selectVideoInputs<T extends {file:File}>(items: (T | NonFile)[], report: (error: LocalInputError) => void) {
+  const { accepted, reportRejections } = await inspectVideoInputs(items);
+  reportRejections(report);
   return accepted;
 }

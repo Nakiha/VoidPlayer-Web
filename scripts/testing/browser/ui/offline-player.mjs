@@ -13,6 +13,36 @@ function installMockFileLaunch() {
   Object.defineProperty(window, 'launchQueue', { value: { setConsumer(fn) { window.deliverFiles = fn; } } });
 }
 
+function holdFileLaunchStartup() {
+  if (location.search !== '?open=files') return;
+  const startup = window.fileLaunchStartup = { frameRequests: 0, frameReady: false, identityStarted: false };
+  const waitGpu = new Promise(resolve => { startup.releaseGpu = resolve; });
+  const adapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
+  navigator.gpu.requestAdapter = async (...args) => { await waitGpu; return adapter(...args); };
+  const waitIdentity = new Promise(resolve => { startup.releaseIdentity = resolve; });
+  const fetchResource = window.fetch.bind(window);
+  window.fetch = async (resource, ...args) => {
+    if (new URL(resource instanceof Request ? resource.url : resource, location.href).pathname === '/api/health') {
+      startup.identityStarted = true;
+      await waitIdentity;
+    }
+    return fetchResource(resource, ...args);
+  };
+  const post = Worker.prototype.postMessage;
+  Worker.prototype.postMessage = function (message, ...args) {
+    if (message.type === 'at') {
+      startup.frameRequests++;
+      const receive = ({ data }) => {
+        if (data.id !== message.id || !data.ok || !data.data?.description) return;
+        this.removeEventListener('message', receive);
+        startup.frameReady = true;
+      };
+      this.addEventListener('message', receive);
+    }
+    return post.call(this, message, ...args);
+  };
+}
+
 export async function verifyOfflinePlayer(browser, engine, staticDir) {
   const root = await mkdtemp(path.join(tmpdir(), 'vp-offline-')), dist = path.join(root, 'dist');
   const context = await browser.newContext({ locale: 'en-US' });
@@ -116,27 +146,13 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     await service.close();
     service = undefined;
     const offline = await context.newPage();
-    if (engine === 'chromium') await offline.addInitScript(installMockFileLaunch);
+    if (engine === 'chromium') {
+      await offline.addInitScript(installMockFileLaunch);
+      await offline.addInitScript(holdFileLaunchStartup);
+    }
     const navigation = await offline.goto(base + (engine === 'chromium' ? manifest.file_handlers[0].action : '/?pwa-test=offline'));
     assert.equal(navigation.fromServiceWorker(), true);
-    await offline.locator('#settings-open').waitFor({ state: 'visible' });
-    if (engine === 'chromium') {
-      assert.ok(await offline.locator('#opening-media').isVisible(), 'the first interactive frame is a player placeholder');
-      assert.ok(await offline.locator('#start-panel').isHidden(), 'file launch cannot flash recent files while waiting for handles');
-      assert.ok(await offline.locator('.transport').isVisible() && await offline.locator('#play').isDisabled());
-      assert.ok(await offline.locator('#tracks-hidden').isHidden());
-    }
-    await offline.locator(status('ready')).waitFor({ state: 'attached' });
-    assert.equal(await offline.locator('#web-app-install').textContent(), 'Install', 'a cached ordinary tab is not an installed app window');
-    assert.equal(await offline.locator('html').getAttribute('lang'), 'en');
     assert.ok(await offline.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'));
-    const onlineOnly = ['/admin', '/connection', '/api/health', '/missing-file', '/vendor/voidplayer-core/voidplayer-core.wasm?v=old'];
-    for (const url of onlineOnly) {
-      assert.equal(await offline.evaluate(url => fetch(url).then(() => true, () => false), url), false, url);
-    }
-    const admin = await context.newPage();
-    await assert.rejects(admin.goto(base + '/admin'));
-    await admin.close();
     const fixture = path.resolve('fixtures/video/ffv1_yuv422p_8bit.mkv');
     const fixtureB = path.resolve('fixtures/video/ffv1_yuv444p_8bit.mkv');
     async function deliverBytes(filename, bytes) {
@@ -152,9 +168,35 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     const deliverFixture = async (name, file) => deliverBytes(name, await readFile(file));
     const raw = await annexBFixture(path.resolve('fixtures/video/h266_10s_1920x1080.mp4'), 'vvc', 16);
     const rawWithSei = withLeadingSei(raw.bytes, 'vvc');
-    if (engine === 'chromium') await deliverBytes('offline-clip.h266', rawWithSei);
-    else await offline.locator('#file-A').setInputFiles({ name: 'offline-clip.h266', mimeType: 'video/h266', buffer: rawWithSei });
-    await offline.waitForFunction(() => window.voidPlayer.getState().tracks.some(track => track.name === 'offline-clip.h266' && track.frame));
+    if (engine === 'chromium') {
+      await offline.waitForFunction(() => window.deliverFiles, null, { timeout: 5000 });
+      await deliverBytes('offline-clip.h266', rawWithSei);
+      await offline.waitForFunction(() => window.fileLaunchStartup.frameReady, null, { timeout: 45000 });
+      assert.equal(await offline.evaluate(() => !!window.voidPlayer), false, 'decoder can return the first frame while WebGPU is still blocked');
+      assert.ok(await offline.locator('#start-panel').isHidden(), 'file launch cannot flash recent files during startup');
+      await offline.evaluate(() => window.fileLaunchStartup.releaseGpu());
+    } else {
+      await offline.locator('#settings-open').waitFor({ state: 'visible' });
+      await offline.locator('#file-A').setInputFiles({ name: 'offline-clip.h266', mimeType: 'video/h266', buffer: rawWithSei });
+    }
+    await offline.waitForFunction(() => window.voidPlayer?.getState().tracks.some(track => track.name === 'offline-clip.h266' && track.frame));
+    if (engine === 'chromium') {
+      assert.deepEqual(await offline.evaluate(() => {
+        const { frameRequests, identityStarted } = window.fileLaunchStartup;
+        return { frameRequests, identityStarted };
+      }), { frameRequests: 1, identityStarted: true }, 'present the prepared frame exactly once while identity is pending');
+      await offline.evaluate(() => window.fileLaunchStartup.releaseIdentity());
+    }
+    await offline.locator(status('ready')).waitFor({ state: 'attached' });
+    assert.equal(await offline.locator('#web-app-install').textContent(), 'Install', 'a cached ordinary tab is not an installed app window');
+    assert.equal(await offline.locator('html').getAttribute('lang'), 'en');
+    const onlineOnly = ['/admin', '/connection', '/api/health', '/missing-file', '/vendor/voidplayer-core/voidplayer-core.wasm?v=old'];
+    for (const url of onlineOnly) {
+      assert.equal(await offline.evaluate(url => fetch(url).then(() => true, () => false), url), false, url);
+    }
+    const admin = await context.newPage();
+    await assert.rejects(admin.goto(base + '/admin'));
+    await admin.close();
     assert.ok(await offline.locator('#opening-media').isHidden());
     assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].container), 'annexb');
     await offline.evaluate(() => window.voidPlayer.step(1));
@@ -182,6 +224,9 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
         await missing.addInitScript(installMockFileLaunch);
         await missing.goto(base + manifest.file_handlers[0].action);
         await missing.locator('#opening-media').waitFor({ state: 'visible' });
+        assert.ok(await missing.locator('#start-panel').isHidden(), 'the first interactive frame is a player placeholder');
+        assert.ok(await missing.locator('.transport').isVisible() && await missing.locator('#play').isDisabled());
+        assert.ok(await missing.locator('#tracks-hidden').isHidden());
         await missing.locator('#start-panel').waitFor({ state: 'visible', timeout: 10000 });
         await missing.evaluate(() => {
           window.deliverFiles({ files: [{
