@@ -1,3 +1,4 @@
+import { assertReferenceBlock } from '../helpers/reference-block.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -286,7 +287,7 @@ test('independent JS TS analysis shares packet identity, preserves missing DTS a
       const result = await analyzePicture(reader, target, core, 'js-ts-packets-test', controller.signal, { input });
       assert.equal(result.confidence, 'exact'); assert.deepEqual(result.picture, expected);
       assert.equal(result.sourceDtsUs, index.packets[au].timing.dts === null ? null : Math.round(index.packets[au].timing.dts! * 1e6 / 90000));
-      if (!au) for (const block of answers.firstBlocks) assert.deepEqual(result.blocks.find(b => b.x === block.x && b.y === block.y), block);
+      if (!au) for (const block of answers.firstBlocks) assertReferenceBlock(result.blocks, block);
       assert.equal((await playback.readUnit(au)).length, packet.size, 'analysis did not move or close playback cursor');
     }
   } finally { playback.close(); }

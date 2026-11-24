@@ -1,4 +1,5 @@
 import { checkAcknowledgedInputBudget } from '../helpers/bitstream-input-budget.ts';
+import { assertReferenceBlock } from '../helpers/reference-block.ts';
 import { copyAnalysisCoreManifests } from '../helpers/analysis-core-manifests.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,8 +31,7 @@ for (const codec of ['h264', 'hevc', 'vvc']) for (const framing of ['legacy', 'e
     assert.deepEqual(first.timing?.timebase, [1, 1000]);
     const result = await analyzePicture(await reader(`${name}.flv`), target(first), await core(), 'test', signal);
     assert.equal(result.confidence, 'exact');
-    for (const b of answers.find((a: any) => a.codec === codec).firstBlocks)
-      assert.deepEqual(result.blocks.find(x => x.x === b.x && x.y === b.y), b);
+    for (const block of answers.find((a: any) => a.codec === codec).firstBlocks) assertReferenceBlock(result.blocks, block);
     const random = await analyzePicture(await reader(`${name}.flv`), target(rear), await core(), 'test', signal);
     const sequentialInput = await openAnalysisInput(await reader(`${name}.flv`), signal);
     const sequential = await analyzePicture(sequentialInput.reader, target(rear), await core(), 'test', signal, { input: sequentialInput, sequential: true });

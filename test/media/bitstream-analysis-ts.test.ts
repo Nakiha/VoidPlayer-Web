@@ -1,4 +1,5 @@
 import { copyAnalysisCoreManifests } from '../helpers/analysis-core-manifests.ts';
+import { assertReferenceBlock } from '../helpers/reference-block.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -35,7 +36,7 @@ test('lossless TS preserves all source VCLs, static config and independent block
   const answer=JSON.parse(fs.readFileSync('docs/fixtures/bitstream-analysis-answers.json','utf8'))[0];
   const result=await analyzePicture(f.reader(),{sourceVersion,sourcePtsUs:f.pts(0),normalizedMediaUs:0},core,'ts-test',signal());
   assert.equal(result.confidence,'exact');assert.equal(result.containerHeader?.box,'annexb');
-  for(const block of answer.firstBlocks)assert.deepEqual(result.blocks.find(b=>b.x===block.x&&b.y===block.y),block);
+  for (const block of answer.firstBlocks) assertReferenceBlock(result.blocks, block);
   const engine=new JsContainerEngine({file:new Blob([f.bytes])},sourceVersion);
   try{await engine.open(pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href,new Uint8Array(fs.readFileSync('public/vendor/voidplayer-core/voidplayer-core.wasm')),true);const shown=await engine.at(f.pts(0));assert.equal(shown.packetPicture?.au,result.picture.au);assert.equal(shown.packetPicture?.stream,result.picture.stream);shown.frame?.close();}finally{engine.close();}
  } finally {f.close();}

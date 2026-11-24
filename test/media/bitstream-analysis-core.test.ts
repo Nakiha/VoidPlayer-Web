@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { analyzePicture, analyzeStream } from "../../shared/analysis/bitstream/runner.ts";
-import type { AnalysisBlock } from '../../shared/analysis/bitstream/contract.ts';
+import { assertReferenceBlock, withoutBitCount } from '../helpers/reference-block.ts';
 import { openAnalysisInput } from "../../shared/analysis/bitstream/input.ts";
 import { viewportAnalysisGops } from "../../shared/analysis/bitstream/stream.ts";
 import { mp4BoundaryFixture } from '../../scripts/mp4-boundary-fixture.ts';
@@ -23,13 +23,6 @@ const fixtures = JSON.parse(
     "utf8",
   ),
 );
-// The independent geometry and QP references were captured without CABAC positions.
-function withoutBitCount({ bits: _bits, ...block }: AnalysisBlock) { return block; }
-function assertReferenceBlock(blocks: AnalysisBlock[], expected: AnalysisBlock) {
-  const actual = blocks.find(block => block.x === expected.x && block.y === expected.y);
-  assert.ok(actual, `reference block at ${expected.x}, ${expected.y}`);
-  assert.deepEqual(withoutBitCount(actual), expected);
-}
 async function reader(name: string) {
   const file = await open(resolve("fixtures/video", name));
   const { size } = await file.stat();

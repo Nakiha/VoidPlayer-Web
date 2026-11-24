@@ -1,3 +1,4 @@
+import { assertReferenceBlock } from '../helpers/reference-block.ts';
 import { copyAnalysisCoreManifests } from '../helpers/analysis-core-manifests.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,7 +20,7 @@ for (const codec of ['h264', 'hevc', 'vvc']) test(`finite fMP4 ${codec}: byte id
     for (const p of input.packets) { assert.equal(p.au, input.packets.indexOf(p)); assert.deepEqual(await input.readUnit(p), await original.readUnit(original.packets[p.au])); assert.equal(p.timing!.dts, 96000 + p.au * 1000); }
     const answers = JSON.parse(await readFile('docs/fixtures/bitstream-analysis-answers.json', 'utf8'));
     const first = await analyzePicture(await reader(file), target(input.packets[0]), await core(), 'test', signal);
-    for (const b of answers.find((a: any) => a.codec === codec).firstBlocks) assert.deepEqual(first.blocks.find(x => x.x === b.x && x.y === b.y), b);
+    for (const block of answers.find((a: any) => a.codec === codec).firstBlocks) assertReferenceBlock(first.blocks, block);
     const rear = input.packets[200], r = await analyzePicture(await reader(file), target(rear), await core(), 'test', signal);
     const baseline = await analyzePicture(await reader(`fixtures/video/${sourceFile}`), { ...target(original.packets[200]), normalizedMediaUs: original.packets[200].pts - original.packets[0].pts }, await core(), 'test', signal);
     assert.deepEqual(r.blocks, baseline.blocks); assert.deepEqual(r.references, baseline.references); assert.ok(r.metrics!.startAu < 200, 'nonkey moof is not a random access point');
