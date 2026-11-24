@@ -13,6 +13,7 @@ import { setColorOutput } from '../shared/color/color-output.ts';
 import { hdrDisplayAvailable } from './presentation/display-capabilities.ts';
 import { initializeGpuPresentation, keepNativeGpuResource } from './presentation/webgpu-presenter.ts';
 import { indexProgressLabel } from './ui/index-progress.ts';
+import { loadStageLabel } from './ui/media-progress.ts';
 import { LocalInputError, selectVideoInputs } from './ui/video-input.ts';
 import { fileBasename } from './ui/filename.ts';
 import { AnnotationClient } from './review/annotation-client.ts';
@@ -80,6 +81,7 @@ import type { ChannelMode, PixelSizeMode, ViewportSnapshot } from '../shared/pre
 
 const stopLogging = startBrowserLogging();
 const uiEvents = new AbortController();
+let openingFileLaunch = false;
 installFocusFeedback(uiEvents.signal);
 
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as unknown as T;
@@ -316,9 +318,17 @@ function render() {
   const state = session.getState();
   framePositions.update(state.tracks);
   const openingWorkspace = $('app').hasAttribute('data-workspace-opening');
-  const loaded = state.tracks.length > 0 || openingWorkspace;
+  const openingLocal = openingFileLaunch && state.tracks.length === 0;
+  const opening = openingLocal || openingWorkspace;
+  const loaded = state.tracks.length > 0 || opening;
+  const controlsReady = loaded && !openingLocal;
   const visibleTracks = state.tracks.filter(t => t.visible);
-  $('tracks-hidden').hidden = !loaded || visibleTracks.length > 0;
+  const openingMedia = $('opening-media');
+  openingMedia.hidden = !opening || state.tracks.length > 0;
+  const openingLabel = openingWorkspace ? tr(msg('uriState.loading', '正在恢复观看状态…'))
+    : openingLocal ? loadStageLabel(state.mediaLoad?.state === 'loading' ? state.mediaLoad.stage : 'queued') : '';
+  if (!openingMedia.hidden && openingMedia.textContent !== openingLabel) openingMedia.textContent = openingLabel;
+  $('tracks-hidden').hidden = state.tracks.length === 0 || visibleTracks.length > 0;
   $('color-runtime-section').hidden = !loaded;
   $('color-runtime-tracks').textContent=state.tracks.map(track=>{
     const native=track.decoder==='webcodecs', label=native?tr(msg("player.browserNativeDecoding", "浏览器原生解码")):tr(msg("colorFlow.softwareDecoding", "软件解码"));
@@ -356,7 +366,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   for (const card of cards) card.querySelector<HTMLElement>('.card-heading')!.hidden = !loaded;
   for (const slot of SLOTS) {
     const t = state.tracks.find(t => t.slot === slot);
-    $(`empty-${slot}`).hidden = !!t || openingWorkspace;
+    $(`empty-${slot}`).hidden = !!t || opening;
     $(`image-${slot}`).hidden = !t;
     const name = $(`name-${slot}`);
     const basename = t ? fileBasename(t.name) : (slot === 'A' ? tr(msg("player.referenceVideo", "参考视频")) : tr(msg("player.comparisonVideo", "对比视频")));
@@ -393,12 +403,12 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   // Keep native disabled for empty sessions; busy actions are guarded below.
   for (const id of ['play', 'previous', 'next']) {
     const button = $<HTMLButtonElement>(id);
-    button.disabled = !loaded;
-    const disabled = String(!loaded || state.busy);
+    button.disabled = !controlsReady;
+    const disabled = String(!controlsReady || state.busy);
     if (button.getAttribute('aria-disabled') !== disabled) button.setAttribute('aria-disabled', disabled);
   }
-  document.querySelector('.transport')!.setAttribute('aria-busy', String(state.busy));
-  $<HTMLInputElement>('position').disabled = !loaded;
+  document.querySelector('.transport')!.setAttribute('aria-busy', String(openingLocal || state.busy));
+  $<HTMLInputElement>('position').disabled = !controlsReady;
   if ($('play').dataset.playing !== String(state.playing)) {
     $('play').dataset.playing = String(state.playing);
     animatePlaybackIcon($('play'), state.playing);
@@ -406,11 +416,11 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   const playLabel = state.playing ? tr(msg("player.pause", "暂停")) : tr(msg("shell.play", "播放"));
   if ($('play').getAttribute('aria-label') !== playLabel) $('play').setAttribute('aria-label', playLabel);
   const timeline = $<HTMLInputElement>('timeline');
-  timeline.disabled = !loaded;
+  timeline.disabled = !controlsReady;
   timeline.setAttribute('aria-busy', String(state.busy));
   renderProgress(state.positionUs, state.durationUs);
   $('duration').textContent = formatTime(state.durationUs);
-  $('status').textContent = openingWorkspace ? tr(msg('uriState.loading', '正在恢复观看状态…')) : state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
+  $('status').textContent = openingLabel || (state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频")));
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? tr(msg("player.actualSpeed", "实际速度 {p0}×"), { p0: state.playback.speed.toFixed(2) }) : loaded ? tr(msg("player.lastSeekMs", "最近定位 {p0} ms"), { p0: state.lastDecodeMs }) : '—';
   renderTrackToasts(state.tracks);
   const warning = state.error;
@@ -475,8 +485,13 @@ const fileActions: LocalFileActions = {
   error: error => { if (!(error instanceof LocalInputError)) log.warn('ui', '打开本地文件失败', {error}); showError(error); },
 };
 const unbindDrop = bindFileDrop(document.body, { ...fileActions, hover: (slots, nonVideo) => dropFeedback.show(slots, nonVideo) });
-if (import.meta.env.PROD && window.top === window && location.pathname === '/' && location.search === '?open=files'
-    && !document.querySelector('meta[name="voidplayer-page-bridge"]')) bindFileLaunch(fileActions, identitySettings.ready, uiEvents.signal);
+if (!localOnly && import.meta.env.PROD && window.top === window && location.pathname === '/' && location.search === '?open=files'
+    && !document.querySelector('meta[name="voidplayer-page-bridge"]')) {
+  openingFileLaunch = bindFileLaunch(fileActions, identitySettings.ready, uiEvents.signal, opening => {
+    openingFileLaunch = opening;
+    render();
+  });
+}
 for (const slot of SLOTS) {
   $<HTMLInputElement>(`file-${slot}`).onchange = event => {
     const input = event.target as HTMLInputElement; const file = input.files?.[0]; input.value = '';

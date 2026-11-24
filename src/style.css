@@ -123,7 +123,8 @@ button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible {
 .workspace.has-subtracks { --bottom: var(--dock-height, var(--dock-default-height)); }
 .comparison { grid-area: comparison; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .screens { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--view-columns, 2), minmax(0,1fr)); grid-template-rows: repeat(var(--view-rows, 1), minmax(0,1fr)); background: var(--viewport-background); position: relative; overflow: hidden; }
-.tracks-hidden { position: absolute; inset: 0 0 calc(var(--transport-height) + 2 * var(--transport-inset)); display: grid; place-items: center; padding: 24px; overflow: auto; color: var(--viewport-text); text-align: center; }
+.tracks-hidden, .opening-media { position: absolute; inset: 0 0 calc(var(--transport-height) + 2 * var(--transport-inset)); display: grid; place-items: center; padding: 24px; overflow: auto; color: var(--viewport-text); text-align: center; }
+.opening-media { color: var(--viewport-muted); pointer-events: none; }
 .tracks-hidden-content { max-width: 320px; display: flex; flex-direction: column; align-items: center; gap: 12px; margin: auto; }
 .tracks-hidden .tracks-hidden-icon { width: 40px; height: 40px; flex: none; color: var(--viewport-muted); opacity: .65; }
 .tracks-hidden h2 { margin: 4px 0 0; font-size: var(--text-title); font-weight: 500; }

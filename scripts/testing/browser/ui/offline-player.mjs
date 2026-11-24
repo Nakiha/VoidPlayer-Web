@@ -8,6 +8,11 @@ import { startService } from '../../../../server/runtime.ts';
 import { annexBFixture, withLeadingSei } from '../../../../test/helpers/media/annex-b-fixture.ts';
 import { isPlayerAsset, writePlayerWorker } from '../../../pwa/build.mjs';
 
+function installMockFileLaunch() {
+  // Exercise the OS delivery boundary without changing the host's default applications.
+  Object.defineProperty(window, 'launchQueue', { value: { setConsumer(fn) { window.deliverFiles = fn; } } });
+}
+
 export async function verifyOfflinePlayer(browser, engine, staticDir) {
   const root = await mkdtemp(path.join(tmpdir(), 'vp-offline-')), dist = path.join(root, 'dist');
   const context = await browser.newContext({ locale: 'en-US' });
@@ -111,13 +116,16 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     await service.close();
     service = undefined;
     const offline = await context.newPage();
-    if (engine === 'chromium') await offline.addInitScript(() => {
-      // Supply the OS delivery boundary without changing the host's default applications.
-      Object.defineProperty(window, 'launchQueue', { value: { setConsumer(fn) { window.deliverFiles = fn; } } });
-    });
+    if (engine === 'chromium') await offline.addInitScript(installMockFileLaunch);
     const navigation = await offline.goto(base + (engine === 'chromium' ? manifest.file_handlers[0].action : '/?pwa-test=offline'));
     assert.equal(navigation.fromServiceWorker(), true);
     await offline.locator('#settings-open').waitFor({ state: 'visible' });
+    if (engine === 'chromium') {
+      assert.ok(await offline.locator('#opening-media').isVisible(), 'the first interactive frame is a player placeholder');
+      assert.ok(await offline.locator('#start-panel').isHidden(), 'file launch cannot flash recent files while waiting for handles');
+      assert.ok(await offline.locator('.transport').isVisible() && await offline.locator('#play').isDisabled());
+      assert.ok(await offline.locator('#tracks-hidden').isHidden());
+    }
     await offline.locator(status('ready')).waitFor({ state: 'attached' });
     assert.equal(await offline.locator('#web-app-install').textContent(), 'Install', 'a cached ordinary tab is not an installed app window');
     assert.equal(await offline.locator('html').getAttribute('lang'), 'en');
@@ -147,6 +155,7 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     if (engine === 'chromium') await deliverBytes('offline-clip.h266', rawWithSei);
     else await offline.locator('#file-A').setInputFiles({ name: 'offline-clip.h266', mimeType: 'video/h266', buffer: rawWithSei });
     await offline.waitForFunction(() => window.voidPlayer.getState().tracks.some(track => track.name === 'offline-clip.h266' && track.frame));
+    assert.ok(await offline.locator('#opening-media').isHidden());
     assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].container), 'annexb');
     await offline.evaluate(() => window.voidPlayer.step(1));
     assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].frame.ptsUs), 16683);
@@ -166,6 +175,30 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     assert.equal(rawAnalysis.after.sourcePtsUs, rawAnalysis.before.sourcePtsUs);
     await offline.locator('#remove-track-A').click();
     await offline.waitForFunction(() => !window.voidPlayer.getState().tracks.length);
+    assert.ok(await offline.locator('#start-panel').isVisible(), 'closing the opened file can return to recent files');
+    if (engine === 'chromium') {
+      const missing = await context.newPage();
+      try {
+        await missing.addInitScript(installMockFileLaunch);
+        await missing.goto(base + manifest.file_handlers[0].action);
+        await missing.locator('#opening-media').waitFor({ state: 'visible' });
+        await missing.locator('#start-panel').waitFor({ state: 'visible', timeout: 10000 });
+        await missing.evaluate(() => {
+          window.deliverFiles({ files: [{
+            kind:'file', name:'unreadable.h266',
+            getFile: () => new Promise((_, reject) => { window.rejectLaunchRead = () => reject(new Error('denied')); }),
+          }] });
+        });
+        await missing.locator('#opening-media').waitFor({ state: 'visible' });
+        assert.ok(await missing.locator('#start-panel').isHidden(), 'late delivery restores the placeholder');
+        await missing.waitForFunction(() => typeof window.rejectLaunchRead === 'function');
+        await missing.evaluate(() => window.rejectLaunchRead());
+        await missing.locator('#start-panel').waitFor({ state: 'visible' });
+        await missing.locator('.toast-message').filter({ hasText: 'unreadable.h266' }).waitFor({ state: 'visible' });
+      } finally {
+        await missing.close();
+      }
+    }
     if (engine === 'chromium') await deliverFixture('offline-clip.mkv', fixture);
     else await offline.locator('#file-A').setInputFiles(fixture);
     await offline.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.frame, null, { timeout: 45000 });

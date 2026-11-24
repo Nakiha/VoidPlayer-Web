@@ -55,12 +55,27 @@ async function openItems(items: LocalItem<FsFileHandle>[], actions: LocalFileAct
 }
 
 interface FileLaunchQueue { setConsumer(consume: (launch: { files: readonly FsFileHandle[] }) => void): void }
-export function bindFileLaunch(actions: LocalFileActions, ready: Promise<void>, signal: AbortSignal) {
+export function bindFileLaunch(actions: LocalFileActions, ready: Promise<void>, signal: AbortSignal, openingChanged: (opening: boolean) => void): boolean {
   const queue = (window as Window & { launchQueue?: FileLaunchQueue }).launchQueue;
-  if (!queue) return;
+  if (!queue || signal.aborted) return false;
+  // Opening the action URL directly or declining delivery may yield no handles.
+  // Only bound the wait for delivery; an accepted file can take longer to open.
+  let waiting = true;
+  let queued = 0;
+  const update = (opening: boolean) => { if (!signal.aborted) openingChanged(opening); };
+  const timeout = window.setTimeout(() => { waiting = false; update(false); }, 3000);
+  signal.addEventListener('abort', () => window.clearTimeout(timeout), { once: true });
   let pending = ready;
   queue.setConsumer(({ files }) => {
-    if (!files.length || signal.aborted) return;
+    if (signal.aborted) return;
+    const initial = waiting;
+    waiting = false;
+    if (initial) window.clearTimeout(timeout);
+    if (!files.length) {
+      if (initial) queueMicrotask(() => { if (!queued) update(false); });
+      return;
+    }
+    if (++queued === 1 && !initial) queueMicrotask(() => update(true));
     pending = pending.then(async () => {
       if (signal.aborted) return;
       const items = await Promise.all(files.map(async (handle): Promise<LocalItem<FsFileHandle>> => {
@@ -69,8 +84,9 @@ export function bindFileLaunch(actions: LocalFileActions, ready: Promise<void>, 
         catch { return { unreadable: handle.name }; }
       }));
       if (!signal.aborted) await openItems(items, actions, 'launch');
-    }).catch(actions.error);
+    }).catch(actions.error).finally(() => { if (--queued === 0) update(false); });
   });
+  return true;
 }
 
 /** Keep File access inside the drop event, before the browser protects it again. */
