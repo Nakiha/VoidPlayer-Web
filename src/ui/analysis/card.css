@@ -1,0 +1,26 @@
+.analysis-card {
+  position: fixed;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--annotation-toolbar-shadow);
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  transform: translateY(var(--floating-offset-y, 0px));
+  transition: transform 180ms ease, max-height 180ms ease;
+}
+@media (prefers-reduced-motion: reduce) { .analysis-card { transition: none; } }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .analysis-card { background: var(--surface); }
+}
+.analysis-card .metric-value { font-weight: 500; }
+.analysis-card-unit { display: inline-block; margin-left: 5px; color: var(--text-secondary); font-size: inherit; font-weight: 400; }
+.analysis-card-track-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 3px; font-weight: 400; color: var(--text-secondary); }
+.analysis-card-track-time { flex-shrink: 0; margin-left: 8px; white-space: nowrap; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.analysis-card .analysis-card-track-badge { width: 20px; height: 20px; min-height: 20px; font: 600 12px/1 var(--font-ui); vertical-align: middle; }

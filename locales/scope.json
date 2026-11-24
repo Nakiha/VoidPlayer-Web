@@ -36,6 +36,8 @@
     "src/ui/analysis/picture-overlay/controller.ts",
     "src/ui/analysis/picture-overlay/frame-inspector.ts",
     "src/ui/analysis/picture-overlay/geometry.ts",
+    "src/ui/analysis/picture-overlay/hover-card.ts",
+    "src/ui/analysis/picture-overlay/inter-prediction.ts",
     "src/ui/analysis/preferences.ts",
     "src/ui/analysis/queries.ts",
     "src/ui/analysis/range-editor.ts",

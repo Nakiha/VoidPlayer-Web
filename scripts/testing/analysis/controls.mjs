@@ -65,10 +65,11 @@ export async function createAnalysisControls(page) {
       const partition = ['blocks', 'none', 'sizes'].includes(mode);
       await page.locator(`#bitstream-mode [data-mode="${partition ? 'sizes' : mode}"]`).click();
       if (partition) {
-        const check = page.locator('#bitstream-size-fill');
-        if (await check.isChecked() !== (mode === 'sizes')) {
-          if (!await check.isVisible()) await page.locator('#bitstream-show-display').click();
-          await check.setChecked(mode === 'sizes');
+        const button = page.locator('#bitstream-size-fill');
+        if ((await button.getAttribute('aria-pressed') === 'true') !== (mode === 'sizes')) {
+          const display = page.locator('#bitstream-show-display');
+          if (await display.getAttribute('aria-expanded') !== 'true') await display.click();
+          await button.click();
         }
       }
     };

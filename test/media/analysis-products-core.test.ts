@@ -17,18 +17,60 @@ function canonical({metrics:{elapsedMs,bytesRead,heapBytes,...metrics},...value}
  assert.ok(bytesRead>0&&heapBytes>0);
  return JSON.parse(JSON.stringify({...value,metrics}));
 }
+
+test('fresh AVC analysis outputs every B picture without a reorder limit in the SPS', async () => {
+  // Eight 64×64 libx264 pictures (three B frames with B-pyramid). The avcC
+  // SPS has its VUI removed. Each packet keeps its original PTS and DTS.
+  const extra = Buffer.from('0164000affe100096764000aacd944264001000668ebe3cb22c0fdf8f800', 'hex');
+  const packets = [
+    '0000001f6588840011fffef7881f3288dab5dc8479eb153f5188c65b5cf9d9ae8629df',
+    '0000000a419a246c410ffeaa57de', '00000008419e427887ff04c5', '00000008019e617443bf05bc',
+    '00000008019e636a43bf05bd', '00000010419a6749a84168994c0877fffea99d35',
+    '0000000a419e8545112c3bff05bd', '00000008019ea66a43bf05bd',
+  ].map(bytes => Buffer.from(bytes, 'hex'));
+  const presentationRanks = [0, 4, 2, 1, 3, 7, 5, 6];
+  const core = await factory();
+  const ptr = core._malloc(1024);
+  try {
+    for (let gop = 0; gop < 2; gop++) {
+      core.HEAPU8.set(extra, ptr);
+      assert.equal(core._vpa_open(1, ptr, extra.length), 0);
+      const output: [number, number][] = [];
+      const receive = (terminal: number) => {
+        let status: number;
+        while ((status = core._vpa_step()) === 1) {
+          assert.equal(core._vpa_invalid(), 0);
+          output.push([core._vpa_ordinal(), core._vpa_pts()]);
+          assert.ok(core._vpa_take(32 * 1024 * 1024) > 0);
+        }
+        assert.equal(status, terminal);
+      };
+      for (const [au, bytes] of packets.entries()) {
+        core.HEAPU8.set(bytes, ptr);
+        assert.equal(core._vpa_feed(ptr, bytes.length, presentationRanks[au] * 125000, (au - 2) * 125000, au), 0);
+        receive(0);
+      }
+      assert.equal(core._vpa_drain(), 0);
+      receive(2);
+      assert.deepEqual(output, [0, 3, 2, 4, 1, 6, 7, 5].map((au, rank) => [au, rank * 125000]));
+      core._vpa_close();
+      assert.equal(core._vpa_record_bytes(), 0);
+    }
+  } finally { core._vpa_close(); core._free(ptr); }
+});
+
 for(const [name,startUs,endUs,expected] of [['mhw_hevc_fullrange_bt709_3s.mp4',500000,700000,180],['h264_9s_1920x1080.mp4',500000,700000,30],['h266_10s_1920x1080.mp4',0,10000,49]] as const)
 test(`products ${name}: exact fields, summary queries, warm zero decoder`,async()=>{
  const input=await openAnalysisInput(await reader(name),new AbortController().signal), firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
- let hasNonzeroBits = false;
+ let hasSubRefillBits = false;
  const target={mode:'stream' as const,sourceVersion:name,firstPtsUs,durationUs,window:{startUs,endUs,axis:'pts' as const}},oracle=new Map<number,AnalysisBlocks>(),original=new DiagramStore(),projected=new DiagramStore();
  await analyzeStream(await reader(name),target,factory,manifest.buildId,new AbortController().signal,async result=>{
   assert.equal(result.capabilities.bits, 'ready');
   assert.ok(result.blocks.every(block => Number.isInteger(block.bits) && block.bits! >= 0));
-  hasNonzeroBits ||= result.blocks.some(block => block.bits! > 0);
+  hasSubRefillBits ||= result.blocks.some(block => block.bits! % 16 !== 0);
   oracle.set(result.picture.au,packLegacy(result));original.put(result);
  },async()=>{});
- assert.ok(hasNonzeroBits, 'the decoder must supply bit counts for this fixture');
+ assert.ok(hasSubRefillBits, 'CABAC bit counts must resolve consumption within a 16-bit refill');
  if(name.startsWith('h264_'))assert.deepEqual(oracle.values().next().value!.sourceLayout,{provenance:'configuration-sps-v1',configuration:0,codedWidth:1920,codedHeight:1088,visibleRect:{x:0,y:0,width:1920,height:1080}});
  let bytes=0,products=0;
  await analyzeStream(await reader(name),{...target,product:'summary'},factory,manifest.buildId,new AbortController().signal,async(result:AnalysisOutput)=>{

@@ -7,7 +7,7 @@ import { parseMediaIndexIdentity } from '../../media/indexing/media-index-identi
 import type { MediaIndexIdentity } from '../../media/indexing/media-index-identity.ts';
 import { AnalysisFailure } from './failure.ts';
 
-export const MP4_ANALYSIS_INDEX = Object.freeze({kind:'mp4-analysis' as const,streamKey:'video:0',schemaVersion:1,indexerBuild:'mp4-input-v1'});
+export const MP4_ANALYSIS_INDEX = Object.freeze({kind:'mp4-analysis' as const,streamKey:'video:0',schemaVersion:1,indexerBuild:'mp4-input-v2'});
 export type ProductIndexIdentity = MediaIndexIdentity | typeof MP4_ANALYSIS_INDEX;
 export const analysisIndexIdentity = (identity?:ProductIndexIdentity|null):ProductIndexIdentity => identity ?? MP4_ANALYSIS_INDEX;
 export const PRODUCT_SCHEMA = 3;

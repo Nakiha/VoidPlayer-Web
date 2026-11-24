@@ -188,7 +188,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
     const inferred = pictures.some(p => p.referenceLayer?.source === 'inferred');
     layerBadge.hidden = mode !== 'references' || !pictures.some(p => p.referenceLayer);
     layerBadge.textContent = t(inferred ? msg('analysis.inferredLayer', '推断层级') : msg('analysis.temporalLayer', '时间层级'));
-    layerBadge.title = inferred ? t(msg('analysis.inferredLayerHint', '按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层，* 表示参考信息不完整')) : t(msg('analysis.temporalLayerHint', '层级来自图像 VCL NAL 的 Temporal ID'));
+    layerBadge.title = inferred ? t(msg('analysis.inferredLayerHint', '根据相邻锚帧间的局部参考关系推断。只引用过去画面的双列表 B 帧也可作锚帧。* 表示参考信息不完整。')) : t(msg('analysis.temporalLayerHint', '层级来自图像 VCL NAL 的 Temporal ID'));
     const style = getComputedStyle(host);
     const minimumPlot = Number.parseFloat(style.getPropertyValue('--analysis-chart-min-plot-height')) || 36;
     const minimumTypeRow = Number.parseFloat(style.getPropertyValue('--analysis-type-row-min-height')) || 10;

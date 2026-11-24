@@ -3,6 +3,7 @@ import type { InspectionState, TrackInspection } from '../../../shared/analysis/
 import { t, msg } from '../../i18n.ts';
 import { formatAxis } from './canvas.ts';
 import { floatingAvoidanceShift } from './geometry.ts';
+import './card.css';
 
 /** Reuse the player track badge and its theme-owned slot colors in every tooltip. */
 export function analysisTrackBadge(slot: Slot | undefined, color?: string) {

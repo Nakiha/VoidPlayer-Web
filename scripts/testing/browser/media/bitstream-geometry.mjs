@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdir, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
 import { repositoryRoot } from '../../manifest.mjs';
+import { predictionStride, readPrediction } from '../../../../shared/analysis/bitstream/predictions.ts';
 const engine = process.argv[2] ?? 'webkit';
 const directory = path.join(repositoryRoot, '.run/analysis-geometry', engine);
 await mkdir(directory, { recursive: true });
@@ -23,6 +24,8 @@ for (const [width, height] of [[128, 96], [64, 48]]) ff([
     '-f', 'lavfi', '-i', `color=gray:size=${width}x${height}:rate=5:duration=1`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
     '-x264-params', 'bframes=0:keyint=5', path.join(directory, `hover-${width}.mp4`),
 ]);
+const interInputs = { A: 'h266_10s_1920x1080.mp4', B: 'h265_10s_1920x1080.mp4' };
+for (const name of Object.values(interInputs)) await copyFile(path.join(repositoryRoot, 'fixtures/video', name), path.join(directory, name));
 await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: engine==='chromium'?1200000:300000, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
     await ready();
     await page.addStyleTag({content:'.geometry-raw-capture .video-card:has(#stage-A){clip-path:none!important}.geometry-raw-capture .video-card:not(:has(#stage-A)),.geometry-raw-capture #bitstream-overlay-A,.geometry-raw-capture #bitstream-hover-A,.geometry-raw-capture #divider,.geometry-raw-capture .analysis-card{visibility:hidden!important}'});
@@ -59,7 +62,8 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
                 if (await toggle.getAttribute('aria-pressed') !== 'true')
                     await toggle.click();
                 await page.locator('#bitstream-mode [data-mode="sizes"]').click();
-                await page.locator('#bitstream-size-fill').uncheck();
+                const sizeFill = page.locator('#bitstream-size-fill');
+                if (await sizeFill.getAttribute('aria-pressed') === 'true') await sizeFill.click();
                 if (await page.locator('#bitstream-boundaries').getAttribute('aria-pressed') !== 'true') await page.locator('#bitstream-boundaries').click();
                 await page.locator('#bitstream-overlay-A').waitFor({ state: 'visible' });
                 // B gives split mode a real second track. The oracle below uses only fixture
@@ -119,7 +123,8 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
                             const tooltip = page.locator('.bitstream-hit-tooltip:visible');
                             await tooltip.waitFor({ state: 'visible' });
                             const block = result.blocks.find(b => b.x <= 31 && b.x + b.width > 31 && b.y <= 28 && b.y + b.height > 28);
-                            await page.waitForFunction(expected => [...document.querySelectorAll('.bitstream-hit-tooltip')].some(e => !e.hidden && e.textContent.includes(expected)), `${block.x}, ${block.y} · ${block.width}×${block.height}`);
+                            assert.equal(await tooltip.locator('[data-field=position]').textContent(), `${block.x}, ${block.y}`);
+                            assert.equal(await tooltip.locator('[data-field=size]').textContent(), `${block.width}×${block.height}`);
                             const edge = page.locator('#bitstream-hover-A .analysis-picture-hover-edge');
                             await edge.waitFor({state:'visible'});
                             const bounds = await edge.boundingBox();
@@ -215,6 +220,8 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
     if (await boundaries.getAttribute('aria-pressed') !== 'true') await boundaries.click();
     const image = slot => page.locator(`#image-${slot}`).boundingBox();
     const edge = slot => page.locator(`#bitstream-hover-${slot} .analysis-picture-hover-edge`);
+    const card = page.locator('.bitstream-hit-tooltip');
+    const detail = slot => card.locator(`.bitstream-hit-track[data-slot="${slot}"]`);
     const draws = () => page.locator('.analysis-picture-overlay:visible').evaluateAll(canvases => canvases.map(c => c.analysisMetrics.draws));
     const imageA = await image('A');
     const point = {clientX:imageA.x + imageA.width * 88 / 128, clientY:imageA.y + imageA.height * 53 / 96};
@@ -223,6 +230,7 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
     await edge('A').waitFor({state:'visible'});
     await edge('B').waitFor({state:'visible'});
     assert.deepEqual(await draws(), initialDraws, 'hover does not repaint the block grid');
+    assert.deepEqual(await card.locator('.bitstream-hit-track').evaluateAll(rows => rows.map(row => row.dataset.slot)), ['A', 'B']);
     const pickPeer = async () => {
         const a = await image('A'), b = await image('B'), peer = analyses.B;
         const x = (point.clientX - a.x - a.width / 2 + b.width / 2) * peer.width / b.width;
@@ -245,6 +253,9 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
             };
             check();
         }), expected);
+        assert.equal(await detail('B').locator('[data-field=position]').textContent(), `${block.x}, ${block.y}`);
+        assert.equal(await detail('B').locator('[data-field=size]').textContent(), `${block.width}×${block.height}`);
+        assert.equal(await detail('B').locator('[data-field=bits]').textContent(), `${block.bits} bit · ${block.bits / 8} B`);
         return block;
     }
     const uniform = await verifyPeer();
@@ -260,18 +271,148 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
     await stage.dispatchEvent('pointermove', {clientX:imageA.x + imageA.width * .88, clientY:point.clientY});
     await edge('A').waitFor({state:'visible'});
     await edge('B').waitFor({state:'hidden'});
+    await detail('B').waitFor({state:'detached'});
+    await detail('A').waitFor({state:'visible'});
     await stage.dispatchEvent('pointermove', point);
     await edge('B').waitFor({state:'visible'});
     await boundaries.evaluate(button => button.click());
     await edge('A').waitFor({state:'hidden'});
     await edge('B').waitFor({state:'hidden'});
-    assert.equal(await page.locator('.bitstream-hit-tooltip:visible').count(), 1, 'turning off boundaries keeps the active-track tooltip');
+    await detail('A').waitFor({state:'visible'});
+    await detail('B').waitFor({state:'visible'});
     await boundaries.evaluate(button => button.click());
     await edge('B').waitFor({state:'visible'});
     await stage.dispatchEvent('pointerleave');
     await edge('A').waitFor({state:'hidden'});
     await edge('B').waitFor({state:'hidden'});
-    rows.push({input:'local-and-library', kind:'linked-hover', uniform, fill});
+    await card.waitFor({state:'hidden'});
+    const hoverTrack = async slot => {
+        const box = await image(slot);
+        await page.locator(`#stage-${slot}`).dispatchEvent('pointermove', {clientX: box.x + box.width / 2, clientY: box.y + box.height / 2});
+        await detail(slot).waitFor({state:'visible'});
+    };
+    await page.emulateMedia({colorScheme:'dark'});
+    await hoverTrack('B');
+    assert.equal(await card.count(), 1, 'linked overlays share one tooltip');
+    const background = badge => badge.evaluate(element => getComputedStyle(element).backgroundColor);
+    for (const [slot, width] of [['A', 128], ['B', 64]]) {
+        assert.equal(await detail(slot).locator('.analysis-card-track-name').textContent(), `hover-${width}.mp4`);
+        const color = await background(detail(slot).locator('.slot'));
+        assert.equal(color, await background(page.locator(`#bitstream-tracks [data-slot="${slot}"] .slot`)));
+        assert.equal(await edge(slot).evaluate(element => getComputedStyle(element).outlineColor), color, `track ${slot} uses its badge color`);
+    }
+    assert.ok(await card.evaluate(element => {
+        const label = getComputedStyle(element.querySelector('[data-label=position]'));
+        const value = getComputedStyle(element.querySelector('[data-field=position]'));
+        return Number(value.fontWeight) > Number(label.fontWeight) && value.color !== label.color;
+    }), 'block values have stronger contrast and weight than labels');
+    const compact = await card.boundingBox();
+    assert.ok(compact.width < 300 && compact.height < 140, `compact two-track card ${JSON.stringify(compact)}`);
+    await card.screenshot({path:artifact('block-hover-dark.png')});
+    const peerToggle = page.locator('#bitstream-tracks [data-slot="A"]');
+    await peerToggle.evaluate(button => button.click());
+    await detail('A').waitFor({state:'detached'});
+    await detail('B').waitFor({state:'visible'});
+    await peerToggle.evaluate(button => button.click());
+    await detail('A').waitFor({state:'visible'});
+    await page.locator('#stage-B').dispatchEvent('pointerleave');
+    await card.waitFor({state:'hidden'});
+    await page.locator('#bitstream-close').evaluate(button => button.click());
+    await page.emulateMedia({colorScheme:'light'});
+    await page.setViewportSize({width:275,height:700});
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await hoverTrack('A');
+    assert.ok(await card.evaluate(element => {
+        const card = element.getBoundingClientRect(), viewport = element.parentElement.getBoundingClientRect();
+        const time = element.querySelector('time').getBoundingClientRect(), name = element.querySelector('.analysis-card-track-name').getBoundingClientRect();
+        return card.left >= viewport.left + 7 && card.right <= viewport.right - 7 && card.bottom <= viewport.bottom - 7 &&
+            Math.abs(time.top + time.height / 2 - name.top - name.height / 2) < 1 && element.scrollWidth <= element.clientWidth;
+    }), 'narrow cards keep the time on the header line without overflowing the viewport');
+    await card.screenshot({path:artifact('block-hover-narrow-light.png')});
+    rows.push({input:'local-and-library', kind:'linked-hover', uniform, fill, compact});
+    await page.setViewportSize({width:1280,height:900});
+    await page.emulateMedia({colorScheme:'dark'});
+    for (const slot of ['A', 'B']) await call('remove_review_track', {slot});
+    for (const [slot, name] of Object.entries(interInputs)) {
+        if (slot === 'A') await page.locator('#file-A').setInputFiles(path.join(directory, name));
+        else await call('load_library_item', {slot, id:library.entries.find(e => e.name === name).id});
+        await page.waitForFunction(slot => {
+            const state = window.voidPlayer.getState();
+            return !state.busy && state.tracks.some(t => t.slot === slot && t.frame && !t.failure);
+        }, slot);
+    }
+    await call('seek_review', {ptsUs:66667});
+    const inter = {};
+    for (const slot of ['A', 'B']) {
+        const answer = await call('request_bitstream_analysis', {slot, product:'prediction-inter'});
+        const bytes = Uint8Array.from(Buffer.from(answer.payloadBase64, 'base64')), view = new DataView(bytes.buffer);
+        assert.equal(bytes.length / predictionStride('prediction-inter'), answer.recordCount);
+        inter[slot] = Array.from({length:answer.recordCount}, (_, index) => readPrediction(view, 'prediction-inter', index));
+        if (!await page.locator('#analysis-overlay-panel').isVisible()) await page.locator('#toggle-analysis-overlay').click();
+        const toggle = page.locator(`#bitstream-tracks [data-slot="${slot}"]`);
+        if (await toggle.getAttribute('aria-pressed') !== 'true') await toggle.evaluate(button => button.click());
+        await page.locator(`#bitstream-overlay-${slot}`).waitFor({state:'visible'});
+    }
+    const drawer = page.locator('#bitstream-frame-inspector'), fold = page.locator('#bitstream-inspect-frame');
+    if (await drawer.isHidden()) await fold.evaluate(button => button.click());
+    async function downloadFrame() {
+        const [download] = await Promise.all([page.waitForEvent('download', {timeout:15000}), drawer.locator('[data-export]').click()]);
+        return JSON.parse(await readFile(await download.path(), 'utf8'));
+    }
+    assert.equal(await drawer.locator('select, input[type="checkbox"]').count(), 0, 'frame inspector uses project menus without export toggles');
+    for (const slot of ['A', 'B']) {
+        await drawer.locator('#bitstream-inspect-track').click();
+        await page.locator(`#bitstream-inspect-track-menu:popover-open [data-value="${slot}"]`).click();
+        if (slot === 'B') {
+            const requests = '**/bitstream-analysis/requests*';
+            const failPrediction = route => route.request().method() === 'POST' && route.request().postDataJSON()?.target?.product === 'prediction-inter' ?
+                route.fulfill({status:429,json:{reason:{code:'resource-limit',message:'Injected prediction budget failure'}}}) : route.continue();
+            await page.route(requests, failPrediction);
+            try {
+                const partial = await downloadFrame();
+                assert.equal(partial.statistics.blockCount, partial.blocks.length);
+                assert.equal(partial.predictionInter, undefined);
+                assert.match(await drawer.locator('[data-export-status]').textContent(), /已导出块明细/);
+            } finally { await page.unroute(requests, failPrediction); }
+        }
+        const exported = await downloadFrame();
+        const token = await call('get_presented_frame', {slot});
+        assert.equal(exported.slot, slot);
+        assert.equal(exported.statistics.blockCount, exported.blocks.length);
+        assert.deepEqual(exported.predictionInter, inter[slot]);
+        assert.deepEqual(exported.frame.picture, token.picture);
+    }
+    await page.locator('#bitstream-close').evaluate(button => button.click());
+    const tokens = {};
+    for (const slot of ['A', 'B']) tokens[slot] = await call('get_presented_frame', {slot});
+    const visible = slot => tokens[slot].geometry.visibleRect;
+    const a = await image('A'), b = await image('B');
+    const labelOf = record => [record?.merge && 'Merge', record?.mmvd && 'MMVD', record?.ciip && 'CIIP',
+        record?.gpmPartition != null && 'GPM'].filter(Boolean);
+    for (const tool of ['MMVD', 'CIIP', 'GPM', 'Merge', null]) {
+        const record = inter.A.find(r => tool ? labelOf(r).at(-1) === tool : labelOf(r).length === 0);
+        assert.ok(record, `${tool} prediction region on VVC fixture`);
+        const dx = a.width * ((record.x + record.width / 2 - visible('A').x) / visible('A').width - .5);
+        const dy = a.height * ((record.y + record.height / 2 - visible('A').y) / visible('A').height - .5);
+        const peerX = visible('B').x + visible('B').width * (dx / b.width + .5);
+        const peerY = visible('B').y + visible('B').height * (dy / b.height + .5);
+        const peer = inter.B.find(r => peerX >= r.x && peerX < r.x + r.width && peerY >= r.y && peerY < r.y + r.height);
+        await stage.dispatchEvent('pointermove', {clientX: a.x + a.width / 2 + dx, clientY: a.y + a.height / 2 + dy});
+        await page.waitForFunction(({labelsA, labelsB}) => ['A', 'B'].every((slot, i) => {
+            const row = document.querySelector(`.bitstream-hit-tooltip:not([hidden]) [data-slot="${slot}"]`);
+            const tags = row && [...row.querySelectorAll('[data-field=inter-tools] span')].map(n => n.textContent);
+            return tags && tags.join(',') === [labelsA, labelsB][i].join(',');
+        }), {labelsA:labelOf(record), labelsB:labelOf(peer)});
+        const size = await card.boundingBox();
+        assert.equal(size.width, compact.width);
+        assert.equal(size.height, compact.height, 'tool badges stay within the existing prediction row');
+        if (tool === 'GPM') await card.screenshot({path:artifact('inter-tools.png')});
+    }
+    await stage.dispatchEvent('pointerleave');
+    await call('seek_review', {ptsUs:0});
+    await hoverTrack('A');
+    assert.deepEqual(await card.locator('[data-field=inter-tools] span').allTextContents(), [], 'changing frames clears old prediction badges');
+    rows.push({kind:'inter-prediction-hover-export', interVvc:inter.A.length, interHevc:inter.B.length});
     await writeFile(artifact('geometry.json'), JSON.stringify(rows, null, 2));
     console.log(`PASS ${engine}: 12 analysis combinations × 4 viewports, linked hover across pixel modes, and 3 RGBA fallback rotations`);
 });

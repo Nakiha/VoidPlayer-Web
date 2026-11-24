@@ -6,6 +6,7 @@ let fixtureLocation:PropertyDescriptor|undefined,fixtureFetch:typeof fetch;
 beforeEach(()=>{fixtureLocation=Object.getOwnPropertyDescriptor(globalThis,'location');fixtureFetch=globalThis.fetch;Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));});
 afterEach(()=>{globalThis.fetch=fixtureFetch;if(fixtureLocation)Object.defineProperty(globalThis,'location',fixtureLocation);else Reflect.deleteProperty(globalThis,'location');});
 import { inspectPacketPicture } from "../../shared/media/codecs/packet-picture.ts";
+import { ANNEX_B_PACKET_BUILD } from '../../shared/media/indexing/annex-b-index.ts';
 import {
   pictureId,
   validateResult,
@@ -415,6 +416,41 @@ test('signaled VCL temporal IDs take priority; metadata IDs and fake AVC zeros n
   const avc = result(); avc.nalus = [{ offset: 4, size: 20, type: 1, temporalId: 0, layer: 0 }];
   avc.references = { kind: 'active-lists', state: 'ready', poc: 10, frameType: 'B', edges: [] };
   assert.deepEqual(referenceLayers([avc as any]).get(3), { level: 1, source: 'inferred', provisional: true });
+});
+test('past-only B anchors recover a VVC pyramid with all-zero temporal IDs', () => {
+  const picture = (au: number, order: number, edges: [number, 0 | 1][]) => {
+    const frame = result();
+    frame.codec = 'vvc';
+    frame.picture.stream += `@${ANNEX_B_PACKET_BUILD}`;
+    frame.picture.au = au; frame.sourcePtsUs = order * 1000; frame.sourceDtsUs = null; frame.derivedDtsUs = au * 1000;
+    frame.nalus = [{ offset: 4, size: 20, type: au === 0 ? 7 : 0, temporalId: 0, layer: 0 }];
+    frame.references = { kind:'active-lists', state:'ready', poc:order, frameType:au === 0 ? 'I' : 'B',
+      edges: edges.map(([au, list]) => ({au, list})) };
+    return frame;
+  };
+  const records = [
+    picture(0, 0, []),
+    picture(1, 4, [[0, 0], [0, 1]]),
+    picture(2, 2, [[0, 0], [1, 1]]),
+    picture(3, 1, [[0, 0], [2, 1]]),
+    picture(4, 3, [[2, 0], [1, 1]]),
+    picture(5, 8, [[0, 0], [1, 0], [1, 1]]),
+    picture(6, 6, [[1, 0], [3, 0], [5, 1]]),
+    picture(7, 5, [[1, 0], [6, 1]]),
+    picture(8, 7, [[6, 0], [5, 1]]),
+  ];
+  const store = new DiagramStore();
+  store.put(records[1]);
+  const query = (start = 0, end = 9000, axis: 'pts' | 'dts' = 'pts') =>
+    store.queryChart('local:uuid', start, end, 100, axis).pictures;
+  assert.equal(query()[0].referenceLayer?.provisional, true, 'a missing reference cannot establish a B anchor');
+  for (const record of [...records].reverse()) store.put(record);
+  assert.deepEqual(query().map(p => p.referenceLayer), [0, 2, 1, 2, 0, 2, 1, 2, 0].map(level => ({level, source:'inferred'})));
+  assert.deepEqual(query(0, 9000, 'dts').map(p => p.referenceLayer?.level), [0, 0, 1, 2, 2, 0, 1, 2, 2]);
+  for (const p of query(5000, 8000)) {
+    assert.equal(p.references?.frameType, 'B');
+    assert.deepEqual(p.references, records[p.picture.au].references, 'all reference edges are retained');
+  }
 });
 test('NAL charts keep exact payload offsets, header types and byte accounting', () => {
   const avc = new Uint8Array(5); avc[4] = 3;

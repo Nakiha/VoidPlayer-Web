@@ -205,7 +205,16 @@ export async function readMp4Configurations(reader: Mp4Reader, trackId: number, 
       if(ctts.end-ctts.data>24*1024*1024)throw new MediaOpenError('resource','MP4 CTTS 超过上限。');
       const data=await reader.read(ctts.data,ctts.end-ctts.data),cv=new DataView(data.buffer,data.byteOffset,data.byteLength);
       if(data.length<8||data[0]>1||8+cv.getUint32(4)*8!==data.length)return invalid('CTTS 数量无效。');
-      let at=0;for(let i=0;i<cv.getUint32(4);i++){const n=cv.getUint32(8+i*8),offset=data[0]===1?cv.getInt32(12+i*8):cv.getUint32(12+i*8);if(at+n>samples)return invalid('CTTS 样本数量越界。');compositionOffsets.fill(offset,at,at+n);at+=n;}
+      // QuickTime can store negative composition offsets even in a version 0 atom.
+      const ftyp = root.find(box => box.type === 'ftyp' && box.end - box.data >= 4);
+      const signed = data[0] === 1 || !!ftyp && String.fromCharCode(...await reader.read(ftyp.data, 4)) === 'qt  ';
+      let at = 0;
+      for (let i = 0; i < cv.getUint32(4); i++) {
+        const count = cv.getUint32(8 + i * 8), offset = signed ? cv.getInt32(12 + i * 8) : cv.getUint32(12 + i * 8);
+        if (at + count > samples) return invalid('CTTS 样本数量越界。');
+        compositionOffsets.fill(offset, at, at + count);
+        at += count;
+      }
       if(at!==samples)return invalid('CTTS 样本数量不一致。');
     }
     // Preserve source media ticks separately from edit-list/POC presentation

@@ -641,13 +641,15 @@ export class BitstreamAnalysisService {
           consume(state.result);
           return;
         }
-        if (
-          ["error", "cancelled", "limited", "unsupported"].includes(state.state)
-        )
+        if (["error", "cancelled", "limited", "unsupported"].includes(state.state)) {
+          // Partial analysis can finish with several pages of valid results
+          // still waiting to be consumed. Keep them before reporting failure.
+          if (stream && cursor < state.published && state.chunks.length) continue;
           throw restoreFailure(
             state.reason,
             state.error ?? "Analysis cancelled",
           );
+        }
         if (!restoredGop) await new Promise((r) => setTimeout(r, 200));
       }
     } finally {

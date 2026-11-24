@@ -8,6 +8,18 @@ export type FillMode = 'none' | Dimension;
 export type BlockFilter = { slot: Slot; picture: ReadonlyAnalysisResult; dimension: Dimension; key: string };
 export type Bin = { key: string; count: number; pixels: number };
 
+// A fixed scale keeps equal QPs comparable across frames, tracks and codecs.
+// Spend most of the hue range on the QPs most often compared in the overlay.
+const qpHueStops = [[0, 240], [20, 214], [27, 172], [30, 114], [33, 49], [40, 15], [63, 0]] as const;
+const qpColors = Array.from({ length: 64 }, (_, qp) => {
+  const right = qpHueStops.findIndex(([stop]) => stop >= qp);
+  const [upperQp, upperHue] = qpHueStops[Math.max(1, right)];
+  const [lowerQp, lowerHue] = qpHueStops[Math.max(0, right - 1)];
+  const hue = lowerHue + (upperHue - lowerHue) * (qp - lowerQp) / (upperQp - lowerQp);
+  return `hsl(${hue},90%,50%)`;
+});
+export const qpGradient = `linear-gradient(to right,${qpColors.join(',')})`;
+
 // Fixed logarithmic bands keep the same color meaning across frames and tracks.
 const bitBands = [0, 1, 8, 32, 128, 512, 2048, 8192, 32768] as const;
 export const bitBandColors = bitBands.map((_, index) => `hsl(${240 - index * 240 / (bitBands.length - 1)},90%,50%)`);
@@ -30,9 +42,9 @@ export function blockKey(block: AnalysisBlock, dimension: Dimension): string | n
   }
 }
 
-export function blockColor(dimension: Dimension, key: string, codec: ReadonlyAnalysisResult['codec']) {
+export function blockColor(dimension: Dimension, key: string) {
   if (dimension === 'modes') return key === 'intra' ? 'rgb(64,200,255)' : key === 'skip' ? 'rgb(80,220,110)' : 'rgb(255,160,60)';
-  if (dimension === 'qp') return `hsl(${240 - Number(key) * 240 / (codec === 'vvc' ? 63 : 51)},90%,50%)`;
+  if (dimension === 'qp') return qpColors[Number(key)];
   if (dimension === 'bits') return bitBandColors[Number(key)];
   if (dimension === 'depth') return `hsl(${220 - Number(key) * 40},80%,58%)`;
   const [width, height] = key.split('×').map(Number);

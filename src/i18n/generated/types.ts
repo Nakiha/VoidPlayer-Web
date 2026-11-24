@@ -372,7 +372,7 @@ export interface Sources {
   "analysis.indexFailed": "轨道 {slot} 索引失败：{error}";
   "analysis.indexNotReady": "帧索引尚未就绪";
   "analysis.inferredLayer": "推断层级";
-  "analysis.inferredLayerHint": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层，* 表示参考信息不完整";
+  "analysis.inferredLayerHint": "根据相邻锚帧间的局部参考关系推断。只引用过去画面的双列表 B 帧也可作锚帧。* 表示参考信息不完整。";
   "analysis.inferredLayerPartial": "推断层级（参考信息不完整）";
   "analysis.invalidRange": "请输入片源范围内的起止时间，结束时间须晚于起始时间";
   "analysis.layoutMerged": "码流合并";
@@ -486,6 +486,7 @@ export interface Sources {
   "bitstream.analysisProgress": "分析进度";
   "bitstream.blockCount": "块数";
   "bitstream.blockLabels": "块内文字";
+  "bitstream.blockPosition": "坐标";
   "bitstream.blockSize": "块尺寸";
   "bitstream.boundaries": "块边界";
   "bitstream.byArea": "按编码面积";
@@ -500,11 +501,13 @@ export interface Sources {
   "bitstream.enableTrack": "请开启一个轨道遮罩";
   "bitstream.estimatedCodedSize": "估算编码大小";
   "bitstream.exportFrame": "导出当前帧";
+  "bitstream.exportInterBusy": "此轨已有分析任务，暂时无法读取帧间预测明细";
+  "bitstream.exportInterIncomplete": "已导出块明细。帧间预测明细未能读取。{reason}";
+  "bitstream.exportInterPending": "正在读取帧间预测明细…";
   "bitstream.fieldUnavailable": "此轨当前帧没有该模式的数据";
   "bitstream.frameDistribution": "当前帧 · {metric}分布";
   "bitstream.hideTrackOverlay": "隐藏轨道 {slot} 的遮罩";
   "bitstream.highQp": "高 QP";
-  "bitstream.includeBlocks": "附带块明细";
   "bitstream.incompleteReferences": "参考状态不完整，无法生成精确遮罩";
   "bitstream.inspectTrack": "检查轨道";
   "bitstream.inter": "帧间";
@@ -527,6 +530,7 @@ export interface Sources {
   "bitstream.resourceLimit": "分析达到资源上限，请缩短区间或选择更近的起点";
   "bitstream.showTrackOverlay": "显示轨道 {slot} 的遮罩";
   "bitstream.sizeFill": "按块尺寸填色";
+  "bitstream.sizeFillShort": "尺寸填色";
   "bitstream.skip": "跳过";
   "bitstream.sourceChanged": "片源已变更，请重新载入后分析";
   "bitstream.totalBlocks": "{count} 块";
@@ -1767,6 +1771,7 @@ export interface MessageParameters {
   "bitstream.analysisProgress": {  };
   "bitstream.blockCount": {  };
   "bitstream.blockLabels": {  };
+  "bitstream.blockPosition": {  };
   "bitstream.blockSize": {  };
   "bitstream.boundaries": {  };
   "bitstream.byArea": {  };
@@ -1781,11 +1786,13 @@ export interface MessageParameters {
   "bitstream.enableTrack": {  };
   "bitstream.estimatedCodedSize": {  };
   "bitstream.exportFrame": {  };
+  "bitstream.exportInterBusy": {  };
+  "bitstream.exportInterIncomplete": { "reason": string | number };
+  "bitstream.exportInterPending": {  };
   "bitstream.fieldUnavailable": {  };
   "bitstream.frameDistribution": { "metric": string | number };
   "bitstream.hideTrackOverlay": { "slot": string | number };
   "bitstream.highQp": {  };
-  "bitstream.includeBlocks": {  };
   "bitstream.incompleteReferences": {  };
   "bitstream.inspectTrack": {  };
   "bitstream.inter": {  };
@@ -1808,6 +1815,7 @@ export interface MessageParameters {
   "bitstream.resourceLimit": {  };
   "bitstream.showTrackOverlay": { "slot": string | number };
   "bitstream.sizeFill": {  };
+  "bitstream.sizeFillShort": {  };
   "bitstream.skip": {  };
   "bitstream.sourceChanged": {  };
   "bitstream.totalBlocks": { "count": string | number };

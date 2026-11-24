@@ -5,12 +5,13 @@ import path from 'node:path';
 
 /** Small video, real 9 MiB moov, 64-bit mdat declaration beyond EOF.
  * Retain all samples and adjust stco offsets after padding the moov. */
-export async function mp4BoundaryFixture(bFrames = 0, co64 = false) {
+export async function mp4BoundaryFixture(bFrames = 0, co64 = false, negativeCompositionOffsets = false) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'vp-mp4-bounds-'));
   try {
     const file = path.join(dir, 'source.mp4');
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=160x96:rate=10', '-t', '2',
-      '-c:v', 'libx264', '-threads', '1', '-pix_fmt', 'yuv420p', '-g', '10', '-bf', String(bFrames), '-movflags', '+faststart', file]);
+      '-c:v', 'libx264', '-threads', '1', '-pix_fmt', 'yuv420p', '-g', '10', '-bf', String(bFrames),
+      '-movflags', negativeCompositionOffsets ? '+faststart+negative_cts_offsets' : '+faststart', file]);
     let bytes: Buffer = await readFile(file);
     const padding = 9 * 1024 * 1024;
     if (co64) bytes = widenOffsets(bytes);

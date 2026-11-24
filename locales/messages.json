@@ -1643,7 +1643,7 @@
     "params": {}
   },
   "analysis.inferredLayerHint": {
-    "source": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层，* 表示参考信息不完整",
+    "source": "根据相邻锚帧间的局部参考关系推断。只引用过去画面的双列表 B 帧也可作锚帧。* 表示参考信息不完整。",
     "params": {}
   },
   "analysis.inferredLayerPartial": {
@@ -2152,6 +2152,10 @@
     "source": "块内文字",
     "params": {}
   },
+  "bitstream.blockPosition": {
+    "source": "坐标",
+    "params": {}
+  },
   "bitstream.blockSize": {
     "source": "块尺寸",
     "params": {}
@@ -2208,6 +2212,20 @@
     "source": "导出当前帧",
     "params": {}
   },
+  "bitstream.exportInterBusy": {
+    "source": "此轨已有分析任务，暂时无法读取帧间预测明细",
+    "params": {}
+  },
+  "bitstream.exportInterIncomplete": {
+    "source": "已导出块明细。帧间预测明细未能读取。{reason}",
+    "params": {
+      "reason": "string | number"
+    }
+  },
+  "bitstream.exportInterPending": {
+    "source": "正在读取帧间预测明细…",
+    "params": {}
+  },
   "bitstream.fieldUnavailable": {
     "source": "此轨当前帧没有该模式的数据",
     "params": {}
@@ -2226,10 +2244,6 @@
   },
   "bitstream.highQp": {
     "source": "高 QP",
-    "params": {}
-  },
-  "bitstream.includeBlocks": {
-    "source": "附带块明细",
     "params": {}
   },
   "bitstream.incompleteReferences": {
@@ -2320,6 +2334,10 @@
   },
   "bitstream.sizeFill": {
     "source": "按块尺寸填色",
+    "params": {}
+  },
+  "bitstream.sizeFillShort": {
+    "source": "尺寸填色",
     "params": {}
   },
   "bitstream.skip": {

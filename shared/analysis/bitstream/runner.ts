@@ -37,6 +37,10 @@ import type { AnalysisReader } from "./input.ts";
 import { AnalysisFailure, RetryFullAnalysis, coreFailure } from "./failure.ts";
 import { groupAnalysisGops, gopForAu, viewportAnalysisGops } from './stream.ts';
 import type { AnalysisIndexFrontier, StreamProgress } from './stream.ts';
+
+class MissingDecodedPictures extends AnalysisFailure {
+  constructor() { super('incomplete-reference-state', 'Target picture was not output'); }
+}
 // Bind a host's codec-aware loader only after the input has identified its decoder.
 function coreForInput(core: any, codec: AnalysisResult['codec'], wholeStreamConfig?: Uint8Array) {
   const factory = typeof core?.forCodec === 'function' ? () => core.forCodec(codec, wholeStreamConfig) : core;
@@ -462,10 +466,7 @@ async function runPictureAttempt(
         if (options.stream && last && input.indexComplete && outputPictures === input.totalPackets) {
           await progress(true); return last;
         }
-        throw new AnalysisFailure(
-          "incomplete-reference-state",
-          "Target picture was not output",
-        );
+        throw new MissingDecodedPictures();
       }
       if ((options.stream || options.viewport ? sinceOutputPackets : count) >= BUDGET.packets ||
           (options.stream || options.viewport ? sinceOutputBytes : packetBytes) >= BUDGET.inputBytes)
@@ -733,6 +734,7 @@ async function runStream(
       if (!totalPictures || totalPictures > 250000) throw new AnalysisFailure('resource-limit', 'Empty or oversized analysis viewport');
       const totalUs = target.window.endUs - target.window.startUs;
       let pictures = 0, last: AnalysisOutput | undefined;
+      let missingOutput: MissingDecodedPictures | undefined;
       const progress = () => onProgress({ pictures, totalPictures, totalUs, checkedUs: pictures === totalPictures ? totalUs : Math.min(totalUs - 1, Math.floor(totalUs * pictures / totalPictures)), indexComplete: true, waitingForIndex: false });
       await progress();
       const execution = executionPolicy();
@@ -754,11 +756,20 @@ async function runStream(
         }
         if (missing.size) {
           const packet = input.packets[missing.values().next().value!];
-          await runPicture(reader, { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion, sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) }, core, buildId, signal,
-            { input, keepInput: true, viewport: true, desiredAus: missing, onResult: publish, executionPolicy:execution });
+          try {
+            await runPicture(reader, { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion,
+              sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) }, core, buildId, signal,
+              { input, keepInput: true, viewport: true, desiredAus: missing, onResult: publish, executionPolicy: execution });
+          } catch (error) {
+            // A decoder can omit an early reordered picture while correctly
+            // producing the rest. Keep later GOPs available without claiming
+            // full coverage or substituting a neighboring picture.
+            if (!(error instanceof MissingDecodedPictures)) throw error;
+            missingOutput ??= error;
+          }
         }
       }
-      if (pictures !== totalPictures) throw new AnalysisFailure('incomplete-reference-state', 'Incomplete viewport GOP coverage');
+      if (pictures !== totalPictures) throw missingOutput ?? new AnalysisFailure('incomplete-reference-state', 'Incomplete viewport GOP coverage');
       return last!;
     } finally { input.close(); }
   }

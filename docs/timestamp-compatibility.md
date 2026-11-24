@@ -1,5 +1,9 @@
 # 时间线兼容性：恢复显示顺序，不按文件打补丁
 
+## QuickTime 合成偏移
+
+QuickTime 的 `ctts` version 0 也允许有符号的合成偏移。共享样本表按 `qt  ` 主品牌识别这类 MOV，播放与深度分析使用相同的偏移计算 DTS，PTS 继续由公共包接口提供。普通 ISO BMFF 的 version 0 仍按无符号读取。修正后更新播放索引和分析产品的版本，避免复用由旧偏移计算出的 DTS。
+
 ## HEVC MP4 显示顺序恢复
 
 HEVC MP4 如果没有 composition offset，却在码流中存在图片重排，不能直接把原始包时间当作图片显示顺序。

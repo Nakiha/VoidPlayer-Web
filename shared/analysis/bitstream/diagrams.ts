@@ -20,8 +20,8 @@ export interface ReferenceLayer { level: number; source: 'temporal-id' | 'inferr
  * Use signaled VCL temporal IDs when the configuration actually has sublayers.
  * Encoders may mark every picture T0 despite hierarchical B references; that
  * single temporal sublayer does not describe the reference display hierarchy.
- * Otherwise keep each interval
- * between consecutive I/P anchors independent of older active-list candidates.
+ * Otherwise keep each interval between consecutive anchors independent of
+ * older active-list candidates. Past-only B pictures can serve as anchors.
  * Work from retained source records, not the viewport, so zoom cannot change levels. */
 export function referenceLayers(pictures: readonly DiagramPicture[]): Map<number, ReferenceLayer> {
   const ready = pictures.filter(p => p.references?.state === 'ready');
@@ -36,9 +36,21 @@ export function referenceLayers(pictures: readonly DiagramPicture[]): Map<number
   }
   const byAu = new Map(ready.map(p => [p.picture.au, p]));
   const anchors = new Map<number, DiagramPicture[]>();
-  for (const p of ready) if (p.references!.frameType !== 'B') {
+  const anchorAus = new Set<number>();
+  for (const p of ready) {
+    const { frameType, edges } = p.references!;
+    if (frameType === 'B') {
+      // GPB-style anchors have both active lists but reference only earlier
+      // display pictures. Resolve every edge before trusting that direction.
+      if (!edges.some(edge => edge.list === 0) || !edges.some(edge => edge.list === 1)) continue;
+      if (!edges.every(edge => {
+        const ref = byAu.get(edge.au);
+        return ref?.picture.configuration === p.picture.configuration && ref.sourcePtsUs < p.sourcePtsUs;
+      })) continue;
+    }
     const group = anchors.get(p.picture.configuration) ?? [];
     group.push(p); anchors.set(p.picture.configuration, group);
+    anchorAus.add(p.picture.au);
   }
   for (const group of anchors.values()) group.sort((a, b) => a.sourcePtsUs - b.sourcePtsUs || a.picture.au - b.picture.au);
   const intervals = new Map<number, { key: string; complete: boolean }>();
@@ -59,13 +71,13 @@ export function referenceLayers(pictures: readonly DiagramPicture[]): Map<number
       output.set(p.picture.au, { level: temporalId, source: 'temporal-id' });
       continue;
     }
-    if (p.references!.frameType !== 'B') { output.set(p.picture.au, { level: 0, source: 'inferred' }); continue; }
+    if (anchorAus.has(p.picture.au)) { output.set(p.picture.au, { level: 0, source: 'inferred' }); continue; }
     const interval = intervals.get(p.picture.au)!;
     let level = 1, provisional = !interval.complete;
     for (const edge of p.references!.edges) {
       const ref = byAu.get(edge.au), parent = output.get(edge.au);
       if (!ref) { provisional = true; continue; }
-      if (interval.complete && ref.references!.frameType === 'B' && intervals.get(edge.au)?.key === interval.key) {
+      if (interval.complete && !anchorAus.has(edge.au) && intervals.get(edge.au)?.key === interval.key) {
         if (parent) { level = Math.max(level, parent.level + 1); provisional ||= !!parent.provisional; }
         else provisional = true;
       }

@@ -1,10 +1,11 @@
 import { analysisRetryButton } from './analysis/retry.ts';
-import { SLOTS, formatTime } from '../../shared/review/model.ts';
+import { SLOTS } from '../../shared/review/model.ts';
 import type { Slot } from '../../shared/review/model.ts';
 import type { ReadonlyAnalysisResult, PresentedFrameToken } from '../../shared/analysis/bitstream/contract.ts';
+import { pictureId } from '../../shared/analysis/bitstream/contract.ts';
 import type { ReviewSession } from '../session.ts';
 import { t, msg } from '../i18n.ts';
-import { failureInfo, canRetryAnalysis } from '../../shared/analysis/bitstream/failure.ts';
+import { AnalysisFailure, failureInfo, canRetryAnalysis } from '../../shared/analysis/bitstream/failure.ts';
 import { bitstreamReasonText } from './bitstream-reasons.ts';
 import { installNumericChoice } from './numeric-choice.ts';
 import { analysisTrackBadge } from './analysis/card.ts';
@@ -13,19 +14,22 @@ import { progressRingMarkup } from './progress-ring.ts';
 import { installFilterGestures } from './analysis/filter-gestures.ts';
 import { installFloatingPanelAvoidance } from './floating-panels.ts';
 import { depthLabel, installFrameInspector, predictionLabel } from './analysis/picture-overlay/frame-inspector.ts';
-import { bitBandColors, blockColor } from './analysis/picture-overlay/block-display.ts';
+import { installBlockHoverCard, type BlockHoverTrack } from './analysis/picture-overlay/hover-card.ts';
+import { readInterFrame, type InterFrame } from './analysis/picture-overlay/inter-prediction.ts';
+import { bitBandColors, blockColor, qpGradient } from './analysis/picture-overlay/block-display.ts';
 import type { BlockFilter, Dimension, FillMode } from './analysis/picture-overlay/block-display.ts';
 import './bitstream-controls.css';
 
 type State = ReturnType<ReviewSession['getState']>;
 const modes = ['sizes', 'modes', 'qp', 'depth', 'bits'] as const;
 const modeIcons = { sizes: 'analysisOverlay', modes: 'shareNetwork', qp: 'gauge', depth: 'stack', bits: 'storage' } as const;
+type InterRequest = { key: string; controller: AbortController; pending: Promise<InterFrame>; frame?: InterFrame; failed?: boolean };
 type Entry = {
   sourceId: string;
   overlay?: import('./analysis/picture-overlay/controller.ts').ReturnOverlay;
   loading?: Promise<void>;
-  tooltip?: HTMLOutputElement;
   request?: AbortController;
+  inter?: InterRequest;
   enabled: boolean;
   requestedKey?: string;
   result?: ReadonlyAnalysisResult;
@@ -36,6 +40,9 @@ type Entry = {
 };
 const tokenKey = (token: PresentedFrameToken | null) => token?.picture ? JSON.stringify([token.generation, token.picture]) : null;
 const inspectionKey = (token: PresentedFrameToken | null) => tokenKey(token) ?? (token ? `${token.generation}:${token.commit}` : null);
+function interKey(frame: Pick<ReadonlyAnalysisResult, 'buildId' | 'picture' | 'sourcePtsUs'>) {
+  return JSON.stringify([frame.buildId, pictureId(frame.picture), frame.sourcePtsUs]);
+}
 /** Shared automatic analysis, with viewport-only overlay controls. */
 export function installBitstreamControls(session: ReviewSession, canvases: Record<Slot, HTMLCanvasElement>, hooks: {
   selected(): Slot;
@@ -59,26 +66,31 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     <div id="bitstream-retries"></div>
     <div id="bitstream-mode" role="group">${modes.map(value =>
       `<button type="button" data-mode="${value}" aria-pressed="false">${icon(modeIcons[value])}<span></span></button>`).join('')}</div>
-    <button id="bitstream-show-display" type="button" class="bitstream-fold" aria-controls="bitstream-display" aria-expanded="true">
-      <span></span>${icon('down')}</button>
-    <div id="bitstream-display">
-      <label id="bitstream-size-style"><input id="bitstream-size-fill" type="checkbox"><span></span></label>
+    <div class="bitstream-fold-section">
+      <button id="bitstream-show-display" type="button" class="bitstream-fold" aria-controls="bitstream-display-region" aria-expanded="true">
+        <span></span>${icon('down')}</button>
+      <div id="bitstream-display-region" class="bitstream-fold-region"><div class="bitstream-fold-clip"><div id="bitstream-display">
       <div id="bitstream-prediction-key" class="bitstream-legend" hidden></div>
       <div id="bitstream-qp-key" class="bitstream-legend" hidden><span></span><i></i><span></span></div>
       <div id="bitstream-bits-key" class="bitstream-legend" hidden><span></span><i></i><span></span></div>
       <div class="bitstream-layer-buttons">
+        <button id="bitstream-size-fill" type="button" aria-pressed="false">${icon('grid')}<span></span></button>
         <button id="bitstream-boundaries" type="button" aria-pressed="true">${icon('analysisOverlay')}<span></span></button>
         <button id="bitstream-labels" type="button" aria-pressed="false">${icon('text')}<span></span></button>
       </div>
       <div class="bitstream-field"><span id="bitstream-opacity-label"></span>
         <button id="bitstream-opacity" class="choice-trigger" type="button"></button></div>
+      </div></div></div>
     </div>
-    <button id="bitstream-inspect-frame" type="button" class="bitstream-fold" aria-controls="bitstream-frame-inspector" aria-expanded="false">
-      <span></span>${icon('down')}</button>
-    <div id="bitstream-frame-inspector" hidden></div>`;
+    <div class="bitstream-fold-section">
+      <button id="bitstream-inspect-frame" type="button" class="bitstream-fold" aria-controls="bitstream-frame-region" aria-expanded="false">
+        <span></span>${icon('down')}</button>
+      <div id="bitstream-frame-region" class="bitstream-fold-region" inert><div class="bitstream-fold-clip"><div id="bitstream-frame-inspector"></div></div></div>
+    </div>`;
   const entries = new Map<Slot, Entry>();
   let lastState = session.getState();
   const life = new AbortController();
+  const hoverCard = installBlockHoverCard(viewport, life.signal);
   const opacityChoice = installNumericChoice('bitstream-opacity', { glyph: 'opacity', presets: [0, 10, 25, 50, 75, 100], suffix: '%', min: 0, max: 100,
     editLabel: () => t(msg('bitstream.editOpacity', '编辑不透明度')),
     choose(value) {
@@ -89,18 +101,22 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   });
   const inspector = installFrameInspector($('bitstream-frame-inspector'), () => render(), value => {
     filter = value; updateDisplay();
-  });
+  }, (slot, frame) => requestInter(slot, frame, true)?.pending, life.signal);
   const modeButtons = [...$('bitstream-mode').querySelectorAll<HTMLButtonElement>('button')];
-  const sizeStyle = $<HTMLInputElement>('bitstream-size-fill');
+  const sizeStyle = $<HTMLButtonElement>('bitstream-size-fill');
   const displayToggle = $('bitstream-show-display'), frameToggle = $('bitstream-inspect-frame');
+  const displayRegion = $('bitstream-display-region'), frameRegion = $('bitstream-frame-region');
   const sections = new Map(modes.map(key => [key, { display: true, frame: false }]));
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  let modeResize: Animation | undefined;
   function showSections() {
     const { display, frame } = sections.get(mode)!;
     displayToggle.setAttribute('aria-expanded', String(display));
     frameToggle.setAttribute('aria-expanded', String(frame));
-    $('bitstream-display').hidden = !display;
+    displayRegion.inert = !display;
+    frameRegion.inert = !frame;
     inspector.setVisible(open && frame);
-    $('bitstream-size-style').hidden = mode !== 'sizes';
+    sizeStyle.hidden = mode !== 'sizes';
     $('bitstream-prediction-key').hidden = mode !== 'modes';
     $('bitstream-qp-key').hidden = mode !== 'qp';
     $('bitstream-bits-key').hidden = mode !== 'bits';
@@ -115,17 +131,43 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     inspector.setDimension(next);
     showSections(); updateDisplay();
   }
-  for (const button of modeButtons) button.onclick = () => { selectMode(button.dataset.mode as Dimension); render(); };
+  function stopModeResize() {
+    modeResize?.cancel();
+    modeResize = undefined;
+    host.removeAttribute('data-mode-resize');
+  }
+  for (const button of modeButtons) button.onclick = () => {
+    const next = button.dataset.mode as Dimension;
+    if (mode === next) return;
+    const animate = open && !reducedMotion.matches;
+    const before = animate ? host.getBoundingClientRect().height : 0;
+    stopModeResize();
+    // Measure the destination with the new mode's folds already in their final state.
+    host.toggleAttribute('data-mode-resize', animate);
+    selectMode(next);
+    render();
+    if (!animate) return;
+    const after = host.getBoundingClientRect().height;
+    if (Math.abs(before - after) < 1) { stopModeResize(); return; }
+    const style = getComputedStyle(host);
+    const duration = Number.parseFloat(style.getPropertyValue('--panel-motion-duration'));
+    const easing = style.getPropertyValue('--panel-motion-easing').trim();
+    const animation = host.animate({ height: [`${before}px`, `${after}px`] }, { duration, easing, fill: 'both' });
+    modeResize = animation;
+    animation.addEventListener('finish', () => { if (modeResize === animation) stopModeResize(); }, { once:true });
+  };
   displayToggle.onclick = () => {
+    stopModeResize();
     opacityChoice.close();
     const current = sections.get(mode)!; current.display = !current.display;
     showSections(); render();
   };
   frameToggle.onclick = () => {
+    stopModeResize();
     const current = sections.get(mode)!; current.frame = !current.frame;
     showSections(); render();
   };
-  sizeStyle.onchange = () => { sizeFill = sizeStyle.checked; updateDisplay(); };
+  sizeStyle.onclick = () => { sizeFill = !sizeFill; updateDisplay(); render(); };
   const retryButtons = new Map<Slot, ReturnType<typeof analysisRetryButton>>();
   installFilterGestures($('bitstream-tracks'), life.signal, (button, solo) => {
     const slot = button.dataset.slot as Slot;
@@ -141,7 +183,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     const wasOpen = open;
     open = value && lastState.tracks.some(track=>!track.failure);
     panel.hidden = !open; trigger.setAttribute('aria-expanded', String(open));
-    if (!open) { opacityChoice.close(); inspector.clearFilter(); }
+    if (!open) { stopModeResize(); opacityChoice.close(); inspector.clearFilter(); }
     showSections();
     if (open && !initialized) { initialized = true; setVisibility(hooks.selected(), true); }
     render();
@@ -189,11 +231,43 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   function destroy(slot: Slot) {
     const entry = entries.get(slot);
     if (hoverPointer?.slot === slot) clearHover();
-    entry?.request?.abort(); entry?.overlay?.dispose(); entry?.tooltip?.remove(); entries.delete(slot);
+    if (entry) stopInter(entry);
+    entry?.request?.abort(); entry?.overlay?.dispose(); entries.delete(slot);
   }
   function cached(slot: Slot) {
     const token = session.getPresentedFrame(slot);
     return session.cachedBitstreamAnalysis(slot, token ?? undefined);
+  }
+  function stopInter(entry: Entry) {
+    const request = entry.inter;
+    entry.inter = undefined;
+    request?.controller.abort();
+  }
+  function requestInter(slot: Slot, frame: ReadonlyAnalysisResult, retry = false): InterRequest | undefined {
+    const entry = entries.get(slot);
+    if (!entry?.enabled || lastState.busy || lastState.playing || frame.codec === 'h264') return;
+    const key = interKey(frame);
+    if (entry.inter?.key === key && (!retry || !entry.inter.failed)) return entry.inter;
+    const analysis = session.getBitstreamAnalysisState(slot);
+    // A hover must never interrupt a chart scan or an explicit analysis job.
+    const current = cached(slot);
+    if (entry.request || analysis.state === 'pending' || analysis.state === 'paused' || !current || interKey(current) !== key) return;
+    const controller = new AbortController();
+    const pending = session.requestBitstreamAnalysis(slot, controller.signal, 'prediction-inter').then(result => {
+      controller.signal.throwIfAborted();
+      const shown = cached(slot);
+      if (interKey(result) !== key || result.width !== frame.width || result.height !== frame.height || !shown || interKey(shown) !== key)
+        throw new AnalysisFailure('source-changed', 'Inter prediction picture changed');
+      if (result.confidence !== 'exact') throw new AnalysisFailure('unsupported-picture-layout', 'Exact inter prediction is unavailable');
+      return request.frame = readInterFrame(result);
+    }).catch(error => {
+      request.failed = true;
+      throw error;
+    }).finally(scheduleHover);
+    const request: InterRequest = { key, controller, pending };
+    entry.inter = request;
+    void pending.catch(() => {});
+    return request;
   }
   async function ensureOverlay(slot: Slot, entry: Entry) {
     if (entry.overlay) return;
@@ -203,8 +277,6 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       entry.overlay.setDisplay({ fill: fill(), boundaries, labels, filter: filter?.slot === slot ? filter : null });
       entry.overlay.setOpacity(opacity / 100);
       const result = cached(slot); if (result) entry.overlay.setResult(result);
-      const tooltip = document.createElement('output'); tooltip.className = 'bitstream-hit-tooltip'; tooltip.hidden = true;
-      viewport.append(tooltip); entry.tooltip = tooltip;
       scheduleHover();
     }).finally(() => { entry.loading = undefined; });
     await entry.loading;
@@ -215,7 +287,8 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (enabled) void ensureOverlay(slot, entry).catch(error => { entry.message = bitstreamReasonText(failureInfo(error).code); render(); });
     else {
       if (hoverPointer?.slot === slot) clearHover();
-      entry.overlay?.dispose(); entry.overlay = undefined; entry.tooltip?.remove(); entry.tooltip = undefined;
+      stopInter(entry);
+      entry.overlay?.dispose(); entry.overlay = undefined;
     }
     render();
   }
@@ -253,13 +326,17 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     $('bitstream-mode').setAttribute('aria-label', t(msg('bitstream.analysisMode', '分析模式')));
     for (const button of modeButtons) button.querySelector('span')!.textContent = modeTitle(button.dataset.mode as Dimension);
     displayToggle.querySelector('span')!.textContent = t(msg('bitstream.displayTab', '画面显示'));
-    $('bitstream-size-style').querySelector('span')!.textContent = t(msg('bitstream.sizeFill', '按块尺寸填色'));
+    const sizeFillLabel = t(msg('bitstream.sizeFill', '按块尺寸填色'));
+    sizeStyle.querySelector('span')!.textContent = t(msg('bitstream.sizeFillShort', '尺寸填色'));
+    sizeStyle.setAttribute('aria-label', sizeFillLabel);
+    sizeStyle.setAttribute('data-tooltip', sizeFillLabel);
     $('bitstream-prediction-key').replaceChildren(...(['intra','inter','skip'] as const).map(key => {
       const item = document.createElement('span'), dot = document.createElement('i');
-      dot.style.backgroundColor = blockColor('modes', key, 'h264'); item.append(dot, predictionLabel(key)); return item;
+      dot.style.backgroundColor = blockColor('modes', key); item.append(dot, predictionLabel(key)); return item;
     }));
-    const qpEnds = $('bitstream-qp-key').querySelectorAll('span');
+    const qpKey = $('bitstream-qp-key'), qpEnds = qpKey.querySelectorAll('span');
     qpEnds[0].textContent = t(msg('bitstream.lowQp', '低 QP')); qpEnds[1].textContent = t(msg('bitstream.highQp', '高 QP'));
+    qpKey.querySelector('i')!.style.backgroundImage = qpGradient;
     const bitsKey = $('bitstream-bits-key'), bitsEnds = bitsKey.querySelectorAll('span');
     bitsKey.title = t(msg('bitstream.codedSizeHint', '解码时估算的块码量，共用语法开销不计入单块'));
     bitsEnds[0].textContent = '0 bit';
@@ -273,6 +350,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     $('bitstream-boundaries').setAttribute('aria-label', edges);
     $('bitstream-labels').querySelector('span')!.textContent = t(msg('bitstream.blockLabels', '块内文字'));
     inspector.localize();
+    hoverCard.localize();
     showSections();
     updateDisplay(); render();
   }
@@ -285,8 +363,9 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     trigger.toggleAttribute('disabled', !state.tracks.some(track=>!track.failure));
     if (!state.tracks.length) { initialized=false; if(open) setOpen(false); }
     for(const [slot,entry] of entries) {
-      automatic(slot,entry);
       const result=cached(slot);
+      if (entry.inter && (state.playing || state.busy || !result || interKey(result) !== entry.inter.key)) stopInter(entry);
+      automatic(slot,entry);
       if (result?.confidence === 'exact') { entry.capabilities = result.capabilities; entry.blockDepth = result.blockDepth; }
       if(result && entry.enabled) entry.overlay?.setResult(result);
     }
@@ -345,6 +424,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
         if (caption.textContent !== text) caption.textContent = text;
       }
     }
+    sizeStyle.setAttribute('aria-pressed', String(sizeFill));
     $('bitstream-boundaries').setAttribute('aria-pressed', String(boundaries));
     $('bitstream-labels').setAttribute('aria-pressed', String(labels));
     $('bitstream-labels').toggleAttribute('disabled', entries.size === 0);
@@ -386,10 +466,8 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (hoverFrame) cancelAnimationFrame(hoverFrame);
     hoverFrame = 0;
     hoverPointer = null;
-    for (const entry of entries.values()) {
-      entry.overlay?.setHoveredBlock(null);
-      if (entry.tooltip) entry.tooltip.hidden = true;
-    }
+    for (const entry of entries.values()) entry.overlay?.setHoveredBlock(null);
+    hoverCard.hide();
   }
   function scheduleHover() {
     if (hoverPointer && !hoverFrame && !life.signal.aborted) hoverFrame = requestAnimationFrame(updateHover);
@@ -402,28 +480,18 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     const stage = stages.get(slot)!.getBoundingClientRect();
     const hit = entry?.enabled && stage.width > 0 && stage.height > 0 && drawingLayers.get(slot)!.hasAttribute('hidden') ?
       entry.overlay?.hitWithDisplacement(clientX - stage.left, clientY - stage.top) : null;
-    for (const [peer, target] of entries) {
-      const block = boundaries && hit && target.enabled ?
-        peer === slot ? hit.block : target.overlay?.hitDisplacement(hit.displacement) ?? null : null;
-      target.overlay?.setHoveredBlock(block);
+    const tracks: BlockHoverTrack[] = [];
+    for (const track of lastState.tracks) {
+      const target = entries.get(track.slot);
+      const point = hit && target?.enabled && track.visible ? track.slot === slot ? hit : target.overlay?.hitDisplacement(hit.displacement) : null;
+      target?.overlay?.setHoveredBlock(boundaries ? point?.block ?? null : null);
+      if (!point) continue;
+      const frame = point.block.mode === 'intra' ? null : cached(track.slot);
+      const request = frame?.confidence === 'exact' ? requestInter(track.slot, frame) : undefined;
+      tracks.push({ slot: track.slot, name: track.name, block: point.block, depth: target?.blockDepth,
+        timeUs: session.getPresentedFrame(track.slot)?.normalizedMediaUs, interTools: request?.frame?.toolsAt(point.coded) });
     }
-    const tooltip = entry?.tooltip;
-    if (!tooltip) return;
-    tooltip.hidden = !hit;
-    if (!hit) return;
-    const {block} = hit, token = session.getPresentedFrame(slot);
-    const text = `${slot} · ${formatTime(token?.normalizedMediaUs ?? 0)} · PTS\n${block.x}, ${block.y} · ${block.width}×${block.height} · ${predictionLabel(block.mode)} · QP ${block.qp ?? '—'}`;
-    const depth = block.depth === undefined ? '' : ` · ${depthLabel(entry.blockDepth)} ${block.depth}`;
-    const bits = block.bits === undefined ? '' :
-      `\n${t(msg('bitstream.estimatedCodedSize', '估算编码大小'))} · ${block.bits} bit · ${block.bits / 8} B · ${(block.bits / 8192).toFixed(4)} KiB`;
-    const value = text + depth + bits;
-    if (tooltip.textContent !== value) tooltip.textContent = value;
-    const bounds = viewport.getBoundingClientRect(), tip = tooltip.getBoundingClientRect();
-    let x = clientX - bounds.left + 12, y = clientY - bounds.top + 12;
-    if (x + tip.width > bounds.width - 8) x = clientX - bounds.left - tip.width - 12;
-    if (y + tip.height > bounds.height - 8) y = clientY - bounds.top - tip.height - 12;
-    tooltip.style.left = `${Math.max(8, Math.min(x, bounds.width - tip.width - 8))}px`;
-    tooltip.style.top = `${Math.max(8, Math.min(y, bounds.height - tip.height - 8))}px`;
+    hoverCard.show(tracks, clientX, clientY);
   }
 
   for (const [slot, stage] of stages) {
@@ -443,12 +511,16 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   window.addEventListener('blur', clearHover, {signal:life.signal});
   const offFrames=session.subscribePresentedFrames(slot=>{
     const entry=entries.get(slot);if(!entry)return;
-    entry.message=undefined;if(entry.tooltip)entry.tooltip.hidden=true;
+    entry.message=undefined;
+    if (hoverPointer?.slot === slot) hoverCard.hide();
     render();
   });
   localize();
   return {
     render, localize, setOpen,
-    dispose() { clearHover(); offFrames(); floating.dispose(); life.abort(); opacityChoice.dispose(); for (const slot of SLOTS) destroy(slot); },
+    dispose() {
+      stopModeResize(); clearHover(); offFrames(); floating.dispose(); life.abort(); opacityChoice.dispose();
+      for (const slot of SLOTS) destroy(slot);
+    },
   };
 }

@@ -8,9 +8,12 @@ import { open, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { analyzePicture } from "../../shared/analysis/bitstream/runner.ts";
+import { analyzePicture, analyzeStream } from "../../shared/analysis/bitstream/runner.ts";
+import type { AnalysisBlock } from '../../shared/analysis/bitstream/contract.ts';
 import { openAnalysisInput } from "../../shared/analysis/bitstream/input.ts";
 import { viewportAnalysisGops } from "../../shared/analysis/bitstream/stream.ts";
+import { mp4BoundaryFixture } from '../../scripts/mp4-boundary-fixture.ts';
+import { inspectMp4Playback } from '../../shared/media/containers/mp4-playback.ts';
 const fixtures = JSON.parse(
   await readFile(
     new URL(
@@ -20,6 +23,13 @@ const fixtures = JSON.parse(
     "utf8",
   ),
 );
+// The independent geometry and QP references were captured without CABAC positions.
+function withoutBitCount({ bits: _bits, ...block }: AnalysisBlock) { return block; }
+function assertReferenceBlock(blocks: AnalysisBlock[], expected: AnalysisBlock) {
+  const actual = blocks.find(block => block.x === expected.x && block.y === expected.y);
+  assert.ok(actual, `reference block at ${expected.x}, ${expected.y}`);
+  assert.deepEqual(withoutBitCount(actual), expected);
+}
 async function reader(name: string) {
   const file = await open(resolve("fixtures/video", name));
   const { size } = await file.stat();
@@ -47,9 +57,41 @@ async function core() {
 test('viewport MP4 renews IO only on acknowledged outputs and enumerates the complete index', async () => {
   await checkAcknowledgedInputBudget(await readFile(resolve('fixtures/video', fixtures[0].file)));
 });
+test('QuickTime v0 signed offsets and a missing B picture preserve exact results in later GOPs', async () => {
+  const fixture = await mp4BoundaryFixture(2, false, true);
+  const mov = Buffer.from(fixture.valid), ctts = mov.indexOf('ctts', fixture.moov);
+  assert.ok(ctts > fixture.moov && mov[ctts + 4] === 1);
+  mov[ctts + 4] = 0;
+  mov.write('qt  ', 8, 'ascii');
+  const source = (bytes: Buffer) => ({ size: bytes.length,
+    async read(offset: number, length: number) { return new Uint8Array(bytes.subarray(offset, offset + length)); }, close() {} });
+  const signal = new AbortController().signal;
+  const reference = await openAnalysisInput(source(fixture.valid), signal);
+  const input = await openAnalysisInput(source(mov), signal);
+  const playback = await inspectMp4Playback(source(mov));
+  const clocks = reference.packets.map(({ pts, dts }) => [pts, dts]);
+  assert.ok(clocks.some(([pts, dts]) => pts! < dts!), 'fixture contains negative composition offsets');
+  assert.deepEqual(input.packets.map(({ pts, dts }) => [pts, dts]), clocks);
+  assert.deepEqual(playback.index.packets.map(({ pts, dts }) => [pts, dts]), clocks);
+  reference.close(); input.close();
+
+  const module = await core(), step = module._vpa_step;
+  const missing = 3;
+  module._vpa_step = () => {
+    const status = step();
+    if (status !== 1 || module._vpa_ordinal() !== missing) return status;
+    assert.ok(module._vpa_take(64 * 1024 * 1024) > 0, 'fault injection releases the omitted decoder output');
+    return step();
+  };
+  const firstPtsUs = playback.index.firstPts, durationUs = playback.index.duration;
+  const output = new Map<number, (number | null)[]>();
+  await assert.rejects(analyzeStream(source(mov), { mode: 'stream', product: 'summary', sourceVersion: 'qt-ctts-fixture',
+    firstPtsUs, durationUs, window: { startUs: 0, endUs: durationUs, axis: 'pts' } }, module, 'test', signal,
+    async frame => { output.set(frame.picture.au, [frame.sourcePtsUs, frame.sourceDtsUs ?? null]); }, async () => {}), /Target picture was not output/);
+  assert.deepEqual([...output.entries()].sort(([a], [b]) => a - b), clocks.map((clock, au) => [au, clock]).filter(([au]) => au !== missing));
+});
 for (const fixture of fixtures)
   test(`viewport ${fixture.codec} analyzes only intersecting GOPs and reuses cached pictures`, async () => {
-    const { analyzeStream } = await import("../../shared/analysis/bitstream/runner.ts");
     const input = await openAnalysisInput(await reader(fixture.file), new AbortController().signal);
     const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts));
     const packet = input.packets[Math.min(100, input.packets.length - 1)];
@@ -107,11 +149,7 @@ for (const fixture of fixtures)
     assert.equal(result.confidence, "exact");
     assert.equal(result.picture.au, fixture.pictureAu);
     assert.ok(result.blocks.length > 0);
-    for (const block of fixture.firstBlocks)
-      assert.deepEqual(
-        result.blocks.find((b) => b.x === block.x && b.y === block.y),
-        block,
-      );
+    for (const block of fixture.firstBlocks) assertReferenceBlock(result.blocks, block);
     assert.equal(
       module._vpa_record_bytes(),
       0,
@@ -206,6 +244,7 @@ for (const fixture of fixtures)
       description = input.configurations[0];
     const pointer = module._malloc(description.length);
     module.HEAPU8.set(description, pointer);
+    assert.equal(module._vpa_block_bits_enable(), 0);
     assert.equal(
       module._vpa_open(
         ({ h264: 1, hevc: 2, vvc: 3 } as Record<string, number>)[fixture.codec],
@@ -222,7 +261,7 @@ for (const fixture of fixtures)
       paused = false,
       draining = false;
     const order: number[] = [],
-      snapshots = new Map<number, any[]>();
+      snapshots = new Map<number, AnalysisBlock[]>();
     const selected = new Set([104, 232, 584]);
     let lastPts = -Infinity,
       earlyHeap = 0,
@@ -264,20 +303,22 @@ for (const fixture of fixtures)
           lastPts = pts;
           order.push(au);
           if (selected.has(au)) {
-            const blocks = [],
+            const stride = 16;
+            const blocks: AnalysisBlock[] = [],
               view = new DataView(
                 module.HEAPU8.buffer,
                 module._vpa_blocks(),
-                module._vpa_count() * 12,
+                module._vpa_count() * stride,
               );
             for (let n = 0; n < module._vpa_count(); n++) {
-              const at = n * 12;
+              const at = n * stride;
               blocks.push({
                 x: view.getUint16(at, true),
                 y: view.getUint16(at + 2, true),
                 width: view.getUint16(at + 4, true),
                 height: view.getUint16(at + 6, true),
                 ...(fixture.codec !== 'h264' ? {depth: view.getUint8(at + 11)} : {}),
+                bits: view.getUint32(at + 12, true),
                 qp: view.getInt16(at + 8, true),
                 mode: ({ 1: "intra", 2: "inter", 3: "skip" } as any)[
                   view.getUint8(at + 10)
@@ -456,7 +497,7 @@ test("encoder-controlled flat H264 has a manually checkable macroblock grid, lum
       new AbortController().signal,
     );
     assert.equal(result.confidence, "exact");
-    assert.deepEqual(result.blocks, [
+    assert.deepEqual(result.blocks.map(withoutBitCount), [
       { x: 0, y: 0, width: 16, height: 16, qp: 17, mode: "intra" },
       { x: 16, y: 0, width: 16, height: 16, qp: 17, mode: "intra" },
       { x: 0, y: 16, width: 16, height: 16, qp: 17, mode: "intra" },
@@ -519,7 +560,7 @@ test("fixed-size HEVC CUs and fixed luma QP have an encoder-controlled independe
       new AbortController().signal,
     );
     assert.equal(result.confidence, "exact");
-    assert.deepEqual(result.blocks, [
+    assert.deepEqual(result.blocks.map(withoutBitCount), [
       { x: 0, y: 0, width: 32, height: 32, qp: 17, mode: "intra", depth: 0 },
       { x: 32, y: 0, width: 32, height: 32, qp: 17, mode: "intra", depth: 0 },
       { x: 0, y: 32, width: 32, height: 32, qp: 17, mode: "intra", depth: 0 },
@@ -584,7 +625,7 @@ for (const fixture of fixtures) test(`whole ${fixture.codec} stream keeps one de
       assert.equal(aus.has(result.picture.au), false); aus.add(result.picture.au); groups.add(result.gop.startAu);
       pictures++;
       if (result.picture.au === fixture.pictureAu)
-        for (const block of fixture.firstBlocks) assert.deepEqual(result.blocks.find(b => b.x === block.x && b.y === block.y), block);
+        for (const block of fixture.firstBlocks) assertReferenceBlock(result.blocks, block);
       if (pictures === 40) {
         const before = feeds;
         await new Promise(resolve => setTimeout(resolve, 30));

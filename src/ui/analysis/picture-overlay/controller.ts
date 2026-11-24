@@ -29,6 +29,7 @@ export function createAnalysisOverlay(
   const hover = document.createElement('div'), edge = document.createElement('div');
   hover.id = `bitstream-hover-${slot}`;
   hover.className = 'analysis-picture-hover';
+  hover.style.setProperty('--hover-track-color', `var(--slot-${slot.toLowerCase()})`);
   hover.setAttribute('aria-hidden', 'true');
   hover.hidden = true;
   edge.className = 'analysis-picture-hover-edge';
@@ -154,7 +155,7 @@ export function createAnalysisOverlay(
         ctx.fillRect(x, y, w, h);
       } else if (!highlight && key !== null && fill !== 'none') {
         let color = colors.get(key);
-        if (!color) { color = blockColor(fill, key, result.codec); colors.set(key, color); }
+        if (!color) { color = blockColor(fill, key); colors.set(key, color); }
         ctx.fillStyle = color;
         ctx.fillRect(x, y, w, h);
       }
@@ -195,7 +196,7 @@ export function createAnalysisOverlay(
     if (metrics.drawTimesMs.length >= 2048) metrics.drawTimesMs.shift();
     metrics.drawTimesMs.push(performance.now() - started);
   };
-  function findBlock(x: number, y: number): AnalysisBlock | null {
+  function findBlock(x: number, y: number) {
     if (canvas.hidden || !result || !token || !geometry || x < 0 || y < 0 || x >= geometry.width || y >= geometry.height) return null;
     const rect = presentationRect(geometry);
     if (x < rect.x || y < rect.y || x >= rect.x + rect.width || y >= rect.y + rect.height) return null;
@@ -217,7 +218,8 @@ export function createAnalysisOverlay(
       hitCells = { result, columns, cells };
     }
     const cell = hitCells.cells[Math.floor(p.y / 4) * hitCells.columns + Math.floor(p.x / 4)];
-    return result.blocks[cell - 1] ?? null;
+    const block = result.blocks[cell - 1];
+    return block ? { block, coded: p } : null;
   }
   function imageCenter() {
     return geometry ? { x: geometry.width / 2 + geometry.offsetX, y: geometry.height / 2 + geometry.offsetY } : null;
@@ -298,10 +300,10 @@ export function createAnalysisOverlay(
       labels = value.labels;
       draw();
     },
-    hit: findBlock,
+    hit: (x: number, y: number) => findBlock(x, y)?.block ?? null,
     hitWithDisplacement(x: number, y: number) {
-      const center = imageCenter(), block = center && findBlock(x, y);
-      return center && block ? {block, displacement: {x: x - center.x, y: y - center.y}} : null;
+      const center = imageCenter(), hit = center && findBlock(x, y);
+      return center && hit ? {...hit, displacement: {x: x - center.x, y: y - center.y}} : null;
     },
     hitDisplacement(point: Point) {
       const center = imageCenter();

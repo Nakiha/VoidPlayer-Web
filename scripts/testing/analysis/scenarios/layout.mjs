@@ -60,7 +60,9 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await page.waitForFunction(() => Number(document.querySelector('#analysis-canvas')?.dataset.plotRight) > 0);
         assert.equal(await page.locator('#analysis-load-metrics [data-metric="qp"]').getAttribute('aria-pressed'), 'false', 'QP is opt-in');
         assert.deepEqual((await call('get_uri_state')).layout.analysisView.loadMetrics, ['bitrate']);
-        assert.ok(!requests.slice(beforeOverview).some(r => /voidplayer-analysis|local-worker|bitstream-analysis/.test(r.url)), 'opening the lightweight overview starts no deep analysis');
+        const startedAnalysis = requests.slice(beforeOverview).filter(request =>
+          request.method !== 'DELETE' && /voidplayer-analysis|local-worker|bitstream-analysis/.test(request.url));
+        assert.deepEqual(startedAnalysis, [], 'opening the lightweight overview starts no deep analysis');
         for (const slot of ['A', 'B']) assert.equal((await call('get_bitstream_analysis_state', {slot})).state, 'idle');
         if (input === 'local-file' && !overlayOnly) await context.stage('analysis-hover-surface', async () => {
           const combined = page.locator('.analysis-linked-card');
@@ -205,7 +207,9 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           const pictureBox=await page.locator(`#bitstream-overlay-${slot}`).boundingBox();
           await page.locator(`#stage-${slot}`).dispatchEvent('pointermove',{clientX:pictureBox.x+pictureBox.width/2,clientY:pictureBox.y+pictureBox.height/2});
           const tooltip=page.locator('.bitstream-hit-tooltip:visible');await tooltip.waitFor({state:'visible'});
-          assert.match(await tooltip.innerText(),new RegExp(`${slot}.*PTS[\\s\\S]*QP`));
+          assert.equal(await tooltip.locator('.analysis-card-track-badge').textContent(), slot);
+          assert.match(await tooltip.locator('time').textContent(), /PTS$/);
+          assert.ok(await tooltip.locator('[data-field=qp]').isVisible());
           const tooltipBox=await tooltip.boundingBox(),viewportBox=await page.locator('.viewport-surface').boundingBox();
           assert.ok(tooltipBox.x>=viewportBox.x+7 && tooltipBox.x+tooltipBox.width<=viewportBox.x+viewportBox.width-7 && tooltipBox.y>=viewportBox.y+7 && tooltipBox.y+tooltipBox.height<=viewportBox.y+viewportBox.height-7,'hover details stay inside the viewport');
 
@@ -347,17 +351,78 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         }
         await setMode('none');
         assert.deepEqual(await readOverlay(), { visible: 0, cyan: 0, checksum: 0 });
+        const layerActions = page.locator('.bitstream-layer-buttons button:not([hidden])');
+        assert.deepEqual(await layerActions.evaluateAll(buttons => buttons.map(button => button.id)),
+          ['bitstream-size-fill', 'bitstream-boundaries', 'bitstream-labels']);
+        assert.ok(await layerActions.evaluateAll(buttons => {
+          const [first, ...others] = buttons.map(button => button.getBoundingClientRect());
+          return others.every(rect => Math.abs(rect.width - first.width) < 1 && Math.abs(rect.top - first.top) < 1);
+        }), 'block display buttons share one equal-width row');
+        await page.locator('#bitstream-size-fill').press('Enter');
+        assert.equal(await page.locator('#bitstream-size-fill').getAttribute('aria-pressed'), 'true');
+        assert.ok((await readOverlay()).visible > 0, 'size fill is independently enabled by its button');
+        await setMode('none');
         const drawer = page.locator('#analysis-overlay-panel #bitstream-frame-inspector');
         const display = page.locator('#bitstream-show-display'), frameToggle = page.locator('#bitstream-inspect-frame');
+        const trackChoice = drawer.locator('#bitstream-inspect-track'), weightChoice = drawer.locator('#bitstream-weight');
+        const chooseTrack = async slot => {
+          await trackChoice.click();
+          await page.locator(`#bitstream-inspect-track-menu:popover-open [role="menuitemradio"][data-value="${slot}"]`).click();
+          assert.equal(await trackChoice.textContent(), slot);
+          assert.equal(await trackChoice.evaluate(button => document.activeElement === button), true);
+        };
         const fold = async (button, expanded) => {
           if (await button.getAttribute('aria-expanded') !== String(expanded)) await button.press('Enter');
+          const region = page.locator(`#${await button.getAttribute('aria-controls')}`);
+          await region.waitFor({state:expanded ? 'visible' : 'hidden'});
         };
+        if (input === 'local-file') {
+          for (const button of [display, frameToggle]) {
+            const wasExpanded = await button.getAttribute('aria-expanded') === 'true';
+            await fold(button, true);
+            const region = page.locator(`#${await button.getAttribute('aria-controls')}`);
+            await region.evaluate(el => Promise.allSettled(el.getAnimations().map(animation => animation.finished)));
+            const sample = async () => button.evaluate(trigger => {
+              const pane = document.getElementById(trigger.getAttribute('aria-controls'));
+              const start = pane.getBoundingClientRect().height;
+              trigger.click();
+              const animation = pane.getAnimations().find(item => item.transitionProperty === 'grid-template-rows');
+              if (!animation) return null;
+              animation.pause(); animation.currentTime = animation.effect.getTiming().duration / 2;
+              const midpoint = pane.getBoundingClientRect().height;
+              animation.finish();
+              return {start, midpoint, end:pane.getBoundingClientRect().height, inert:pane.inert};
+            });
+            const close = await sample();
+            assert.ok(close?.inert && close.start > close.midpoint && close.midpoint > close.end && close.end === 0, JSON.stringify(close));
+            await region.waitFor({state:'hidden'});
+            assert.notEqual(await button.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)', 'collapsed button has a resting fill');
+            const open = await sample();
+            assert.ok(open && !open.inert && open.start === 0 && open.start < open.midpoint && open.midpoint < open.end, JSON.stringify(open));
+            await fold(button, wasExpanded);
+          }
+          const resize = await page.locator('#bitstream-inspector').evaluate(host => {
+            const start = host.getBoundingClientRect().height;
+            host.querySelector('[data-mode=modes]').click();
+            const animation = host.getAnimations().find(item => item.effect.getKeyframes().some(frame => 'height' in frame));
+            if (!animation) return null;
+            animation.pause();
+            animation.currentTime = animation.effect.getTiming().duration / 2;
+            const midpoint = host.getBoundingClientRect().height;
+            animation.finish();
+            return {start, midpoint, end:host.getBoundingClientRect().height};
+          });
+          assert.ok(resize && resize.start < resize.midpoint && resize.midpoint < resize.end,
+            `switching modes with both fold states unchanged animates the legend height: ${JSON.stringify(resize)}`);
+          await setMode('none');
+        }
         assert.deepEqual(await page.locator('#bitstream-mode button').allTextContents(), ['块划分','预测类型','QP 热图','树深度','编码大小']);
         assert.ok(await page.locator('#bitstream-mode [data-mode="depth"]').isDisabled(), 'AVC macroblocks have no tree depth');
         await setMode('modes');
         assert.deepEqual(await page.locator('#bitstream-prediction-key span').allTextContents(), ['帧内','帧间','跳过']);
         await fold(frameToggle, true);
-        await drawer.locator('[data-inspect-track]').selectOption('A');
+        await chooseTrack('A');
+        assert.equal(await drawer.locator('select, input[type="checkbox"]').count(), 0, 'uses project menus and exports details by default');
         await fold(display, false);
         assert.ok(await page.locator('#bitstream-display').isHidden());
         assert.ok(await drawer.locator('[data-readings]').isHidden(), 'prediction has its own statistics');
@@ -394,14 +459,33 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.deepEqual(await readOverlay(), highlighted, 'folding leaves the selected class highlighted');
         await fold(frameToggle, true);
         assert.equal(await bin.getAttribute('aria-pressed'), 'true');
-        await drawer.locator('[data-weight]').selectOption('count');
+        const area = page.locator('#bitstream-weight-menu:popover-open [data-value="pixels"]');
+        if (await weightChoice.textContent() !== '按编码面积') {
+          await weightChoice.click();
+          await area.click();
+        }
+        await weightChoice.press('ArrowDown');
+        assert.equal(await area.getAttribute('aria-checked'), 'true');
+        await area.press('ArrowDown');
+        await page.keyboard.press('Enter');
+        assert.equal(await weightChoice.textContent(), '按块数');
+        assert.equal(await weightChoice.evaluate(button => document.activeElement === button), true);
         assert.equal(await bin.getAttribute('aria-pressed'), 'true');
         await bin.click();
         assert.deepEqual(await readOverlay(), { visible: 0, cyan: 0, checksum: 0 });
-        await drawer.locator('[data-blocks]').check();
         await setMode('qp');
         await fold(frameToggle, true);
         await fold(display, false);
+        const metricsMaterial = await drawer.locator('[data-readings]').evaluate(element => {
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          const style = getComputedStyle(element);
+          context.fillStyle = style.backgroundColor;
+          context.fillRect(0, 0, 1, 1);
+          return {alpha:context.getImageData(0, 0, 1, 1).data[3], opacity:style.opacity};
+        });
+        assert.ok(metricsMaterial.alpha > 0 && metricsMaterial.alpha < 255, 'statistics add a translucent fill over the panel');
+        assert.equal(metricsMaterial.opacity, '1', 'statistics text keeps full opacity');
         if (input === 'local-file') {
           await page.mouse.move(0, 0);
           await page.locator('#analysis-overlay-panel').screenshot({path: artifact('frame-inspector.png')});
@@ -410,6 +494,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         const report = JSON.parse(await readFile(await download.path(), 'utf8'));
         assert.equal(report.slot, 'A');
         assert.equal(report.statistics.blockCount, report.blocks.length);
+        assert.equal(report.predictionInter, undefined, 'AVC exports blocks without a prediction product');
         const qpValues = report.blocks.map(block => block.qp);
         const numbers = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
         assert.deepEqual(await drawer.locator('dd').allTextContents(),
@@ -422,19 +507,33 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.equal(await firstRow.locator('span').last().textContent(), numbers.format(share) + '%');
         assert.equal(report.statistics.distributions.sizes.reduce((sum, bin) => sum + bin.pixels, 0), report.frame.width * report.frame.height);
         assert.equal(report.frame.picture.au, (await call('get_presented_frame', {slot:'A'})).picture.au);
-        await drawer.locator('[data-inspect-track]').selectOption('B');
+        await chooseTrack('B');
         await fold(frameToggle, false);
         await fold(display, true);
         assert.ok(await drawer.isHidden());
-        const boxWithoutDrawing = await page.locator('#bitstream-overlay-A').boundingBox();
-        await page.locator('#stage-A').dispatchEvent('pointermove', { clientX: boxWithoutDrawing.x + boxWithoutDrawing.width / 2, clientY: boxWithoutDrawing.y + boxWithoutDrawing.height / 2 });
-        const pointTip = page.locator('.bitstream-hit-tooltip:visible');
+        await settleAppearance(page);
+        const hoverPoint = await page.locator('#stage-A').evaluate(stage => {
+          const bounds = stage.getBoundingClientRect(), picture = stage.querySelector('#image-A').getBoundingClientRect();
+          const left = Math.max(bounds.left, picture.left), right = Math.min(bounds.right, picture.right);
+          const top = Math.max(bounds.top, picture.top), bottom = Math.min(bounds.bottom, picture.bottom);
+          // A dragged inspector can still cover the picture center when its folds change height.
+          for (const x of [0.5, 0.05, 0.95]) for (const y of [0.5, 0.05, 0.95]) {
+            const clientX = left + x * (right - left), clientY = top + y * (bottom - top);
+            if (stage.contains(document.elementFromPoint(clientX, clientY))) return {clientX, clientY};
+          }
+          return null;
+        });
+        assert.ok(hoverPoint, 'a visible point on the picture is available for inspection');
+        await page.mouse.move(hoverPoint.clientX, hoverPoint.clientY);
+        const pointTip = page.locator('.bitstream-hit-tooltip:visible .bitstream-hit-track[data-slot="A"]');
         await pointTip.waitFor();
-        const tooltipText = await pointTip.innerText(), coords = /PTS\s+(\d+), (\d+)/.exec(tooltipText);
-        assert.ok(coords, tooltipText);
-        const block = report.blocks.find(value => value.x === Number(coords[1]) && value.y === Number(coords[2]));
+        const [x, y] = (await pointTip.locator('[data-field=position]').textContent()).split(', ').map(Number);
+        const block = report.blocks.find(value => value.x === x && value.y === y);
         assert.ok(Number.isInteger(block?.bits));
-        assert.ok(tooltipText.includes(`${block.bits} bit · ${block.bits / 8} B · ${(block.bits / 8192).toFixed(4)} KiB`));
+        assert.equal(await pointTip.locator('[data-field=bits]').textContent(), `${block.bits} bit · ${block.bits / 8} B`);
+        const kib = pointTip.locator('[data-field=kib]');
+        assert.equal(await kib.evaluate(value => value.firstChild.textContent), (block.bits / 8192).toFixed(4));
+        assert.equal(await kib.locator('.analysis-card-unit').textContent(), 'KiB');
         const analysisAfterDisplay = await Promise.all(['A', 'B'].map(slot => call('get_bitstream_analysis_state', { slot })));
         const displayRequestEvidence = assertCachedDisplayReuse(requests, requestsBeforeDisplay, page.url(), analysisBeforeDisplay, analysisAfterDisplay);
         assert.ok(displayRequestEvidence.health.length >= 1, 'the injected health poll must be observed inside the guarded display window');
@@ -487,7 +586,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.ok(await page.locator('#analysis-overlay-panel').isHidden(),'both enabled track overlays follow their own current picture with controls closed');
         if (input === 'local-file') {
           await openAnalysis('A'); await setMode('modes'); await fold(frameToggle, true);
-          await drawer.locator('[data-inspect-track]').selectOption('A');
+          await chooseTrack('A');
           const classes = await drawer.locator('[data-bins] button').evaluateAll(items => items.map(el => el.dataset.key));
           assert.ok(classes.includes('inter') || classes.includes('skip'), 'the inter-coded fixture exposes actual prediction classes');
           await page.mouse.move(0, 0);
@@ -566,6 +665,11 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         const legend = page.locator('.bitstream-diagrams[data-slot="A"] .bitstream-diagram-legend');
         const sps = legend.getByRole('button', {name:'SPS',exact:true});
         const pps = legend.getByRole('button', {name:'PPS',exact:true});
+        await sps.waitFor({state:'visible'});
+        assert.ok(await legend.locator('button').evaluateAll(buttons => buttons.every(button => {
+          const style = getComputedStyle(button);
+          return style.borderRadius === style.getPropertyValue('--radius-control').trim();
+        })), 'NALU filter chips share the theme control radius');
         const expectFilter = async type => {
           await page.waitForFunction(type => [...document.querySelectorAll('.bitstream-diagrams[data-slot="A"] .bitstream-diagram-legend [data-nalu-type]')].every(e => e.getAttribute('aria-pressed') === (type == null || e.dataset.naluType === type ? 'true' : 'false')), type);
           assert.ok(await page.locator('.bitstream-diagrams[data-slot="B"] .bitstream-diagram-legend [data-filter="all"]').getAttribute('aria-pressed') === 'true', 'solo filtering stays within its track');

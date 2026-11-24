@@ -1489,8 +1489,8 @@
     "translation": "Inferred layer"
   },
   "analysis.inferredLayerHint": {
-    "source": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层，* 表示参考信息不完整",
-    "translation": "Inferred from local references between consecutive I/P anchors, not a signaled temporal layer. * indicates incomplete reference information."
+    "source": "根据相邻锚帧间的局部参考关系推断。只引用过去画面的双列表 B 帧也可作锚帧。* 表示参考信息不完整。",
+    "translation": "Inferred from local references between consecutive anchors. B pictures with two active lists containing only earlier pictures can also serve as anchors. * indicates incomplete references."
   },
   "analysis.inferredLayerPartial": {
     "source": "推断层级（参考信息不完整）",
@@ -1961,6 +1961,10 @@
     "source": "块内文字",
     "translation": "Block labels"
   },
+  "bitstream.blockPosition": {
+    "source": "坐标",
+    "translation": "Position"
+  },
   "bitstream.blockSize": {
     "source": "块尺寸",
     "translation": "Block size"
@@ -2021,6 +2025,21 @@
     "source": "导出当前帧",
     "translation": "Export current frame"
   },
+  "bitstream.exportInterBusy": {
+    "source": "此轨已有分析任务，暂时无法读取帧间预测明细",
+    "translation": "This track is already running analysis. Try again when it finishes.",
+    "needsReview": false
+  },
+  "bitstream.exportInterIncomplete": {
+    "source": "已导出块明细。帧间预测明细未能读取。{reason}",
+    "translation": "Block details were exported. Inter prediction details were unavailable. {reason}",
+    "needsReview": false
+  },
+  "bitstream.exportInterPending": {
+    "source": "正在读取帧间预测明细…",
+    "translation": "Reading inter prediction details…",
+    "needsReview": false
+  },
   "bitstream.fieldUnavailable": {
     "source": "此轨当前帧没有该模式的数据",
     "translation": "This track has no data for this mode on the current frame"
@@ -2037,10 +2056,6 @@
   "bitstream.highQp": {
     "source": "高 QP",
     "translation": "High QP"
-  },
-  "bitstream.includeBlocks": {
-    "source": "附带块明细",
-    "translation": "Include block records"
   },
   "bitstream.incompleteReferences": {
     "source": "参考状态不完整，无法生成精确遮罩",
@@ -2131,6 +2146,11 @@
   "bitstream.sizeFill": {
     "source": "按块尺寸填色",
     "translation": "Color by block size"
+  },
+  "bitstream.sizeFillShort": {
+    "source": "尺寸填色",
+    "translation": "Size fill",
+    "needsReview": false
   },
   "bitstream.skip": {
     "source": "跳过",

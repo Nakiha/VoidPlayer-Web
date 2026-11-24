@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AnalysisResult } from '../../shared/analysis/bitstream/contract.ts';
 import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, validateRecords, PRODUCT_LIMIT } from '../../shared/analysis/bitstream/products.ts';
-import { blockColor, summarizeBlocks } from '../../src/ui/analysis/picture-overlay/block-display.ts';
+import { blockColor, qpGradient, summarizeBlocks } from '../../src/ui/analysis/picture-overlay/block-display.ts';
 import { DiagramStore } from '../../shared/analysis/bitstream/diagrams.ts';
 const result = (): AnalysisResult => ({
   schema: 1,
@@ -93,7 +93,7 @@ test('coded size preserves zero and unsigned counts through packed transport and
   assert.deepEqual([...owned].map(block => block.bits), [0, 0xffffffff]);
   const bins = summarizeBlocks(owned.view()).distributions.bits;
   assert.deepEqual(bins.map(({count, pixels}) => ({count, pixels})), [{count: 1, pixels: 128}, {count: 1, pixels: 128}]);
-  assert.notEqual(blockColor('bits', bins[0].key, 'h264'), blockColor('bits', bins[1].key, 'h264'));
+  assert.notEqual(blockColor('bits', bins[0].key), blockColor('bits', bins[1].key));
   assert.deepEqual(summarizeBlocks(legacyOf(packLegacy(result()))).distributions.bits, []);
   assert.throws(() => validateProduct({...packed, capabilities: result().capabilities}), /encoding/);
   assert.throws(() => validateProduct({...packed, payload: packed.payload.slice(0, 24)}), /payload length/);
@@ -101,6 +101,15 @@ test('coded size preserves zero and unsigned counts through packed transport and
     frame.blocks[0].bits = bad;
     assert.throws(() => packLegacy(frame), /Invalid analysis block/);
   }
+});
+
+test('QP palette distinguishes common values and shares the full scale with its legend', () => {
+  const colors = Array.from({ length: 64 }, (_, qp) => blockColor('qp', String(qp)));
+  const hues = colors.map(color => Number(color.slice(4).split(',')[0]));
+  assert.ok(hues.every((hue, qp) => qp === 0 || hue < hues[qp - 1]));
+  assert.ok(hues[20] - hues[40] >= 180, 'QP 20–40 uses at least three quarters of the hue range');
+  assert.ok(hues[27] - hues[33] >= 100, 'QP 27 and 33 have visibly different hues');
+  assert.equal(qpGradient, `linear-gradient(to right,${colors.join(',')})`);
 });
 
 test('frame inspection keeps coded area, rectangular dimensions, depth zero and unavailable QP distinct', () => {
@@ -111,7 +120,7 @@ test('frame inspection keeps coded area, rectangular dimensions, depth zero and 
   const stats = summarizeBlocks(new OwnedBlocks(packLegacy(frame)).view());
   assert.deepEqual(stats.qp, {min: 10, mean: 20, max: 40});
   assert.equal(stats.codedPixels, 96);
-  assert.equal(new Set(['8×32', '16×16', '32×8', '64×4'].map(size => blockColor('sizes', size, 'vvc'))).size, 4);
+  assert.equal(new Set(['8×32', '16×16', '32×8', '64×4'].map(size => blockColor('sizes', size))).size, 4);
   assert.deepEqual(stats.distributions.sizes, [{key: '8×8', count: 1, pixels: 64}, {key: '4×8', count: 1, pixels: 32}]);
   assert.deepEqual(stats.distributions.depth, [{key: '0', count: 1, pixels: 64}, {key: '1', count: 1, pixels: 32}]);
   const unknown = summarizeBlocks({...original, qp: {...original.qp, mean: null}, blocks: [{...base, qp: null}]});
