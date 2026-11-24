@@ -327,6 +327,7 @@ async function runPictureAttempt(
           picture: input.picture(selected, target.sourceVersion),
           sourcePtsUs: core._vpa_pts(),
           sourceDtsUs: selected.dts,
+          ...(selected.derivedDts === undefined ? {} : {derivedDtsUs: selected.derivedDts}),
           width,
           height,
           confidence: invalid ? "partial" : "exact",

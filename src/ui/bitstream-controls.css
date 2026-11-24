@@ -66,3 +66,9 @@
 .bitstream-hit-tooltip { position:absolute; z-index:6; padding:5px 8px; width:max-content; max-width:calc(100% - 16px); box-sizing:border-box; border-radius:6px; color:var(--text); background:var(--preview-fill); box-shadow:var(--popover-shadow); font:12px/1.45 var(--font-ui); white-space:pre-line; overflow-wrap:anywhere; pointer-events:none; }
 #toggle-analysis-overlay[aria-expanded=true] { color:var(--accent); background:var(--annotation-toolbar-selected); }
 @media (prefers-reduced-motion:reduce) { .bitstream-track-progress { transition:none; animation:none; } .bitstream-track-progress.is-waiting .analysis-progress-ring { animation:none; } }
+.analysis-picture-hover {
+  position:absolute; z-index:2; pointer-events:none; overflow:hidden;
+}
+.analysis-picture-hover-edge {
+  position:absolute; outline:2px solid #ffe04c; outline-offset:-1px; box-shadow:0 0 0 2px #15120b;
+}

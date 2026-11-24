@@ -1,3 +1,4 @@
+import { axisOf } from '../../../shared/analysis/metadata/projection.ts';
 import type { Slot } from '../../../shared/review/model.ts';
 import type { AnalysisCapability, AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
 import { buildInspection } from '../../../shared/analysis/metadata/inspection.ts';
@@ -31,7 +32,7 @@ export function createInspectionController(snapshot: () => {
     const r = snapshot().results.get(direct.slot);
     const s = r?.samples.find(v => v.sampleId === direct.sampleId);
     if (!s) return null;
-    const axisT = snapshot().axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
+    const axisT = axisOf(s, snapshot().axis);
     if (axisT == null || !Number.isFinite(axisT)) return null;
     return { axisUs: Math.round(axisT), sampleId: s.sampleId };
   }

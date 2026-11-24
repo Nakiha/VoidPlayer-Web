@@ -357,7 +357,7 @@
 /* All plots scroll together; no overview-only inner clipping or scrollbar. */
 .analysis-body { overscroll-behavior: auto; }
 
-.analysis-linked-card { pointer-events: none; overflow: auto; max-width: min(900px, calc(100vw - 16px)); }
+.analysis-linked-card { pointer-events: auto; overflow: auto; max-width: min(900px, calc(100vw - 16px)); }
 .analysis-card-section { margin-top: 5px; padding-top: 4px; border-top: 1px solid var(--border); }
 .analysis-card-section:first-child { margin-top: 0; border-top: 0; }
 .analysis-card-section > strong { font-size: inherit; color: var(--text-secondary); }
@@ -393,7 +393,6 @@
 .analysis-linked-card .analysis-card-section::after { content: ''; position: absolute; left: 3px; right: 3px; top: -7px; height: 1px; background: var(--divider); }
 .analysis-linked-card .analysis-card-section > strong { display: block; margin-bottom: 2px; }
 
-.analysis-linked-card.is-scrollable { pointer-events: auto; }
 
 /* Each chart group has a readable card beside the shared inspection line. */
 .analysis-view-card {
@@ -500,9 +499,8 @@
 
 /* Independent cards move as a complete stack; only an oversized stack scrolls. */
 .analysis-individual-layer { inset: 8px 0; }
-.analysis-individual-layer > .analysis-card { position: absolute; overflow: visible; }
+.analysis-individual-layer > .analysis-card { position: absolute; overflow: visible; pointer-events: auto; }
 .analysis-individual-layer.is-scrollable { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
-.analysis-individual-layer.is-scrollable > .analysis-card { pointer-events: auto; }
 
 /* Header and frame metadata must not reserve width in the NALU metric columns. */
 .analysis-card [data-kind="nalu"] { display: block; }

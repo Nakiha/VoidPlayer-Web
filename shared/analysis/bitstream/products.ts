@@ -83,9 +83,11 @@ export const metadata = (value: AnalysisOutput): FrameMetadata => {
   if (isProduct(value)) { const { product, productSchema, encoding, indexIdentity, validatedBlockCount, ...frame } = value; const { payload: _payload, ...rest } = frame as FrameMetadata & {payload?: ArrayBuffer}; return rest; }
   const { blocks, ...frame } = value; return frame;
 };
+/** Products made before the derived clock lack DTS placements for Annex-B. */
+export const analysisClockKey = (identity?: ProductIndexIdentity | null) => identity?.kind === 'js-annexb' ? ['annex-b-dts-v1'] : [];
 export function productKey(picture: SourcePictureKey, buildId: string, indexIdentity: ProductIndexIdentity | null, product: AnalysisProduct['product']) {
   // Build IDs distinguish producer revisions. Preserve the lookup namespace for older block products.
-  return JSON.stringify([pictureId(picture), buildId, ANALYSIS_RECIPE, ANALYZER_VERSION, PRODUCT_SCHEMA, product, productKeyEncoding(product), analysisIndexIdentity(indexIdentity)]);
+  return JSON.stringify([pictureId(picture), buildId, ANALYSIS_RECIPE, ANALYZER_VERSION, PRODUCT_SCHEMA, product, productKeyEncoding(product), analysisIndexIdentity(indexIdentity), ...analysisClockKey(indexIdentity)]);
 }
 export function summaryOf(value: AnalysisOutput, indexIdentity: ProductIndexIdentity | null = null): AnalysisSummary {
   if (isProduct(value)) return { ...metadata(value), product: 'summary', productSchema: PRODUCT_SCHEMA, encoding: 'summary-json-v1', indexIdentity: value.indexIdentity, validatedBlockCount: value.validatedBlockCount };

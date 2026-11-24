@@ -1,4 +1,4 @@
-import { executeSortedQuerySteps } from './adapters.ts';
+import { executeSortedQuerySteps, packetDts } from './adapters.ts';
 import type { PacketView, SortedAxis, SourceQueryContext } from './adapters.ts';
 import type { AnalysisQuery, AnalysisResult } from './types.ts';
 import { lowerBound } from './statistics.ts';
@@ -11,7 +11,7 @@ function* sortedPackets(packets: ArrayLike<PacketView>, firstPtsUs: number, axis
   let fresh: { pos: number; t: number }[] = [];
   for (let i = previous?.length ?? 0; i < packets.length; i++) {
     if (i % BATCH === 0) yield;
-    const raw = axis === 'pts' ? packets[i].pts : packets[i].dts;
+    const raw = axis === 'pts' ? packets[i].pts : packetDts(packets[i]);
     if (raw != null && Number.isFinite(raw)) fresh.push({ pos: i, t: raw - firstPtsUs });
   }
   const compare = (a: { pos: number; t: number }, b: { pos: number; t: number }) => a.t - b.t || a.pos - b.pos;
@@ -69,7 +69,7 @@ export function createCooperativeQuerier() {
       const sorted = yield* sortedFor(packets, firstPtsUs, axis), at = lowerBound(sorted.times, tUs);
       const pos = sorted.times[at] === tUs ? sorted.order[at] : null, packet = pos == null ? null : packets[pos];
       return { rank: at, total: sorted.times.length, ordinal: packet ? packet.ordinal ?? pos : null,
-        sourceDtsUs: packet?.dts ?? null };
+        sourceDtsUs: packet?.dts ?? null, ...(packet?.derivedDts === undefined ? {} : {derivedDtsUs:packet.derivedDts}) };
     },
     *number(packets: ArrayLike<PacketView>, firstPtsUs: number, axis: 'pts' | 'dts', number: number): Generator<void, number | null> {
       if (!Number.isSafeInteger(number) || number < 0 || axis !== 'pts' && axis !== 'dts') return null;

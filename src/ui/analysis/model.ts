@@ -1,3 +1,4 @@
+import { axisOf } from '../../../shared/analysis/metadata/projection.ts';
 import type { Slot } from '../../../shared/review/model.ts';
 import type { AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
 import { niceCeiling, shouldBucketize } from '../../../shared/analysis/metadata/statistics.ts';
@@ -33,7 +34,7 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
     if (!r || r.truncated || !r.samples.length) { allRaw = false; break; }
     let n = 0;
     for (const s of r.samples) {
-      const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
+      const axisT = axisOf(s, prefs.axis);
       if (axisT != null && axisT >= range.start && axisT <= range.end) n++;
     }
     totalRawInView += n;
@@ -47,7 +48,7 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
       const r = results.get(t.slot)!;
       const refs: GroupSampleRef[] = [];
       for (const s of r.samples) {
-        const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
+        const axisT = axisOf(s, prefs.axis);
         if (axisT == null || !Number.isFinite(axisT)) continue;
         if (axisT < range.start - halo || axisT > range.end + halo) continue;
         refs.push({
@@ -77,7 +78,7 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
     if (!r) continue;
     const canvasSamples = (useRaw && !r.truncated && r.samples.length)
       ? r.samples.map(s => {
-        const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
+        const axisT = axisOf(s, prefs.axis);
         return {
           t: axisT ?? Number.NaN,
           size: s.sizeBytes ?? 0,

@@ -1,3 +1,5 @@
+import { createSourceQuerier } from '../../shared/analysis/metadata/adapters.ts';
+import { DiagramStore } from '../../shared/analysis/bitstream/diagrams.ts';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -48,6 +50,14 @@ for (const [codec, name, sampleFps] of samples) test(`Annex-B ${codec} seeks to 
     const order = [...index.packets].sort((a, b) => a.ptsUs - b.ptsUs).map(p => p.au);
     assert.deepEqual(order, expected, 'display order agrees with independent MP4 composition timestamps');
     assert.ok(index.packets.every(p => p.timing.pts === null && p.timing.dts === null));
+    const stats = engine.analysisIndex!.packets, querier = createSourceQuerier();
+    const decodeRank = order.findIndex((au, rank) => au !== rank), decodeAu = order[decodeRank];
+    assert.ok(decodeRank >= 0, 'fixture has presentation reordering');
+    assert.equal(stats[decodeAu].dts, null);
+    assert.equal(stats[decodeAu].derivedDts, Math.round(decodeAu * 1e6 / actualFps));
+    assert.equal(querier.rank(stats, 0, 'dts', stats[decodeAu].derivedDts!).ordinal, decodeAu);
+    assert.equal(querier.rank(stats, 0, 'pts', stats[decodeAu].pts!).sourceDtsUs, null);
+    assert.equal(querier.sampleAtNumber(stats, 0, 'dts', decodeAu), opened.times[decodeRank]);
     const bad = structuredClone(index);
     bad.packets[1].locator = 0;
     assert.equal(parseAnnexBPacketIndex(bad, name, bytes.length), undefined);
@@ -82,6 +92,7 @@ for (const [codec, name, sampleFps] of samples) test(`Annex-B ${codec} seeks to 
       assert.deepEqual(result.picture, picture);
       assert.equal(result.sourcePtsUs, pts);
       assert.equal(result.sourceDtsUs, null);
+      assert.equal(result.derivedDtsUs, Math.round(au * 1e6 / actualFps));
       assert.equal(result.containerHeader?.box, 'annexb');
       assert.equal(result.capabilities.bits, 'ready');
       assert.ok(result.blocks.some(block => (block.bits ?? 0) > 0));
@@ -106,16 +117,21 @@ test('Annex-B VVC summary stream delivers each AU with its indexed display time'
   const { default: createCore } = await import(pathToFileURL(resolve('public/vendor/voidplayer-analysis/voidplayer-analysis.js')).href);
   const reader = new RangeReader({ file: new Blob([fixture.bytes]) });
   const sourceVersion = 'raw-summary', indexIdentity = JS_ANNEX_B_MEDIA_INDEX_IDENTITY;
-  const seen = new Map<number, number>();
+  const seen = new Map<number, number>(), charts = new DiagramStore();
+  const dtsOrder = Array.from({length: fixture.timestamps.length}, (_, au) => au);
   await analyzeStream(reader, { mode: 'stream', product: 'summary', sourceVersion, indexIdentity, firstPtsUs: 0,
-    durationUs: 266933 }, createCore, 'annexb-test', new AbortController().signal, async result => {
+    durationUs: 266933, window: {startUs: 0, endUs: 266933, axis: 'dts'} }, createCore, 'annexb-test', new AbortController().signal, async result => {
     assert.equal(result.confidence, 'exact');
     assert.equal(result.sourceDtsUs, null);
     assert.ok(!seen.has(result.picture.au));
     seen.set(result.picture.au, result.sourcePtsUs);
+    assert.ok('product' in result && result.product === 'summary');
+    charts.putSummary(result);
   }, async () => {});
   const order = fixture.timestamps.map((_, au) => au).sort((a, b) => fixture.timestamps[a] - fixture.timestamps[b]);
   assert.equal(seen.size, order.length);
+  assert.deepEqual(charts.queryChart(sourceVersion, 0, 266933, 1024, 'dts').pictures.map(p => p.picture.au), dtsOrder);
+  assert.deepEqual(charts.queryChart(sourceVersion, 0, 266933, 1024, 'pts').pictures.map(p => p.picture.au), order);
   assert.deepEqual(order, [...seen].sort((a, b) => a[1] - b[1]).map(([au]) => au));
 });
 

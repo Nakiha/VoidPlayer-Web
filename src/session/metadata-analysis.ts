@@ -78,6 +78,7 @@ export async function queryTrackAnalysis(
       ...s,
       effectivePtsUs: s.effectivePtsUs == null ? null : shift(s.effectivePtsUs),
       dtsUs: s.dtsUs == null ? null : shift(s.dtsUs),
+      ...(s.derivedDtsUs === undefined ? {} : {derivedDtsUs: shift(s.derivedDtsUs)}),
     })),
     buckets: result.buckets?.map(b => ({ ...b, startUs: shift(b.startUs), endUs: shift(b.endUs) })) ?? null,
     bitrate: result.bitrate?.map(p => ({ ...p, tUs: shift(p.tUs) })) ?? null,
@@ -154,6 +155,7 @@ export async function locateTrackAnalysisSample(
       ...found,
       effectivePtsUs: found.effectivePtsUs == null ? null : found.effectivePtsUs + offsetUs,
       dtsUs: found.dtsUs == null ? null : found.dtsUs + offsetUs,
+      ...(found.derivedDtsUs === undefined ? {} : {derivedDtsUs: found.derivedDtsUs + offsetUs}),
     },
   };
 }

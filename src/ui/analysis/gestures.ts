@@ -28,7 +28,7 @@ export function installAnalysisGestures(options: {
   scene: AnalysisGestureScene; retainHoverOnLeave?(event: PointerEvent): boolean;
   setView(start: number | null, end?: number): void;
   render(): void; renderRubber(): void; positionHover(): void;
-  updateInspection(x: number, y: number): void; renderFloat(snapshot: InspectionState | null, x: number | null): void;
+  updateInspection(x: number, y: number, overPlot?: boolean): void; renderFloat(snapshot: InspectionState | null, x: number | null): void;
   refreshOverlay(): void; publishTestHook(): void; pickAt(x: number, y: number): AnalysisGlyph | null;
   pinInspection(target: DirectTarget | null): void; unpinInspection(focus?: boolean): void;
   curveTargetAt?(x: number, y: number, snapshot: InspectionState): InspectionState['tracks'][number] | null;
@@ -38,7 +38,7 @@ export function installAnalysisGestures(options: {
     publishTestHook, pickAt, pinInspection, unpinInspection } = options;
   const { inspectAt, directTargetFromGlyph } = inspection;
   let hoverRaf = 0;
-  let pendingHover: { x: number; y: number; t: number } | null = null;
+  let pendingHover: { x: number; y: number; t: number; overPlot: boolean } | null = null;
   // ---- 指针交互 ----
   let pressX: number | null = null;
   let pressT = 0;
@@ -78,23 +78,31 @@ export function installAnalysisGestures(options: {
         return;
       }
     }
-    // rAF 合并取本帧最新坐标，不保留首个事件丢弃后续；冻结期间不跟随。
-    if (inspection.state.pinned) return;
-    pendingHover = { x: event.clientX, y: event.clientY, t: canvasT(event.clientX) };
+    queueHover(event.clientX, event.clientY, canvasT(event.clientX), true);
+  }, { signal });
+
+  function queueHover(x: number, y: number, t: number, overPlot = false) {
+    if (!scene.open || !scene.selectedTracks().length || inspection.state.pinned || (!overPlot && pressX != null)) return;
+    pendingHover = { x, y, t, overPlot };
     if (hoverRaf) return;
     hoverRaf = requestAnimationFrame(() => {
       hoverRaf = 0;
-      if (signal.aborted || !scene.open) return;
       const p = pendingHover;
       pendingHover = null;
-      if (!p) return;
+      if (!p || signal.aborted || !scene.open || inspection.state.pinned) return;
       inspection.state.hoverUs = Math.round(p.t);
       inspection.state.kbInspect = false;
       inspection.state.lastClient = { x: p.x, y: p.y };
       positionHover();
-      updateInspection(p.x, p.y);
+      updateInspection(p.x, p.y, p.overPlot);
     });
-  }, { signal });
+  }
+
+  function cancelHover() {
+    if (hoverRaf) cancelAnimationFrame(hoverRaf);
+    hoverRaf = 0;
+    pendingHover = null;
+  }
 
   canvas.addEventListener('pointerup', event => {
     if (pressX == null) return;
@@ -193,9 +201,7 @@ export function installAnalysisGestures(options: {
 
   canvas.addEventListener('pointerleave', event => {
     if (options.retainHoverOnLeave?.(event)) {
-      pendingHover = null;
-      if (hoverRaf) cancelAnimationFrame(hoverRaf);
-      hoverRaf = 0;
+      cancelHover();
       return;
     }
     if (pressX != null) return;
@@ -310,8 +316,7 @@ export function installAnalysisGestures(options: {
   }, { signal });
 
   function cancel() {
-    if (hoverRaf) cancelAnimationFrame(hoverRaf);
-    hoverRaf = 0; pendingHover = null;
+    cancelHover();
     const wasSelecting = selecting;
     pressX = null; selecting = false; scene.rubber = null;
     if (wasSelecting && !signal.aborted) render();
@@ -319,5 +324,5 @@ export function installAnalysisGestures(options: {
   canvas.addEventListener('pointercancel', cancel, { signal });
   canvas.addEventListener('lostpointercapture', () => { if (pressX != null) cancel(); }, { signal });
   signal.addEventListener('abort', cancel, { once: true });
-  return { cancel };
+  return { cancel, queueHover, cancelHover };
 }

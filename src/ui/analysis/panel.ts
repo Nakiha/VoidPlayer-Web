@@ -1,3 +1,4 @@
+import { diagramTime } from '../../../shared/analysis/bitstream/diagrams.ts';
 import { icon } from '../icons.ts';
 import { analysisRetryButton } from './retry.ts';
 import { createSettledAnalysisDemand } from './settled-demand.ts';
@@ -42,7 +43,7 @@ import { installFilterGestures } from './filter-gestures.ts';
 import { installAnalysisRangeEditor } from './range-editor.ts';
 import { publishAnalysisTestHook } from './test-hook.ts';
 import { createFrameTask } from '../frame-task.ts';
-import { centerTimeRange, zoomTimeRange } from '../../../shared/analysis/metadata/projection.ts';
+import { axisOf, centerTimeRange, zoomTimeRange } from '../../../shared/analysis/metadata/projection.ts';
 import './panel.css';
 
 import type { ChartHover, AnalysisAction as Action } from './shared.ts';
@@ -84,7 +85,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     <header class="analysis-head">
       <div class="analysis-primary"><div id="analysis-diagrams" class="analysis-diagram-toggles" role="group" aria-label="${th(msg('analysis.diagrams','分析图示'))}"></div></div>
       <div class="analysis-tools" role="group" aria-label="${th(msg("analysis.tools", "分析选项"))}">
-        <div class="segmented" id="analysis-axis" role="group" aria-label="${th(msg("analysis.timeBase", "时间基准"))}" title="${th(msg("analysis.timeBaseTitle", "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图"))}">
+        <div class="segmented" id="analysis-axis" role="group" aria-label="${th(msg("analysis.timeBase", "时间基准"))}" title="${th(msg("analysis.timeBaseTitle", "PTS 为展示时间，DTS 为解码时间。裸码流的 DTS 按解码顺序推算。"))}">
           <button type="button" data-axis="pts">PTS</button>
           <button type="button" data-axis="dts">DTS</button>
         </div>
@@ -179,7 +180,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
   let sharedHover: ChartHover | null = null;
   let sharedPointerY: number | null = null;
-  let sharedOrigin: 'overview' | 'deep' = 'overview';
+  let sharedOrigin: 'overview' | 'surface' | 'deep' = 'overview';
+  let cancelQueuedHover: (() => void) | undefined;
   function syncChartMinimum() {
     // A chart's minimum fills the panel's usable area at the resize lower bound.
     // Keep this independent of the current height so enlarging the panel can fit more charts.
@@ -377,6 +379,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   });
   const { cardEl, contains: hoverCardsContain, text: cardText, positionIndividual: positionIndividualCards, positionFloat, refreshAvoidance: refreshCardAvoidance, renderCombined } = hoverCards;
   function clearSharedHover() {
+    cancelQueuedHover?.();
     if (inspection.state.pinned) return;
     sharedHover = null;
     sharedPointerY = null;
@@ -392,9 +395,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     for (const { slot, panel } of deepPanels.values()) panel.highlight(sharedHover ? trackHover(slot, sharedHover) : null);
     positionHover(); refreshOverlay();
   }
-  function renderFloat(snapshot: InspectionState | null, x: number | null) {
+  function renderFloat(snapshot: InspectionState | null, x: number | null, origin: 'overview' | 'surface' = 'overview') {
     if (!snapshot) { clearSharedHover(); return; }
-    sharedOrigin = 'overview';
+    sharedOrigin = origin;
     const targetSlot = snapshot.directTarget?.slot ?? streamSlot();
     const track = snapshot.tracks.find(entry => entry.slot === targetSlot);
     const reference = track?.reference;
@@ -483,11 +486,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       if (r.samples.length && !r.truncated) {
         // DTS 轴下样本按 DTS 有序，首项即最小；PTS 轴下需扫描最小 DTS。
         if (r.axis === 'dts') {
-          const v = r.samples[0].dtsUs;
+          const v = axisOf(r.samples[0], 'dts');
           if (v != null && Number.isFinite(v) && (dtsMin == null || v < dtsMin)) dtsMin = v;
         } else {
           for (const s of r.samples) {
-            if (s.dtsUs != null && Number.isFinite(s.dtsUs) && (dtsMin == null || s.dtsUs < dtsMin)) dtsMin = s.dtsUs;
+            const time = axisOf(s, 'dts');
+            if (time != null && Number.isFinite(time) && (dtsMin == null || time < dtsMin)) dtsMin = time;
           }
         }
       } else if (r.buckets) {
@@ -545,8 +549,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       if (sequence !== locateSequence || signal.aborted || !open || prefs.axis !== axis) return;
       const latest = session.getPresentedFrame(slot);
       if (!latest || latest.generation !== frame.generation || latest.normalizedMediaUs !== frame.normalizedMediaUs) return;
-      if (!('sourceDtsUs' in rank) || rank.sourceDtsUs == null) { followingFrame = ''; return; }
-      time = rank.sourceDtsUs - track.firstPtsUs + track.offsetUs;
+      const dts = 'sourceDtsUs' in rank ? rank.sourceDtsUs ?? rank.derivedDtsUs : null;
+      if (dts == null) { followingFrame = ''; return; }
+      time = dts - track.firstPtsUs + track.offsetUs;
     }
     if (continuous && !follow) return;
     const range = viewRange(), next = centerTimeRange(range, time, domainBounds(range.end - range.start));
@@ -722,6 +727,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }, '.analysis-chip');
   function refreshTools() {
     const dtsOk = allHaveDts();
+    const derivedDts = dtsOk && selectedTracks().some(track => caps.get(track.slot)?.dtsSource === 'annex-b-derived');
     const hasTracks = selectedTracks().length > 0;
     $<HTMLButtonElement>('#analysis-locate').disabled = !hasTracks;
     $<HTMLButtonElement>('#analysis-follow').disabled = !hasTracks;
@@ -734,10 +740,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // 单一时间基准同时控制图表、当前帧号和按帧号跳转。
     for (const button of axisButtons) {
       button.setAttribute('aria-pressed', String(button.dataset.axis === prefs.axis));
-      button.textContent = button.dataset.axis!.toUpperCase();
+      const isDts = button.dataset.axis === 'dts';
+      button.textContent = isDts && derivedDts ? 'DTS ≈' : button.dataset.axis!.toUpperCase();
       const explanation = t(button.dataset.axis === 'pts' ? msg('analysis.presentationTime', '展示时间 PTS') : msg('analysis.decodingTime', '解码时间 DTS'));
       button.disabled = !hasTracks || (button.dataset.axis === 'dts' && !dtsOk);
-      button.title = button.dataset.axis === 'dts' && !dtsOk ? `${explanation}\n${t(msg('analysis.missingDts', '所选轨道缺少可靠 DTS，无法按解码时间显示'))}` : explanation;
+      button.title = !isDts ? explanation : !dtsOk ?
+        `${explanation}\n${t(msg('analysis.missingDts', '所选轨道缺少可靠 DTS，无法按解码时间显示'))}` : derivedDts ?
+        `${explanation}\n${t(msg('analysis.derivedDts', '裸码流的解码时间按 AU 顺序和名义帧率推算'))}` : explanation;
     }
     const windowButton = $<HTMLButtonElement>('#analysis-window');
     windowButton.title = t(prefs.axis === 'pts' ? msg('analysis.presentationLoadWindowHint', '展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐') : msg('analysis.decodeBitrateWindowHint', '码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐'));
@@ -755,7 +764,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // Choice menus mirror the trigger label into the popup; refresh both ends
     // (the menu's own language listener runs before this one).
     const triggers = [
-      ['analysis-axis', msg("analysis.timeBase", "时间基准"), msg("analysis.timeBaseTitle", "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图")],
+      ['analysis-axis', msg("analysis.timeBase", "时间基准"), msg("analysis.timeBaseTitle", "PTS 为展示时间，DTS 为解码时间。裸码流的 DTS 按解码顺序推算。")],
       ['analysis-window', msg("analysis.bitrateWindow", "码率窗口"), msg("analysis.bitrateWindowTitle", "码率窗口：视频样本负载码率的滑动时间窗（真实时间窗，非 N 帧窗）")],
       ['analysis-layout', msg("analysis.multiTrackLayout", "多轨布局"), msg("analysis.multiTrackLayoutTitle", "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示")],
     ] as const;
@@ -807,7 +816,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if(data.aggregated) {const bin=data.buckets.find(b=>time>=b.startUs+data.offsetUs-data.firstPtsUs && time<b.endUs+data.offsetUs-data.firstPtsUs);return bin?.qpCount?(bin.qpSum ?? 0)/bin.qpCount:null;}
     const shift=data.offsetUs-data.firstPtsUs;
     let nearest:typeof data.pictures[number]|undefined, distance=Infinity;
-    for(const p of data.pictures) {const at=(prefs.axis==='pts'?p.sourcePtsUs:p.sourceDtsUs); if(at==null)continue;const d=Math.abs(at+shift-time);if(d<distance){distance=d;nearest=p;}}
+    for(const p of data.pictures) {const at=diagramTime(p, prefs.axis); if(at==null)continue;const d=Math.abs(at+shift-time);if(d<distance){distance=d;nearest=p;}}
     const track=tracks.find(t=>t.slot===slot);
     return distance <= (track?.frameIntervalUs ?? 33333)/2+2000 ? nearest?.qpMean ?? null : null;
   }
@@ -823,7 +832,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         if(data.codec==='vvc')model.qpMax=63;
         const shift=data.offsetUs-data.firstPtsUs;
         track.qp=data.aggregated? data.buckets.map(b=>({t:(b.startUs+b.endUs)/2+shift,value:b.qpCount?(b.qpSum ?? 0)/b.qpCount:null}))
-          :data.pictures.map(p=>({t:(prefs.axis==='pts'?p.sourcePtsUs:p.sourceDtsUs ?? NaN)+shift,value:p.qpMean ?? null})).sort((a,b)=>a.t-b.t);
+          :data.pictures.map(p=>({t:(diagramTime(p, prefs.axis) ?? NaN)+shift,value:p.qpMean ?? null})).sort((a,b)=>a.t-b.t);
         available ||= track.qp.some(p=>p.value!=null);
       }
       qpNotice.hidden=available;
@@ -912,16 +921,17 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // 视图变化后把检查点重锚到光标（滚轮/捏合只动视图，不产生 pointermove），
     // 不展示过期内容；键盘检查中不抢夺焦点位置。
     const viewSig = `${drawn.viewStart}:${drawn.viewEnd}`;
-    if (sharedOrigin === 'overview' && !inspection.state.kbInspect && inspection.state.hoverUs != null && inspection.state.lastClient) {
+    if (sharedOrigin !== 'deep' && !inspection.state.kbInspect && inspection.state.hoverUs != null && inspection.state.lastClient) {
       if (viewSig !== lastViewSig) {
-        inspection.state.hoverUs = Math.round(tOf(drawn, geom, inspection.state.lastClient.x - canvas.getBoundingClientRect().left));
+        inspection.state.hoverUs = sharedOrigin === 'surface' ? surfaceTimeAt(inspection.state.lastClient.x) :
+          Math.round(tOf(drawn, geom, inspection.state.lastClient.x - canvas.getBoundingClientRect().left));
         const range = viewRange();
         if (inspection.state.hoverUs < range.start || inspection.state.hoverUs > range.end) {
           inspection.state.hoverUs = null;
           hoverEl.hidden = true;
         }
       }
-      if (inspection.state.hoverUs != null) { positionHover(); updateInspection(inspection.state.lastClient.x, inspection.state.lastClient.y); }
+      if (inspection.state.hoverUs != null) updateInspection(inspection.state.lastClient.x, inspection.state.lastClient.y, sharedOrigin === 'overview');
     }
     lastViewSig = viewSig;
     publishTestHook();
@@ -991,21 +1001,21 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const directTargetFromGlyph = (glyph: AnalysisGlyph | null) => inspection.directTargetFromGlyph(glyph);
 
   /** 命中样本只更新检查内容与标记；鼠标悬浮线和卡片保留连续位置。 */
-  function updateInspection(clientX: number, clientY: number) {
-    if (inspection.state.hoverUs == null) { inspection.state.lastInspection = null; renderFloat(null, null); refreshOverlay(); publishTestHook(); return; }
+  function updateInspection(clientX: number, clientY: number, overPlot = true) {
+    if (inspection.state.hoverUs == null || !diagrams.size) { clearSharedHover(); return; }
     const sel = selectedTracks();
     if (!sel.length) { inspection.state.lastInspection = null; renderFloat(null, null); refreshOverlay(); publishTestHook(); return; }
     if (inspection.state.pinned) return;
     if (inspection.state.hoverUs < chartFrameHoverStart(containerColumn())) { clearSharedHover(); return; }
     sharedPointerY = inspection.state.kbInspect ? null : clientY;
-    const direct = directTargetFromGlyph(pickAt(clientX, clientY));
+    const direct = overPlot ? directTargetFromGlyph(pickAt(clientX, clientY)) : null;
     // The first frame extends left of its timestamp, but its readout stays at media start.
     const insp = inspectAt(Math.max(dataDomainBounds().start, inspection.state.hoverUs), direct);
     // 键盘检查沿用样本锚点；指针位置独立于命中样本的真实时间。
     if (inspection.state.kbInspect) inspection.state.hoverUs = insp.inspectionTimeUs;
     inspection.state.lastInspection = insp;
     positionHover();
-    renderFloat(insp, clientX);
+    renderFloat(insp, clientX, overPlot ? 'overview' : 'surface');
     // 辅助技术播报只在键盘步进/固定时更新，不每个鼠标帧推送整段文本。
     if (inspection.state.kbInspect) live.textContent = cardText();
     refreshOverlay();
@@ -1074,13 +1084,37 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       const bounds = canvas.getBoundingClientRect();
       return pickLoadCurve(lastModel, snapshot, x - bounds.left, y - bounds.top, qpAt);
     },
-    retainHoverOnLeave: event => charts.matches(':hover') || (event.relatedTarget instanceof Node && hoverCardsContain(event.relatedTarget)),
+    retainHoverOnLeave: event => event.relatedTarget instanceof Node && section.contains(event.relatedTarget) ||
+      hoverCardsContain(event.relatedTarget) || hoverCards.inGap(event),
     scene: { get open() { return open; }, get lastModel() { return lastModel; }, get lastGeom() { return lastGeom; },
       get positionUs() { return positionUs; }, results,
       get rubber() { return rubber; }, set rubber(value) { rubber = value; },
       selectedTracks, viewRange, domainBounds, plotWidthCss },
     setView, render, renderRubber, positionHover, updateInspection, renderFloat, refreshOverlay, publishTestHook,
     pickAt, pinInspection, unpinInspection });
+  cancelQueuedHover = gestures.cancelHover;
+
+  // Non-plot areas use the same clock without picking an underlying glyph.
+  function surfaceTimeAt(clientX: number) {
+    const rect = charts.getBoundingClientRect(), g = plotGeometry(charts.clientWidth);
+    const range = viewRange(), fraction = Math.max(0, Math.min(1, (clientX - rect.left - g.gutter) / g.plotW));
+    const time = Math.round(range.start + fraction * (range.end - range.start));
+    return Math.max(time, Math.min(range.end, Math.ceil(chartFrameHoverStart(containerColumn()))));
+  }
+  section.addEventListener('pointermove', event => {
+    if (!open || !diagrams.size || event.pointerType === 'touch' || event.buttons || !(event.target instanceof Element)) return;
+    const target = event.target;
+    if (target === canvas) return;
+    if (target.closest('.bitstream-diagram-plot canvas')) { gestures.cancelHover(); return; }
+    const button = target.closest<HTMLElement>('button, [role="button"]');
+    if (button?.innerText.trim() || target.closest('input, select, textarea, [contenteditable="true"]')) {
+      gestures.cancelHover();
+      if (sharedHover) clearSharedHover();
+      return;
+    }
+    gestures.queueHover(event.clientX, event.clientY, surfaceTimeAt(event.clientX));
+  }, { signal });
+  section.addEventListener('pointerleave', gestures.cancelHover, { signal });
 
   // ---- 会话联动（开关与高度由 workbench 统一管理） ----
   function setOpen(next: boolean) {

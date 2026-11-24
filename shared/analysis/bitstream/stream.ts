@@ -1,3 +1,4 @@
+import { packetDts } from '../metadata/adapters.ts';
 import type { AnalysisPacket } from './input.ts';
 import type { AnalysisGop } from './contract.ts';
 
@@ -34,7 +35,7 @@ export function viewportAnalysisGops(packets: readonly AnalysisPacket[], firstPt
   const groups = groupAnalysisGops(packets);
   const selected = new Set<number>();
   for (const packet of packets) {
-    const time = window.axis === 'dts' ? packet.dts : packet.pts;
+    const time = window.axis === 'dts' ? packetDts(packet) : packet.pts;
     if (time != null && time - firstPtsUs >= window.startUs && time - firstPtsUs < window.endUs) selected.add(gopForAu(groups, packet.au).startAu);
   }
   return groups.filter(group => selected.has(group.startAu));

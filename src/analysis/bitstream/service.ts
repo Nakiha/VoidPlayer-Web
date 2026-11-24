@@ -352,7 +352,7 @@ export class BitstreamAnalysisService {
         const row = times.get(au), entry = this.diagrams.summaryAt(target.sourceVersion, au);
         if (!row || !entry || entry.buildId !== plan.buildId ||
             JSON.stringify(entry.indexIdentity) !== JSON.stringify(analysisIndexIdentity(plan.indexIdentity)) ||
-            entry.sourcePtsUs !== row[1] || entry.sourceDtsUs !== row[2] ||
+            entry.sourcePtsUs !== row[1] || (entry.sourceDtsUs ?? entry.derivedDtsUs ?? null) !== row[2] ||
             entry.picture.configuration !== group.configuration || entry.confidence !== 'exact') return null;
         pictures++;
       }

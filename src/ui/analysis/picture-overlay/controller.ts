@@ -1,5 +1,6 @@
 import { pictureId, matchesAnalysisLayout } from "../../../../shared/analysis/bitstream/contract.ts";
 import type {
+  AnalysisBlock,
   ReadonlyAnalysisResult,
   PresentedFrameToken,
 } from "../../../../shared/analysis/bitstream/contract.ts";
@@ -12,17 +13,27 @@ import type { Slot } from "../../../../shared/review/model.ts";
 import { t, msg } from "../../../i18n.ts";
 import { blockColor, blockKey } from './block-display.ts';
 import type { BlockFilter, FillMode } from './block-display.ts';
+type Point = { x: number; y: number };
+
 export function createAnalysisOverlay(
   session: ReviewSession,
   slot: Slot,
   source: HTMLCanvasElement,
+  geometryChanged?: () => void,
 ) {
   const canvas = document.createElement("canvas");
   canvas.className = "analysis-picture-overlay";
   canvas.id = `bitstream-overlay-${slot}`;
   canvas.setAttribute("aria-hidden", "true");
   canvas.hidden = true;
-  source.closest(".frame-stage")!.append(canvas);
+  const hover = document.createElement('div'), edge = document.createElement('div');
+  hover.id = `bitstream-hover-${slot}`;
+  hover.className = 'analysis-picture-hover';
+  hover.setAttribute('aria-hidden', 'true');
+  hover.hidden = true;
+  edge.className = 'analysis-picture-hover-edge';
+  hover.append(edge);
+  source.closest('.frame-stage')!.append(canvas, hover);
   let token: PresentedFrameToken | null = session.getPresentedFrame(slot),
     result: ReadonlyAnalysisResult | null = null,
     geometry: PresentationGeometry | null = null,
@@ -38,6 +49,7 @@ export function createAnalysisOverlay(
     boundaries: boolean;
     labels: boolean;
   } | null = null;
+  let hitCells: { result: ReadonlyAnalysisResult; columns: number; cells: Uint32Array } | null = null;
   const metrics = {
     presentations: 0,
     cacheHits: 0,
@@ -53,6 +65,8 @@ export function createAnalysisOverlay(
   const clear = () => {
     result = null;
     lastDraw = null;
+    hitCells = null;
+    hover.hidden = true;
     canvas.hidden = true;
     delete canvas.dataset.picture;
     delete canvas.dataset.labels;
@@ -70,7 +84,7 @@ export function createAnalysisOverlay(
     }
     // Cached results may arrive before the initial geometry observation.
     // Retain the verified picture so that observation can draw it directly.
-    if (!geometry) { canvas.hidden = true; return; }
+    if (!geometry) { canvas.hidden = true; hover.hidden = true; return; }
     const g = geometry,
       rect = presentationRect(g);
     const signature = JSON.stringify([g, token.geometry, labels ? document.documentElement.lang : ""]);
@@ -92,6 +106,7 @@ export function createAnalysisOverlay(
       clear();
       return;
     }
+    if (hitCells?.result !== result) hitCells = null;
     const started = performance.now();
     const width = Math.max(1, Math.round(g.width * g.dpr));
     const height = Math.max(1, Math.round(g.height * g.dpr));
@@ -180,9 +195,55 @@ export function createAnalysisOverlay(
     if (metrics.drawTimesMs.length >= 2048) metrics.drawTimesMs.shift();
     metrics.drawTimesMs.push(performance.now() - started);
   };
+  function findBlock(x: number, y: number): AnalysisBlock | null {
+    if (canvas.hidden || !result || !token || !geometry || x < 0 || y < 0 || x >= geometry.width || y >= geometry.height) return null;
+    const rect = presentationRect(geometry);
+    if (x < rect.x || y < rect.y || x >= rect.x + rect.width || y >= rect.y + rect.height) return null;
+    const p = viewportToCoded(x, y, token, geometry);
+    if (p.x < 0 || p.y < 0 || p.x >= result.width || p.y >= result.height) return null;
+    if (!hitCells || hitCells.result !== result) {
+      // Exact results cover the coded picture on a 4×4 grid. Build once on
+      // demand so moving over dense partitions does not scan the frame.
+      const columns = result.width / 4;
+      const cells = new Uint32Array(columns * result.height / 4);
+      let id = 0;
+      for (const b of result.blocks) {
+        id++;
+        for (let row = b.y / 4; row < (b.y + b.height) / 4; row++) {
+          const left = row * columns + b.x / 4;
+          cells.fill(id, left, left + b.width / 4);
+        }
+      }
+      hitCells = { result, columns, cells };
+    }
+    const cell = hitCells.cells[Math.floor(p.y / 4) * hitCells.columns + Math.floor(p.x / 4)];
+    return result.blocks[cell - 1] ?? null;
+  }
+  function imageCenter() {
+    return geometry ? { x: geometry.width / 2 + geometry.offsetX, y: geometry.height / 2 + geometry.offsetY } : null;
+  }
+  function setHoveredBlock(block: AnalysisBlock | null) {
+    if (!block || !boundaries || canvas.hidden || !token || !geometry) { hover.hidden = true; return; }
+    const rect = presentationRect(geometry);
+    const a = codedToViewport(block.x, block.y, token, geometry);
+    const b = codedToViewport(block.x + block.width, block.y + block.height, token, geometry);
+    const left = Math.max(0, rect.x), top = Math.max(0, rect.y);
+    const width = Math.min(geometry.width, rect.x + rect.width) - left;
+    const height = Math.min(geometry.height, rect.y + rect.height) - top;
+    hover.style.left = `${left}px`;
+    hover.style.top = `${top}px`;
+    hover.style.width = `${width}px`;
+    hover.style.height = `${height}px`;
+    edge.style.left = `${Math.min(a.x, b.x) - left}px`;
+    edge.style.top = `${Math.min(a.y, b.y) - top}px`;
+    edge.style.width = `${Math.abs(a.x - b.x)}px`;
+    edge.style.height = `${Math.abs(a.y - b.y)}px`;
+    hover.hidden = false;
+  }
   const offGeometry = observePresentationGeometry(source, (g) => {
     geometry = g;
     draw();
+    geometryChanged?.();
   });
   const offFrame = session.subscribePresentedFrames((changed, next) => {
     if (changed !== slot) return;
@@ -233,35 +294,29 @@ export function createAnalysisOverlay(
       filter = value.filter ?? null;
       fill = value.fill;
       boundaries = value.boundaries;
+      if (!boundaries) hover.hidden = true;
       labels = value.labels;
       draw();
     },
-    hit(x: number, y: number) {
-      if (!result || !token || !geometry) return null;
-      const rect = presentationRect(geometry);
-      if (
-        x < rect.x ||
-        y < rect.y ||
-        x >= rect.x + rect.width ||
-        y >= rect.y + rect.height
-      )
-        return null;
-      const p = viewportToCoded(x, y, token, geometry);
-      return (
-        result.blocks.find(
-          (b) =>
-            p.x >= b.x &&
-            p.y >= b.y &&
-            p.x < b.x + b.width &&
-            p.y < b.y + b.height,
-        ) ?? null
-      );
+    hit: findBlock,
+    hitWithDisplacement(x: number, y: number) {
+      const center = imageCenter(), block = center && findBlock(x, y);
+      return center && block ? {block, displacement: {x: x - center.x, y: y - center.y}} : null;
+    },
+    hitDisplacement(point: Point) {
+      const center = imageCenter();
+      return center ? findBlock(center.x + point.x, center.y + point.y) : null;
+    },
+    setHoveredBlock,
+    setOpacity(value: number) {
+      canvas.style.opacity = hover.style.opacity = String(value);
     },
     dispose() {
       offFrame();
       offState();
       offGeometry();
       canvas.remove();
+      hover.remove();
     },
   };
 }

@@ -21,6 +21,8 @@ export interface AnalysisSample {
   effectivePtsUs: number | null;
   /** 真实源 DTS（微秒）；不存在则为 null，不得伪造。 */
   dtsUs: number | null;
+  /** 按 Annex-B AU 和名义帧率推算的图表坐标，与原始 DTS 分开。 */
+  derivedDtsUs?: number;
   /** 源压缩样本负载字节；未知为 null，不得填 0。 */
   sizeBytes: number | null;
   randomAccess: RandomAccessFlag;
@@ -44,6 +46,8 @@ export interface AnalysisRank {
   ordinal: number | null;
   /** 精确命中样本的原始源 DTS（微秒），不减 firstPts、不加轨道 offset；缺失或未命中为 null。 */
   sourceDtsUs: number | null;
+  /** 同一命中样本的推算解码时间，未归一化。 */
+  derivedDtsUs?: number;
   /** false 表示索引构建中，排名与序号仅覆盖已确认部分，为暂定值，不得当精确值展示。 */
   complete: boolean;
 }
@@ -55,8 +59,9 @@ export interface AnalysisRankOptions {
 
 export interface AnalysisCapability {
   hasSize: boolean;
-  /** DTS 可用当且仅当后端有真实容器 DTS。 */
+  /** 有真实 DTS 或已验证的 Annex-B 解码时钟。 */
   hasDts: boolean;
+  dtsSource?: 'annex-b-derived';
   keySource: KeyFlagSource;
   pictureType: 'key-only' | 'full' | 'unavailable';
   qp: DataState;

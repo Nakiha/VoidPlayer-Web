@@ -45,6 +45,10 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   const panel = $('analysis-overlay-panel'), trigger = $('toggle-analysis-overlay');
   let open = false, initialized = false, mode: Dimension = 'sizes', sizeFill = false, boundaries = true, labels = false, opacity = 75;
   let filter: BlockFilter | null = null;
+  let hoverPointer: {slot: Slot; x: number; y: number} | null = null, hoverFrame = 0;
+  const stages = new Map(SLOTS.map(slot => [slot, canvases[slot].closest<HTMLElement>('.frame-stage')!]));
+  const drawingLayers = new Map(SLOTS.map(slot => [slot, stages.get(slot)!.querySelector('.drawing-layer')!]));
+  const viewport = panel.closest<HTMLElement>('.viewport-surface')!;
   const fill = (): FillMode => mode === 'sizes' && !sizeFill ? 'none' : mode;
   host.innerHTML = `
     <div class="viewport-tool-head">
@@ -79,7 +83,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     editLabel: () => t(msg('bitstream.editOpacity', '编辑不透明度')),
     choose(value) {
       opacity = value;
-      for (const slot of entries.keys()) { const canvas = document.getElementById(`bitstream-overlay-${slot}`); if (canvas) canvas.style.opacity = String(opacity / 100); }
+      for (const entry of entries.values()) entry.overlay?.setOpacity(opacity / 100);
       render();
     },
   });
@@ -184,6 +188,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }
   function destroy(slot: Slot) {
     const entry = entries.get(slot);
+    if (hoverPointer?.slot === slot) clearHover();
     entry?.request?.abort(); entry?.overlay?.dispose(); entry?.tooltip?.remove(); entries.delete(slot);
   }
   function cached(slot: Slot) {
@@ -194,12 +199,13 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (entry.overlay) return;
     if (!entry.loading) entry.loading = import('./analysis/picture-overlay/controller.ts').then(({ createAnalysisOverlay }) => {
       if (entries.get(slot) !== entry || !entry.enabled || life.signal.aborted) return;
-      entry.overlay = createAnalysisOverlay(session, slot, canvases[slot]);
+      entry.overlay = createAnalysisOverlay(session, slot, canvases[slot], scheduleHover);
       entry.overlay.setDisplay({ fill: fill(), boundaries, labels, filter: filter?.slot === slot ? filter : null });
-      const canvas = $(`bitstream-overlay-${slot}`); canvas.style.opacity = String(opacity / 100);
+      entry.overlay.setOpacity(opacity / 100);
       const result = cached(slot); if (result) entry.overlay.setResult(result);
       const tooltip = document.createElement('output'); tooltip.className = 'bitstream-hit-tooltip'; tooltip.hidden = true;
-      panel.closest('.viewport-surface')!.append(tooltip); entry.tooltip = tooltip;
+      viewport.append(tooltip); entry.tooltip = tooltip;
+      scheduleHover();
     }).finally(() => { entry.loading = undefined; });
     await entry.loading;
   }
@@ -207,7 +213,10 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     const entry = entryFor(slot); if (!entry) return;
     entry.enabled = enabled;
     if (enabled) void ensureOverlay(slot, entry).catch(error => { entry.message = bitstreamReasonText(failureInfo(error).code); render(); });
-    else { entry.overlay?.dispose(); entry.overlay = undefined; entry.tooltip?.remove(); entry.tooltip = undefined; }
+    else {
+      if (hoverPointer?.slot === slot) clearHover();
+      entry.overlay?.dispose(); entry.overlay = undefined; entry.tooltip?.remove(); entry.tooltip = undefined;
+    }
     render();
   }
   function supports(entry: Entry, value: Dimension) {
@@ -217,6 +226,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }
   function updateDisplay() {
     for (const [slot, entry] of entries) entry.overlay?.setDisplay({ fill: fill(), boundaries, labels, filter: filter?.slot === slot ? filter : null });
+    scheduleHover();
   }
   $('bitstream-labels').addEventListener('click', () => {
     labels = !labels;
@@ -280,6 +290,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       if (result?.confidence === 'exact') { entry.capabilities = result.capabilities; entry.blockDepth = result.blockDepth; }
       if(result && entry.enabled) entry.overlay?.setResult(result);
     }
+    scheduleHover();
     if (!open) return;
     const tracks = $('bitstream-tracks');
     const signature = state.tracks.filter(track=>!track.failure).map(track=>`${track.slot}:${track.id}:${track.sourceGen}`).join(',');
@@ -371,30 +382,65 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       render();
     }
   }
-  for (const slot of SLOTS) {
-    const stage = canvases[slot].closest<HTMLElement>('.frame-stage')!;
-    stage.addEventListener('pointermove', event => {
-      const entry=entries.get(slot); if(!entry?.tooltip)return;
-      const rect=stage.getBoundingClientRect();
-      const block=entry.enabled && stage.querySelector('.drawing-layer')?.hasAttribute('hidden') && !(event.target as Element).closest('button,input,select') ? entry.overlay?.hit(event.clientX-rect.left,event.clientY-rect.top):null;
-      if (entry.tooltip.hidden !== !block) entry.tooltip.hidden = !block;
-      if (!block) return;
-      const token=session.getPresentedFrame(slot);
-      const text = `${slot} · ${formatTime(token?.normalizedMediaUs ?? 0)} · PTS\n${block.x}, ${block.y} · ${block.width}×${block.height} · ${predictionLabel(block.mode)} · QP ${block.qp ?? '—'}`;
-      const depth = block.depth === undefined ? '' : ` · ${depthLabel(entry.blockDepth)} ${block.depth}`;
-      const bits = block.bits === undefined ? '' :
-        `\n${t(msg('bitstream.estimatedCodedSize', '估算编码大小'))} · ${block.bits} bit · ${block.bits / 8} B · ${(block.bits / 8192).toFixed(4)} KiB`;
-      const value = text + depth + bits;
-      if (entry.tooltip.textContent !== value) entry.tooltip.textContent = value;
-      const viewport=panel.closest('.viewport-surface')!.getBoundingClientRect(), tip=entry.tooltip.getBoundingClientRect();
-      let x=event.clientX-viewport.left+12, y=event.clientY-viewport.top+12;
-      if(x+tip.width>viewport.width-8)x=event.clientX-viewport.left-tip.width-12;
-      if(y+tip.height>viewport.height-8)y=event.clientY-viewport.top-tip.height-12;
-      entry.tooltip.style.left=`${Math.max(8,Math.min(x,viewport.width-tip.width-8))}px`;
-      entry.tooltip.style.top=`${Math.max(8,Math.min(y,viewport.height-tip.height-8))}px`;
-    }, {signal:life.signal});
-    stage.addEventListener('pointerleave',()=>{const entry=entries.get(slot);if(entry?.tooltip)entry.tooltip.hidden=true;},{signal:life.signal});
+  function clearHover() {
+    if (hoverFrame) cancelAnimationFrame(hoverFrame);
+    hoverFrame = 0;
+    hoverPointer = null;
+    for (const entry of entries.values()) {
+      entry.overlay?.setHoveredBlock(null);
+      if (entry.tooltip) entry.tooltip.hidden = true;
+    }
   }
+  function scheduleHover() {
+    if (hoverPointer && !hoverFrame && !life.signal.aborted) hoverFrame = requestAnimationFrame(updateHover);
+  }
+  function updateHover() {
+    hoverFrame = 0;
+    if (!hoverPointer || life.signal.aborted) return;
+    const {slot, x: clientX, y: clientY} = hoverPointer;
+    const entry = entries.get(slot);
+    const stage = stages.get(slot)!.getBoundingClientRect();
+    const hit = entry?.enabled && stage.width > 0 && stage.height > 0 && drawingLayers.get(slot)!.hasAttribute('hidden') ?
+      entry.overlay?.hitWithDisplacement(clientX - stage.left, clientY - stage.top) : null;
+    for (const [peer, target] of entries) {
+      const block = boundaries && hit && target.enabled ?
+        peer === slot ? hit.block : target.overlay?.hitDisplacement(hit.displacement) ?? null : null;
+      target.overlay?.setHoveredBlock(block);
+    }
+    const tooltip = entry?.tooltip;
+    if (!tooltip) return;
+    tooltip.hidden = !hit;
+    if (!hit) return;
+    const {block} = hit, token = session.getPresentedFrame(slot);
+    const text = `${slot} · ${formatTime(token?.normalizedMediaUs ?? 0)} · PTS\n${block.x}, ${block.y} · ${block.width}×${block.height} · ${predictionLabel(block.mode)} · QP ${block.qp ?? '—'}`;
+    const depth = block.depth === undefined ? '' : ` · ${depthLabel(entry.blockDepth)} ${block.depth}`;
+    const bits = block.bits === undefined ? '' :
+      `\n${t(msg('bitstream.estimatedCodedSize', '估算编码大小'))} · ${block.bits} bit · ${block.bits / 8} B · ${(block.bits / 8192).toFixed(4)} KiB`;
+    const value = text + depth + bits;
+    if (tooltip.textContent !== value) tooltip.textContent = value;
+    const bounds = viewport.getBoundingClientRect(), tip = tooltip.getBoundingClientRect();
+    let x = clientX - bounds.left + 12, y = clientY - bounds.top + 12;
+    if (x + tip.width > bounds.width - 8) x = clientX - bounds.left - tip.width - 12;
+    if (y + tip.height > bounds.height - 8) y = clientY - bounds.top - tip.height - 12;
+    tooltip.style.left = `${Math.max(8, Math.min(x, bounds.width - tip.width - 8))}px`;
+    tooltip.style.top = `${Math.max(8, Math.min(y, bounds.height - tip.height - 8))}px`;
+  }
+
+  for (const [slot, stage] of stages) {
+    stage.addEventListener('pointermove', event => {
+      if (!entries.get(slot)?.enabled || !drawingLayers.get(slot)!.hasAttribute('hidden') ||
+          event.pointerType === 'touch' || event.buttons || (event.target as Element).closest('button,input,select')) {
+        if (hoverPointer?.slot === slot) clearHover();
+        return;
+      }
+      hoverPointer = {slot, x: event.clientX, y: event.clientY};
+      scheduleHover();
+    }, {signal:life.signal});
+    for (const type of ['pointerdown', 'pointerleave', 'pointercancel']) stage.addEventListener(type, () => {
+      if (hoverPointer?.slot === slot) clearHover();
+    }, {signal:life.signal});
+  }
+  window.addEventListener('blur', clearHover, {signal:life.signal});
   const offFrames=session.subscribePresentedFrames(slot=>{
     const entry=entries.get(slot);if(!entry)return;
     entry.message=undefined;if(entry.tooltip)entry.tooltip.hidden=true;
@@ -403,6 +449,6 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   localize();
   return {
     render, localize, setOpen,
-    dispose() { offFrames(); floating.dispose(); life.abort(); opacityChoice.dispose(); for (const slot of SLOTS) destroy(slot); },
+    dispose() { clearHover(); offFrames(); floating.dispose(); life.abort(); opacityChoice.dispose(); for (const slot of SLOTS) destroy(slot); },
   };
 }

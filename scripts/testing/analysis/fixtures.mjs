@@ -25,6 +25,8 @@ export async function prepareAnalysisFixtures(directory, profiles) {
       '-f', 'lavfi', '-i', `color=${color}:size=640x360:rate=5:duration=1`, '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', path.join(directory, `glass-${name}.mp4`),
     ]);
   }
+  if (needs('annexb-order')) ff(['-i', path.join(directory, 'stream.mp4'), '-c:v', 'copy', '-bsf:v', 'h264_mp4toannexb',
+    '-f', 'h264', path.join(directory, 'reordered.h264')]);
   if (needs('queues')) for (const name of ['stream.mp4', 'incremental.mp4', 'stream-2.mp4']) await copyFile(path.join(directory, name), path.join(directory, 'queue-' + name));
   if (needs('index-flv')) for (const action of ['continue', 'cancel']) ff(['-i', path.join(directory, 'incremental.mp4'), '-an', '-c:v', 'copy', '-f', 'flv', path.join(directory, `incremental-${action}.flv`)]);
   const references = [];

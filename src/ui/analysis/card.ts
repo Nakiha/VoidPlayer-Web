@@ -198,6 +198,8 @@ export function installAnalysisCard(canvas: HTMLCanvasElement, options: {
   return { element: cardEl, render: renderFloat, position: positionFloat, managePosition: floating.managePosition, reset: () => { flOrder = []; flTime = null; } };
 }
 
+export const ANALYSIS_CARD_SIDE_GAP = 24;
+
 /** Shared glass surface, removed with its owner and clamped to the visible viewport. */
 export function installFloatingAnalysisCard(canvas: HTMLCanvasElement, signal: AbortSignal, panelBounds?: () => DOMRect, beside = false, avoid?: () => DOMRect | undefined) {
   const layer = document.createElement('div'); layer.className = 'analysis-float-layer'; layer.setAttribute('aria-hidden', 'true');
@@ -216,7 +218,7 @@ export function installFloatingAnalysisCard(canvas: HTMLCanvasElement, signal: A
     element.style.maxHeight = managed ? 'none' : beside ? `min(var(--card-max-height, 180px), ${innerHeight - 16}px)` : `${Math.max(0, innerHeight - top - 8)}px`;
     const width = element.offsetWidth, height = element.offsetHeight;
     const left = Math.max(8, rect.left + 4), right = Math.min(innerWidth - 8, rect.right - 4);
-    const gap = 24;
+    const gap = ANALYSIS_CARD_SIDE_GAP;
     const fitsRight = clientX + gap + width <= innerWidth - 8;
     const x = beside ? fitsRight ? clientX + gap : clientX - width - gap
       : Math.max(left, Math.min(right - width, clientX - width / 2));

@@ -400,6 +400,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | JsPacketFormat,
       getAnalysisCapability(): AnalysisCapability {
         return {
           hasSize: true, hasDts: jsPackets?!!deps.preparedTs?.hasDts:true, keySource: jsPackets?'verified':'container',
+          ...(container === 'annexb' ? { dtsSource:'annex-b-derived' as const } : {}),
           pictureType: 'key-only', qp: 'unsupported',
           indexState: info.indexState ?? 'complete',
           ...(info.indexError ? { indexError: info.indexError } : {}),

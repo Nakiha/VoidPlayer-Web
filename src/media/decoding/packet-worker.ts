@@ -156,11 +156,13 @@ async function start() {
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const complete = engine instanceof FlvEngine || engine instanceof JsContainerEngine ? engine.indexComplete : true;
           const mediaId = message.mediaId ?? '';
+          const annexb = engine instanceof JsContainerEngine && engine.format === 'annexb';
           const data = querier(packets, {
             mediaId, sourceVersion: `${mediaId}@${packets.length}${complete ? '' : '+'}`, indexRevision: packets.length,
             firstPtsUs: message.firstPtsUs ?? 0, durationUs: message.durationUs ?? 0,
             capability: {
-              hasSize: true, hasDts: engine instanceof JsContainerEngine ? packets.some(p=>p.dts!==null) : true, keySource: engine instanceof JsContainerEngine ? 'verified' : 'container',
+              hasSize: true, hasDts: engine instanceof JsContainerEngine ? annexb || packets.some(p=>p.dts!==null) : true, keySource: engine instanceof JsContainerEngine ? 'verified' : 'container',
+              ...(annexb ? { dtsSource:'annex-b-derived' as const } : {}),
               pictureType: 'key-only', qp: 'unsupported',
               indexState: complete ? 'complete' : 'building',
             },

@@ -1255,6 +1255,11 @@
     "source": "解码时间 DTS",
     "translation": "Decode time DTS"
   },
+  "analysis.derivedDts": {
+    "source": "裸码流的解码时间按 AU 顺序和名义帧率推算",
+    "translation": "Elementary stream decode time is derived from AU order and nominal frame rate",
+    "needsReview": false
+  },
   "analysis.diagramBucketDetail": {
     "source": "{start}–{end} · {count} 帧 · {values}",
     "translation": "{start}–{end} · {count} frames · {values}"
@@ -1767,8 +1772,9 @@
     "translation": "Time base"
   },
   "analysis.timeBaseTitle": {
-    "source": "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图",
-    "translation": "PTS is presentation time, DTS is decode time; tracks without reliable DTS do not support the DTS view"
+    "source": "PTS 为展示时间，DTS 为解码时间。裸码流的 DTS 按解码顺序推算。",
+    "translation": "PTS is presentation time and DTS is decode time. For elementary streams, DTS is derived from decode order.",
+    "needsReview": false
   },
   "analysis.tools": {
     "source": "分析选项",

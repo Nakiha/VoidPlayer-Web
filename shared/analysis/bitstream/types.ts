@@ -20,6 +20,7 @@ export interface AnalysisPacket {
   configuration: number;
   pts: number;
   dts: number | null;
+  derivedDts?: number;
   offset: number;
   size: number;
   key: boolean;

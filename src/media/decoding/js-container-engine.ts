@@ -1,3 +1,4 @@
+import { annexBTime } from '../../../shared/media/indexing/annex-b-index.ts';
 import { hasLightPlaybackCadence, preparePacketThreads } from '../policy/packet-threads.ts';
 import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { RangeReader, type RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
@@ -117,9 +118,11 @@ export class JsContainerEngine {
     }
   }
 
-  private updateStatistics(index: Pick<JsPacketIndex,'packets'>) {
+  private updateStatistics(index: JsPacketIndex | Pick<JsPacketIndex, 'packets'>) {
+    const frameRate = 'kind' in index && index.kind === 'js-annexb-packets' ? index.frameRate : null;
     this.statistics = {packets: index.packets.map(packet=>({pts:packet.timing.pts===null&&this.format!=='annexb'?null:packet.ptsUs,
-      dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6*packet.timing.timebase[0]/packet.timing.timebase[1]),size:packet.size,key:packet.key}))};
+      dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6*packet.timing.timebase[0]/packet.timing.timebase[1]),
+      ...(frameRate === null ? {} : {originalPts:null, derivedDts:annexBTime(packet.au, frameRate)}), size:packet.size,key:packet.key}))};
   }
 
   private timing() {

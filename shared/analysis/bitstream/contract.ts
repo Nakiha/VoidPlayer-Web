@@ -1,3 +1,4 @@
+import { ANNEX_B_PACKET_BUILD } from '../../media/indexing/annex-b-index.ts';
 import { isPredictionProduct } from './predictions.ts';
 import { parseMediaIndexIdentity } from "../../media/indexing/media-index-identity.ts";
 import { validateDiagram, validateContainerHeader } from "./diagram-validation.ts";
@@ -101,6 +102,8 @@ export interface AnalysisResult {
   sourcePtsUs: number;
   /** Source packet DTS; optional for older cached results, never inferred from PTS. */
   sourceDtsUs?: number | null;
+  /** Annex-B decode-order coordinate derived from nominal frame rate. */
+  derivedDtsUs?: number;
   width: number;
   height: number;
   confidence: "exact" | "partial";
@@ -249,6 +252,10 @@ export function validateMetadata(result: Omit<AnalysisResult, "blocks">): void {
     normalizedMediaUs: 0,
     picture: result.picture,
   });
+  if (result.derivedDtsUs !== undefined &&
+      (!Number.isSafeInteger(result.derivedDtsUs) || result.derivedDtsUs < 0 || result.sourceDtsUs != null ||
+        !result.picture.stream.endsWith(`@${ANNEX_B_PACKET_BUILD}`)))
+    throw new Error('Invalid derived decode time');
   if (result.blockDepth !== undefined && (result.confidence !== 'exact' ||
       !(result.blockDepth === 'hevc-cu' && result.codec === 'hevc' || result.blockDepth === 'vvc-qt' && result.codec === 'vvc')))
     throw new Error('Invalid block depth semantics');

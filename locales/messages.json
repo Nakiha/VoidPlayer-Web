@@ -1380,6 +1380,10 @@
     "source": "解码时间 DTS",
     "params": {}
   },
+  "analysis.derivedDts": {
+    "source": "裸码流的解码时间按 AU 顺序和名义帧率推算",
+    "params": {}
+  },
   "analysis.diagramBucketDetail": {
     "source": "{start}–{end} · {count} 帧 · {values}",
     "params": {
@@ -1957,7 +1961,7 @@
     "params": {}
   },
   "analysis.timeBaseTitle": {
-    "source": "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图",
+    "source": "PTS 为展示时间，DTS 为解码时间。裸码流的 DTS 按解码顺序推算。",
     "params": {}
   },
   "analysis.tools": {

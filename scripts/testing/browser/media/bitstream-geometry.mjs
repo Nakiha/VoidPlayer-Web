@@ -19,9 +19,13 @@ ff(['-f', 'lavfi', '-i', 'color=black:size=64x64:rate=5:duration=1', '-vf', 'dra
 ff(['-i', path.join(directory, 'rgb-encoded.mp4'), '-c', 'copy', path.join(directory, 'rgb-0.mp4')]);
 for (const rotation of [90, 270])
     ff(['-display_rotation', String(-rotation), '-i', path.join(directory, 'rgb-0.mp4'), '-c', 'copy', path.join(directory, `rgb-${rotation}.mp4`)]);
+for (const [width, height] of [[128, 96], [64, 48]]) ff([
+    '-f', 'lavfi', '-i', `color=gray:size=${width}x${height}:rate=5:duration=1`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+    '-x264-params', 'bframes=0:keyint=5', path.join(directory, `hover-${width}.mp4`),
+]);
 await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: engine==='chromium'?1200000:300000, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
     await ready();
-    await page.addStyleTag({content:'.geometry-raw-capture .video-card:has(#stage-A){clip-path:none!important}.geometry-raw-capture .video-card:not(:has(#stage-A)),.geometry-raw-capture #bitstream-overlay-A,.geometry-raw-capture #divider,.geometry-raw-capture .analysis-card{visibility:hidden!important}'});
+    await page.addStyleTag({content:'.geometry-raw-capture .video-card:has(#stage-A){clip-path:none!important}.geometry-raw-capture .video-card:not(:has(#stage-A)),.geometry-raw-capture #bitstream-overlay-A,.geometry-raw-capture #bitstream-hover-A,.geometry-raw-capture #divider,.geometry-raw-capture .analysis-card{visibility:hidden!important}'});
     if (await page.locator('#identity-welcome').isVisible())
         await page.locator('#identity-welcome [data-guest]').click();
     const call = (name, params = {}) => page.evaluate(async ({ name, params }) => window.voidPlayer.tools.find(t => t.name === name).execute(params), { name, params });
@@ -116,6 +120,13 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
                             await tooltip.waitFor({ state: 'visible' });
                             const block = result.blocks.find(b => b.x <= 31 && b.x + b.width > 31 && b.y <= 28 && b.y + b.height > 28);
                             await page.waitForFunction(expected => [...document.querySelectorAll('.bitstream-hit-tooltip')].some(e => !e.hidden && e.textContent.includes(expected)), `${block.x}, ${block.y} · ${block.width}×${block.height}`);
+                            const edge = page.locator('#bitstream-hover-A .analysis-picture-hover-edge');
+                            await edge.waitFor({state:'visible'});
+                            const bounds = await edge.boundingBox();
+                            assert.ok(pixels.hit.x >= bounds.x && pixels.hit.x <= bounds.x + bounds.width &&
+                                pixels.hit.y >= bounds.y && pixels.hit.y <= bounds.y + bounds.height, 'rotated block outline encloses the hover point');
+                            await page.locator('#stage-A').dispatchEvent('pointerleave');
+                            await edge.waitFor({state:'hidden'});
                         }
                         if (mode === 'split' && zoom === 8) {
                             const colors = [];
@@ -179,6 +190,88 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: en
         assert.ok(Math.abs(pixels.aspect - (rotation ? .5 : 2)) < .01);
         rows.push({ input: 'local', decoding: 'software-rgba', rotation, token, pixels });
     }
+    await call('remove_review_track', {slot:'A'});
+    await call('remove_review_track', {slot:'B'});
+    await call('set_review_color_mode', {mode:'reference'});
+    await call('set_reference_decode', {decoder:'software', depth:2});
+    await page.evaluate(() => window.voidPlayer.setViewport({mode:'side-by-side', arrangement:'horizontal', pixelSize:'uniform', zoom:1, offsetX:0, offsetY:0}));
+    const analyses = {};
+    for (const [slot, width] of [['A', 128], ['B', 64]]) {
+        const name = `hover-${width}.mp4`;
+        if (slot === 'A') await page.locator('#file-A').setInputFiles(path.join(directory, name));
+        else await call('load_library_item', {slot, id: library.entries.find(e => e.name === name).id});
+        await page.waitForFunction(slot => {
+            const state = window.voidPlayer.getState();
+            return !state.busy && state.tracks.some(t => t.slot === slot && t.frame && !t.failure);
+        }, slot);
+        analyses[slot] = await call('request_bitstream_analysis', {slot});
+        assert.equal(analyses[slot].confidence, 'exact');
+        if (!await page.locator('#analysis-overlay-panel').isVisible()) await page.locator('#toggle-analysis-overlay').click();
+        const toggle = page.locator(`#bitstream-tracks [data-slot="${slot}"]`);
+        if (await toggle.getAttribute('aria-pressed') !== 'true') await toggle.click();
+        await page.locator(`#bitstream-overlay-${slot}`).waitFor({state:'visible'});
+    }
+    const boundaries = page.locator('#bitstream-boundaries'), stage = page.locator('#stage-A');
+    if (await boundaries.getAttribute('aria-pressed') !== 'true') await boundaries.click();
+    const image = slot => page.locator(`#image-${slot}`).boundingBox();
+    const edge = slot => page.locator(`#bitstream-hover-${slot} .analysis-picture-hover-edge`);
+    const draws = () => page.locator('.analysis-picture-overlay:visible').evaluateAll(canvases => canvases.map(c => c.analysisMetrics.draws));
+    const imageA = await image('A');
+    const point = {clientX:imageA.x + imageA.width * 88 / 128, clientY:imageA.y + imageA.height * 53 / 96};
+    const initialDraws = await draws();
+    await stage.dispatchEvent('pointermove', point);
+    await edge('A').waitFor({state:'visible'});
+    await edge('B').waitFor({state:'visible'});
+    assert.deepEqual(await draws(), initialDraws, 'hover does not repaint the block grid');
+    const pickPeer = async () => {
+        const a = await image('A'), b = await image('B'), peer = analyses.B;
+        const x = (point.clientX - a.x - a.width / 2 + b.width / 2) * peer.width / b.width;
+        const y = (point.clientY - a.y - a.height / 2 + b.height / 2) * peer.height / b.height;
+        return {b, peer, block:peer.blocks.find(block => x >= block.x && x < block.x + block.width &&
+            y >= block.y && y < block.y + block.height)};
+    };
+    async function verifyPeer() {
+        const {b, peer, block} = await pickPeer();
+        assert.ok(block, 'the corresponding point hits a block on the smaller track');
+        const expected = { x: b.x + block.x / peer.width * b.width, y: b.y + block.y / peer.height * b.height,
+            width: block.width / peer.width * b.width, height: block.height / peer.height * b.height };
+        await edge('B').evaluate((element, rect) => new Promise((resolve, reject) => {
+            let remaining = 45;
+            const check = () => {
+                const box = element.getBoundingClientRect();
+                if (Object.keys(rect).every(key => Math.abs(rect[key] - box[key]) < 1)) resolve();
+                else if (--remaining) requestAnimationFrame(check);
+                else reject(Error(`Peer outline ${JSON.stringify(box)} expected ${JSON.stringify(rect)}`));
+            };
+            check();
+        }), expected);
+        return block;
+    }
+    const uniform = await verifyPeer();
+    await page.evaluate(() => window.voidPlayer.setViewport({pixelSize:'fill'}));
+    await page.waitForFunction(() => {
+        const a = document.querySelector('#image-A').getBoundingClientRect();
+        const b = document.querySelector('#image-B').getBoundingClientRect();
+        return Math.abs(a.width - b.width) < 1;
+    });
+    const fill = await verifyPeer();
+    assert.notEqual(fill.x, uniform.x, 'changing pixel size updates the peer block with a stationary pointer');
+    await page.evaluate(() => window.voidPlayer.setViewport({pixelSize:'uniform'}));
+    await stage.dispatchEvent('pointermove', {clientX:imageA.x + imageA.width * .88, clientY:point.clientY});
+    await edge('A').waitFor({state:'visible'});
+    await edge('B').waitFor({state:'hidden'});
+    await stage.dispatchEvent('pointermove', point);
+    await edge('B').waitFor({state:'visible'});
+    await boundaries.evaluate(button => button.click());
+    await edge('A').waitFor({state:'hidden'});
+    await edge('B').waitFor({state:'hidden'});
+    assert.equal(await page.locator('.bitstream-hit-tooltip:visible').count(), 1, 'turning off boundaries keeps the active-track tooltip');
+    await boundaries.evaluate(button => button.click());
+    await edge('B').waitFor({state:'visible'});
+    await stage.dispatchEvent('pointerleave');
+    await edge('A').waitFor({state:'hidden'});
+    await edge('B').waitFor({state:'hidden'});
+    rows.push({input:'local-and-library', kind:'linked-hover', uniform, fill});
     await writeFile(artifact('geometry.json'), JSON.stringify(rows, null, 2));
-    console.log(`PASS ${engine}: 12 analysis combinations × 4 viewports and 3 RGBA fallback rotations`);
+    console.log(`PASS ${engine}: 12 analysis combinations × 4 viewports, linked hover across pixel modes, and 3 RGBA fallback rotations`);
 });

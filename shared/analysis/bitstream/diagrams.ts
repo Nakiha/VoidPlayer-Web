@@ -11,7 +11,7 @@ export interface PictureReferences {
   kind: 'active-lists'; state: 'ready' | 'unsupported'; poc: number;
   frameType: 'I' | 'P' | 'B'; edges: { au: number; list: 0 | 1 }[];
 }
-export type DiagramPicture = Pick<AnalysisResult, 'picture' | 'sourcePtsUs' | 'sourceDtsUs' | 'codec' | 'gop'> & {
+export type DiagramPicture = Pick<AnalysisResult, 'picture' | 'sourcePtsUs' | 'sourceDtsUs' | 'derivedDtsUs' | 'codec' | 'gop'> & {
   qpMean?: number | null; nalus: NaluRecord[]; references?: PictureReferences; referenceLayer?: ReferenceLayer;
 };
 export interface ReferenceLayer { level: number; source: 'temporal-id' | 'inferred'; provisional?: boolean }
@@ -88,7 +88,7 @@ interface DiagramSummary {
   containerHeaders: Map<number, ContainerHeader>;
 }
 const emptyAxisSummary = (): DiagramAxisSummary => ({ width: 1000, count: 0, seen: new Uint8Array(250001), qpSeen: new Uint8Array(250001), bins: new Map(), min: Infinity, max: -Infinity });
-export const diagramTime = (picture: DiagramPicture, axis: AnalysisAxis): number | null => axis === 'pts' ? picture.sourcePtsUs : picture.sourceDtsUs ?? null;
+export const diagramTime = (picture: DiagramPicture, axis: AnalysisAxis): number | null => axis === 'pts' ? picture.sourcePtsUs : picture.sourceDtsUs ?? picture.derivedDtsUs ?? null;
 const emptyBucket = (startUs: number, endUs: number): DiagramBucket => ({ startUs, endUs, pictures: 0,
   naluBytes: Array(64).fill(0), naluCounts: Array(64).fill(0), qpSum: 0, qpCount: 0, maxPictureBytes: 0, frames: { I: 0, P: 0, B: 0 }, references: 0 });
 function mergeBucket(target: DiagramBucket, input: DiagramBucket) {
@@ -98,7 +98,7 @@ function mergeBucket(target: DiagramBucket, input: DiagramBucket) {
   for (const type of ['I', 'P', 'B'] as const) target.frames[type] += input.frames[type];
   for (let i = 0; i < 64; i++) { target.naluBytes[i] += input.naluBytes[i]; target.naluCounts[i] += input.naluCounts[i]; }
 }
-function diagramProjection(value:DiagramPicture):DiagramPicture { return {picture:value.picture,sourcePtsUs:value.sourcePtsUs,sourceDtsUs:value.sourceDtsUs,codec:value.codec,gop:value.gop,qpMean:value.qpMean,nalus:value.nalus,references:value.references,...('referenceLayer' in value?{referenceLayer:value.referenceLayer}:{})}; }
+function diagramProjection(value:DiagramPicture):DiagramPicture { return {picture:value.picture,sourcePtsUs:value.sourcePtsUs,sourceDtsUs:value.sourceDtsUs,...(value.derivedDtsUs===undefined?{}:{derivedDtsUs:value.derivedDtsUs}),codec:value.codec,gop:value.gop,qpMean:value.qpMean,nalus:value.nalus,references:value.references,...('referenceLayer' in value?{referenceLayer:value.referenceLayer}:{})}; }
 /** Retain lightweight chart records independently of the block LRU. Entries
  * are source/config/AU owned; bounded queries never clone a whole film. */
 export class DiagramStore {

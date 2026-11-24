@@ -32,7 +32,7 @@ export async function admitJsContainerMedia(format:JsPacketFormat,input:RandomAc
       if(consumed)throw new Error('JS TS admission was already consumed');
       consumed=true;
       try{return await openPacketMedia(format,input,meta,{...deps,forceWasm,sourceVersion:prepared.index.sourceVersion,
-        preparedTs:{rpc,session:prepared.session,hasDts:prepared.index.packets.some(p=>p.timing.dts!==null)}});}
+        preparedTs:{rpc,session:prepared.session,hasDts:prepared.index.kind === 'js-annexb-packets' || prepared.index.packets.some(p=>p.timing.dts!==null)}});}
       catch(error){rpc.terminate();throw error;}
     }};
   } catch(error){rpc.terminate();throw error;}

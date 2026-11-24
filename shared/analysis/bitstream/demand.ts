@@ -1,3 +1,4 @@
+import { packetDts } from '../metadata/adapters.ts';
 import {analysisIndexIdentity} from './products.ts';
 import type {ProductIndexIdentity} from './products.ts';
 import { groupAnalysisGops, viewportAnalysisGops } from './stream.ts';
@@ -19,7 +20,12 @@ export function makeDemandPlan(packets:readonly AnalysisPacket[],target:Analysis
   const plan:DemandPlan={sourceVersion:target.sourceVersion,buildId,indexIdentity:analysisIndexIdentity(target.indexIdentity),firstPtsUs:target.firstPtsUs,selected,times:[],groups:[]};
   for(const group of groups) {
     let ptsMin=Infinity,ptsMax=-Infinity,dtsMin=Infinity,dtsMax=-Infinity;
-    for(let au=group.startAu;au<group.endAu;au++) {const p=packets[au];ptsMin=Math.min(ptsMin,p.pts);ptsMax=Math.max(ptsMax,p.pts);if(p.dts!==null){dtsMin=Math.min(dtsMin,p.dts);dtsMax=Math.max(dtsMax,p.dts);}if(set.has(group.startAu))plan.times.push([au,p.pts,p.dts]);}
+    for (let au = group.startAu; au < group.endAu; au++) {
+      const p = packets[au], dts = packetDts(p);
+      ptsMin = Math.min(ptsMin, p.pts); ptsMax = Math.max(ptsMax, p.pts);
+      if (dts !== null) { dtsMin = Math.min(dtsMin, dts); dtsMax = Math.max(dtsMax, dts); }
+      if (set.has(group.startAu)) plan.times.push([au, p.pts, dts]);
+    }
     plan.groups.push({...group,ptsMin,ptsMax,dtsMin:Number.isFinite(dtsMin)?dtsMin:null,dtsMax:Number.isFinite(dtsMax)?dtsMax:null});
   }
   if(JSON.stringify(plan).length>256*1024)return null;

@@ -1,7 +1,7 @@
 import type {AnalysisResources} from '../../../shared/service/admin.ts';
 import {validateDemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
 import type {DemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
-import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, SUMMARY_BATCH_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
+import { analysisClockKey, analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, SUMMARY_BATCH_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
 import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, isJsPacketIndexKind } from '../../../shared/media/indexing/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
@@ -258,6 +258,7 @@ export class AnalysisScheduler {
               ? pictureId(target.picture)
               : target.sourcePtsUs,
           ANALYSIS_RECIPE,
+          ...analysisClockKey(target.indexIdentity),
           ANALYZER_VERSION,
           buildId,
         ]),
@@ -462,7 +463,7 @@ export class AnalysisScheduler {
       const member = work.target.product === 'summary' ? {...picture,au:Math.floor(picture.au/32)*32} : picture;
       return createHash('sha256').update(productKey(member,work.buildId,work.target.indexIdentity ?? null,work.target.product)).digest('hex');
     }
-    return createHash('sha256').update(JSON.stringify([work.target.sourceVersion,...(work.target.indexIdentity?[work.target.indexIdentity]:[]),pictureId(picture),ANALYSIS_RECIPE,ANALYZER_VERSION,work.buildId])).digest('hex');
+    return createHash('sha256').update(JSON.stringify([work.target.sourceVersion,...(work.target.indexIdentity?[work.target.indexIdentity]:[]),pictureId(picture),ANALYSIS_RECIPE,...analysisClockKey(work.target.indexIdentity),ANALYZER_VERSION,work.buildId])).digest('hex');
   }
   release(id: string, owner?: string) {
     const c = this.consumers.get(id);

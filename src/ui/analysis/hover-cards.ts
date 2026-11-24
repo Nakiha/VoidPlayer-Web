@@ -7,7 +7,7 @@ import type { CanvasModel } from './canvas.ts';
 import { layoutAnalysisCards } from './geometry.ts';
 import { chartHoverStyle, CHART_HOVER_STYLE_EVENT } from '../chart-hover-style.ts';
 import type { BitstreamDiagram, installBitstreamDiagrams } from './bitstream-diagrams.ts';
-import { analysisTrackBadge, installAnalysisCard, installFloatingAnalysisCard } from './card.ts';
+import { ANALYSIS_CARD_SIDE_GAP, analysisTrackBadge, installAnalysisCard, installFloatingAnalysisCard } from './card.ts';
 import type { ChartHover } from './shared.ts';
 
 export interface DeepDiagramEntry {
@@ -56,7 +56,7 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
   } = deps;
 
   // 悬浮卡片挂在 body 顶层（fixed），彻底脱离分析面板的 overflow 裁剪；
-  // abort 时移除，平时 pointer-events:none 不拦截输入。
+  // 层本身透明于输入，只有卡片接收指针。
   const card = installAnalysisCard(canvas, {
     signal, colors: slotColors, pinned, visibleRows,
     qpValue: (slot, time) => qpAt(slot, time), avoid,
@@ -91,7 +91,8 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
       if (signal.aborted || !element.isConnected || frameNumbers.get(slot) !== entry) return;
       const before = element.textContent;
       update();
-      if (element.textContent !== before) card.position(lastClientX() ?? canvas.getBoundingClientRect().left + fracToPx(timeUs));
+      if (element.textContent !== before && !holdingCard())
+        card.position(pointerX ?? canvas.getBoundingClientRect().left + fracToPx(timeUs));
     });
   }
   type CardGroup = 'overview' | `nalu:${Slot}` | `references:${Slot}`;
@@ -99,6 +100,7 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
   individualLayer.setAttribute('aria-hidden', 'true'); document.body.append(individualLayer);
   signal.addEventListener('abort', () => individualLayer.remove(), { once: true });
   const individualCards = new Map<CardGroup, { element: HTMLElement; position(x: number, y?: number): void; managePosition(parent: HTMLElement): void }>();
+  const individualAnchors = new WeakMap<HTMLElement, number>();
 
   function cardGroupBounds(group: CardGroup): DOMRect | undefined {
     if (group === 'overview') {
@@ -122,14 +124,50 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
   overviewCard.managePosition(individualLayer);
   individualCards.set('overview', overviewCard);
 
-  function retainCardLeave(element: HTMLElement) {
+  const cards = () => [cardEl, ...Array.from(individualCards.values(), card => card.element)];
+  function hoverCardsContain(node: EventTarget | null) {
+    return node instanceof Node && cards().some(card => card.contains(node));
+  }
+  function inGap({clientX: x, clientY: y}: PointerEvent) {
+    if (!sharedHover()) return false;
+    const surface = section.getBoundingClientRect();
+    // Hit testing may leave a bordered element before its fractional box edge.
+    const between = (value: number, start: number, end: number) => start <= end && value >= start - 1 && value <= end + 1;
+    return cards().some(card => {
+      if (card.hidden) return false;
+      const box = card.getBoundingClientRect();
+      const overlapsX = between(x, Math.max(surface.left, box.left), Math.min(surface.right, box.right));
+      const overlapsY = between(y, Math.max(surface.top, box.top), Math.min(surface.bottom, box.bottom));
+      return (overlapsX && (between(y, surface.bottom, box.top) || between(y, box.bottom, surface.top))) ||
+        (overlapsY && (between(x, surface.right, box.left) || between(x, box.right, surface.left)));
+    });
+  }
+  function inSurface(node: EventTarget | null) {
+    return node instanceof Node && (section.contains(node) || hoverCardsContain(node));
+  }
+  let crossing = false, hoveredCard: HTMLElement | null = null, pointerX: number | null = null;
+  const holdingCard = () => crossing || (hoveredCard !== null && !hoveredCard.hidden);
+  function watchCard(element: HTMLElement) {
+    element.addEventListener('pointerenter', () => { hoveredCard = element; }, { signal });
     element.addEventListener('pointerleave', event => {
-      if (!(event.relatedTarget instanceof Node) || (!charts.contains(event.relatedTarget) && !hoverCardsContain(event.relatedTarget))) clearSharedHover();
+      if (hoveredCard === element) hoveredCard = null;
+      leaveInspection(event);
     }, { signal });
   }
-  for (const { element } of individualCards.values()) retainCardLeave(element);
+  function leaveInspection(event: PointerEvent) {
+    const staysInside = inSurface(event.relatedTarget);
+    crossing = !staysInside && inGap(event);
+    if (!crossing && !staysInside) clearSharedHover();
+  }
+  section.addEventListener('pointerleave', leaveInspection, { signal });
+  document.addEventListener('pointermove', event => {
+    if (!crossing) return;
+    if (inSurface(event.target)) crossing = false;
+    else if (!inGap(event)) { crossing = false; clearSharedHover(); }
+  }, { signal });
+  window.addEventListener('blur', clearSharedHover, { signal });
+  for (const element of cards()) watchCard(element);
   function hideIndividualCards() { for (const { element } of individualCards.values()) element.hidden = true; }
-  function hoverCardsContain(node: Node) { return cardEl.contains(node) || [...individualCards.values()].some(c => c.element.contains(node)); }
   function cardText() { return cardEl.hidden ? [...individualCards.values()].filter(c => !c.element.hidden).map(c => c.element.textContent).join(' · ') : cardEl.textContent ?? ''; }
   function visibleCard() { return cardEl.hidden ? [...individualCards.values()].find(c => !c.element.hidden)?.element : cardEl; }
 
@@ -137,9 +175,9 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
     return [...deepPanels()].filter(entry => entry.mode !== 'nalu-types' || !deepFor('nalu-size', entry.slot));
   }
 
-  function positionIndividualCards() {
+  function positionIndividualCards(clientX = pointerX) {
     const hover = sharedHover();
-    if (!hover || chartHoverStyle() !== 'separate') return;
+    if (holdingCard() || !hover || chartHoverStyle() !== 'separate') return;
     const clip = charts.getBoundingClientRect();
     const pending: { card: { element: HTMLElement; position(x: number, y?: number): void }; x: number; height: number; preferredTop: number; order: number; top: number; bottom: number; centerY: number }[] = [];
     const widths = new Map<string, number>();
@@ -152,7 +190,16 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
       if (bottom - top < 24) { c.element.hidden = true; continue; }
       const time = mode === 'overview' ? hoverUs() ?? hover.timeUs : hover.cursorTimeUs ?? hover.timeUs;
       const geometry = plotGeometry(rect.width);
-      const range = viewRange(), x = rect.left + geometry.gutter + (time - range.start) / Math.max(1, range.end - range.start) * geometry.plotW;
+      const range = viewRange();
+      let x = rect.left + geometry.gutter + (time - range.start) / Math.max(1, range.end - range.start) * geometry.plotW;
+      const anchor = individualAnchors.get(c.element);
+      // Keep the card within reach while the pointer crosses the space beside it.
+      if (!c.element.hidden && anchor !== undefined && clientX !== null && pointerY !== null && Math.abs(clientX - anchor) <= ANALYSIS_CARD_SIDE_GAP) {
+        const box = c.element.getBoundingClientRect();
+        if (pointerY >= box.top && pointerY <= box.bottom &&
+            (clientX >= anchor && clientX < box.left || clientX <= anchor && clientX > box.right)) x = anchor;
+      }
+      individualAnchors.set(c.element, x);
       c.element.hidden = false;
       c.element.style.width = '';
       c.position(x, 0);
@@ -178,7 +225,11 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
     for (const [i, item] of pending.entries()) item.card.position(item.x, layout.tops[i] - 8);
   }
 
-  const positionFloat = (x: number) => chartHoverStyle() === 'separate' ? positionIndividualCards() : card.position(x);
+  function positionFloat(x: number) {
+    if (holdingCard()) return;
+    if (chartHoverStyle() === 'separate') positionIndividualCards(x);
+    else card.position(x);
+  }
 
   /** 区间编辑器开合或移动后重算卡片避让：与视口两个拖拽面板同一契约。 */
   function refreshCardAvoidance() {
@@ -186,7 +237,7 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
     positionFloat(x);
   }
 
-  function renderIndividual(snapshot: InspectionState) {
+  function renderIndividual(snapshot: InspectionState, x: number | null) {
     const hover = sharedHover()!;
     const activeDiagrams = diagrams();
     cardEl.hidden = true;
@@ -199,16 +250,18 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
         floating = installFloatingAnalysisCard(host.querySelector('canvas')!, signal, () => cardGroupBounds(group) ?? host.getBoundingClientRect(), true, avoid);
         floating.element.classList.add('analysis-view-card'); floating.element.dataset.diagram = kind; floating.element.dataset.slot = slot;
         floating.managePosition(individualLayer);
-        individualCards.set(group, floating); retainCardLeave(floating.element);
+        individualCards.set(group, floating); watchCard(floating.element);
       }
       floating.element.replaceChildren(panel.details(trackHover(slot, hover, snapshot), { size: activeDiagrams.has('nalu-size'), types: activeDiagrams.has('nalu-types') }).element);
       floating.element.dataset.hoverTime = String(hover.timeUs);
     }
-    positionIndividualCards();
+    positionIndividualCards(x);
   }
 
   function renderCombined(snapshot: InspectionState, x: number | null) {
-    if (chartHoverStyle() === 'separate') { renderIndividual(snapshot); return; }
+    if (holdingCard()) return;
+    pointerX = x;
+    if (chartHoverStyle() === 'separate') { renderIndividual(snapshot, x); return; }
     hideIndividualCards();
     const hover = sharedHover()!;
     const activeDiagrams = diagrams();
@@ -266,20 +319,15 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
     const active = activeInspection();
     if (sharedHover() && active) renderCombined(active, lastClientX());
   }, { signal });
-  charts.addEventListener('scroll', positionIndividualCards, { signal, capture: true });
-  charts.addEventListener('pointerleave', event => {
-    if (!(event.relatedTarget instanceof Node) || !hoverCardsContain(event.relatedTarget)) clearSharedHover();
-  }, { signal });
-  cardEl.addEventListener('pointerleave', event => {
-    if (!(event.relatedTarget instanceof Node) || !charts.contains(event.relatedTarget)) clearSharedHover();
-  }, { signal });
-  charts.addEventListener('keydown', event => { if (event.key === 'Escape' && !pinned()) clearSharedHover(); }, { signal });
+  charts.addEventListener('scroll', () => positionIndividualCards(), { signal, capture: true });
+  section.addEventListener('keydown', event => { if (event.key === 'Escape' && !pinned()) clearSharedHover(); }, { signal });
 
   return {
     cardEl,
     reset: () => { frameNumbers.clear(); card.reset(); },
-    hideAll: () => { cardEl.hidden = true; hideIndividualCards(); },
+    hideAll: () => { crossing = false; hoveredCard = null; pointerX = null; cardEl.hidden = true; hideIndividualCards(); },
     contains: hoverCardsContain,
+    inGap,
     text: cardText,
     visibleCard,
     positionIndividual: positionIndividualCards,

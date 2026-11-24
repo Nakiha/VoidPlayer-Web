@@ -8,7 +8,7 @@ export const projectToSession = (normalizedMediaUs: number, offsetUs: number): n
 
 /** 轴取值；缺失轴的样本不进入该轴索引（不伪造）。 */
 export function axisOf(sample: AnalysisSample, axis: 'pts' | 'dts'): number | null {
-  return axis === 'pts' ? sample.effectivePtsUs : sample.dtsUs;
+  return axis === 'pts' ? sample.effectivePtsUs : sample.dtsUs ?? sample.derivedDtsUs ?? null;
 }
 
 /**

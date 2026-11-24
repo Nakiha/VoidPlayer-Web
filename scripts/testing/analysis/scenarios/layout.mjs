@@ -9,9 +9,44 @@ import { settleAppearance } from '../../browser-contracts.mjs';
 export async function run(context) {
 const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, call, openAnalysis, hideOverlay, setMode, stable, library } = context;
 
+      if (!overlayOnly) for (const input of ['local-file', 'library']) await context.stage(`annexb-dts-${input}`, async () => {
+        const name = 'reordered.h264';
+        if (input === 'local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir, name));
+        else await call('load_library_item', {slot:'A', id:library.entries.find(e => e.name === name).id});
+        await stable();
+        await selectDiagrams(page, 'overview');
+        const dts = page.locator('#analysis-axis [data-axis="dts"]'), pts = page.locator('#analysis-axis [data-axis="pts"]');
+        await dts.click();
+        assert.equal(await dts.getAttribute('aria-pressed'), 'true');
+        assert.equal(await dts.textContent(), 'DTS ≈');
+        const query = {slot:'A', startUs:0, endUs:4_000_000};
+        const decode = await call('query_analysis', {...query, axis:'dts'});
+        const display = await call('query_analysis', {...query, axis:'pts'});
+        assert.equal(decode.capability.dtsSource, 'annex-b-derived');
+        assert.equal(decode.samples.length, 120);
+        assert.deepEqual(decode.samples.map(sample => sample.decodeOrdinal), Array.from({length:120}, (_, au) => au));
+        assert.ok(decode.samples.every((sample, au) => sample.dtsUs === null && sample.derivedDtsUs === Math.round(au * 1e6 / 30)));
+        assert.ok(display.samples.some((sample, rank) => sample.decodeOrdinal !== rank), 'B frames reorder presentation');
+        const before = await call('get_presented_frame', {slot:'A'});
+        await selectDiagrams(page, 'nalu-size');
+        await page.waitForFunction(() => {
+          const chart = document.querySelector('#bitstream-diagram-nalu-size');
+          return chart?.dataset.axis === 'dts' && Number(chart.dataset.renderedNalus) > 0;
+        });
+        const chart = await call('query_bitstream_chart', {...query, axis:'dts'});
+        assert.ok(chart.pictures.length);
+        assert.ok(chart.pictures.every(p => p.sourceDtsUs === null && p.derivedDtsUs === Math.round(p.picture.au * 1e6 / 30)));
+        await pts.click();
+        await page.waitForFunction(() => document.querySelector('#bitstream-diagram-nalu-size')?.dataset.axis === 'pts');
+        assert.deepEqual(await call('get_presented_frame', {slot:'A'}), before);
+        rows.push({kind:'annexb-dts', input, samples:decode.samples.length, pictures:chart.pictures.length});
+        await selectDiagrams(page, 'overview');
+        await call('remove_review_track', {slot:'A'});
+      });
+
       for (const input of ['local-file', 'library']) await context.stage(`layout-${input}`, async () => {
         console.log(`${engine}: overlay and opt-in analysis ${input}`);
-        if (await page.locator('#analysis-diagrams').count()) await selectDiagrams(page, 'overview');
+        if (await page.locator('#analysis-panel').isVisible()) await selectDiagrams(page, 'overview');
         for (const slot of ['A', 'B']) {
           await call('remove_review_track', { slot });
           const name = slot === 'A' ? 'stream.mp4' : 'stream-2.mp4';
@@ -27,6 +62,73 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.deepEqual((await call('get_uri_state')).layout.analysisView.loadMetrics, ['bitrate']);
         assert.ok(!requests.slice(beforeOverview).some(r => /voidplayer-analysis|local-worker|bitstream-analysis/.test(r.url)), 'opening the lightweight overview starts no deep analysis');
         for (const slot of ['A', 'B']) assert.equal((await call('get_bitstream_analysis_state', {slot})).state, 'idle');
+        if (input === 'local-file' && !overlayOnly) await context.stage('analysis-hover-surface', async () => {
+          const combined = page.locator('.analysis-linked-card');
+          const graph = page.locator('#analysis-canvas');
+          const panel = page.locator('#analysis-panel');
+          const timeline = page.locator('#analysis-shared-axis');
+          const before = await call('get_presented_frame', {slot:'A'});
+          await settleAppearance(page);
+          const [first, second] = await page.locator('#analysis-diagrams button').evaluateAll(buttons =>
+            buttons.slice(0, 2).map(button => button.getBoundingClientRect().toJSON()));
+          await page.mouse.move((first.right + second.left) / 2, first.y + first.height / 2);
+          await combined.waitFor({state:'visible'});
+          const plotTime = await graph.getAttribute('data-hover-cursor-time');
+          await page.locator('#analysis-diagrams [data-value="references"]').hover();
+          await page.waitForFunction(time => document.querySelector('#analysis-canvas').dataset.hoverCursorTime !== time, plotTime);
+          assert.ok(await combined.isVisible(), 'icon-only controls still allow chart inspection');
+          await page.locator('#analysis-axis [data-axis="pts"]').hover();
+          await combined.waitFor({state:'hidden'});
+          const [surface, axis] = await Promise.all([panel.boundingBox(), timeline.boundingBox()]);
+          const x = axis.x + axis.width / 2;
+          await page.mouse.move(x, axis.y + axis.height / 2);
+          await combined.waitFor({state:'visible'});
+          const box = await combined.boundingBox();
+          assert.ok(box.y > surface.y + surface.height, 'combined card has a real gap below the panel');
+          const time = await combined.getAttribute('data-hover-time');
+          await page.mouse.move(x, (surface.y + surface.height + box.y) / 2, {steps:8});
+          await settleAppearance(page);
+          assert.ok(await combined.isVisible(), 'pointer can stop in the gap');
+          await page.mouse.move(x, box.y + 4, {steps:8});
+          assert.ok(await combined.evaluate(card => card.matches(':hover')), 'combined card receives pointer input');
+          assert.equal(await combined.getAttribute('data-hover-time'), time, 'entering the card keeps the inspected time');
+          await page.mouse.move(x, axis.y + axis.height / 2, {steps:8});
+          assert.ok(await combined.isVisible(), 'pointer can return to the panel');
+          await page.mouse.move(4, 4);
+          await combined.waitFor({state:'hidden'});
+
+          const setStyle = async value => {
+            await page.locator('#settings-open').click();
+            await page.locator('#settings-tab-appearance').click();
+            await page.locator('#chart-hover-style').click();
+            await page.locator(`#chart-hover-style-menu [data-value="${value}"]`).click();
+            await page.locator('#settings-close').click();
+            await page.locator('#settings').waitFor({state:'hidden'});
+          };
+          await setStyle('separate');
+          const individual = page.locator('.analysis-view-card[data-diagram="overview"]');
+          const plot = await graph.boundingBox(), y = plot.y + plot.height / 2;
+          await page.mouse.move(x, y);
+          await individual.waitFor({state:'visible'});
+          const side = await individual.boundingBox();
+          assert.ok(y > side.y && y < side.y + side.height, 'the approach crosses the side of the card');
+          const edge = side.x > x ? side.x + 4 : side.x + side.width - 4;
+          const step = Math.sign(edge - x);
+          for (let clientX = x + step; Math.abs(clientX - edge) >= 1; clientX += step) {
+            await page.mouse.move(clientX, y);
+            await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+          }
+          await page.mouse.move(edge, y);
+          assert.ok(await individual.evaluate(card => card.matches(':hover')), 'the side card stays within reach at slow pointer speeds');
+          const held = await individual.getAttribute('data-hover-time');
+          await page.mouse.move(edge, y + 3);
+          assert.equal(await individual.getAttribute('data-hover-time'), held);
+          await page.mouse.move(4, 4);
+          await individual.waitFor({state:'hidden'});
+          await setStyle('combined');
+          assert.deepEqual(await call('get_presented_frame', {slot:'A'}), before, 'hovering and entering a card never seeks');
+        });
+
         for (const slot of ['A', 'B']) {
           await openAnalysis(slot);
           await page.locator(`#bitstream-overlay-${slot}`).waitFor({state:'visible'});

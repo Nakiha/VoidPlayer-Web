@@ -1,3 +1,4 @@
+import { axisOf } from '../../../shared/analysis/metadata/projection.ts';
 import type { Slot } from '../../../shared/review/model.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
 import { shouldBucketize } from '../../../shared/analysis/metadata/statistics.ts';
@@ -111,7 +112,7 @@ export function createAnalysisQueries(hooks: {
     if (!r.truncated && r.samples.length) {
       let n = 0;
       for (const s of r.samples) {
-        const t = axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
+        const t = axisOf(s, axis);
         if (t != null && t >= startUs && t < endUs) n++;
       }
       return n;

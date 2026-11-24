@@ -314,6 +314,7 @@ export interface Sources {
   "analysis.currentFrameNumbersEmpty": "当前上屏帧号：尚未载入视频";
   "analysis.decodeBitrateWindowHint": "码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐";
   "analysis.decodingTime": "解码时间 DTS";
+  "analysis.derivedDts": "裸码流的解码时间按 AU 顺序和名义帧率推算";
   "analysis.diagramBucketDetail": "{start}–{end} · {count} 帧 · {values}";
   "analysis.diagramDetailEvicted": "当前范围保留了汇总；重新检查可恢复逐帧细节";
   "analysis.diagramNoTrack": "先载入一条视频轨道";
@@ -441,7 +442,7 @@ export interface Sources {
   "analysis.temporalLayer": "时间层级";
   "analysis.temporalLayerHint": "层级来自图像 VCL NAL 的 Temporal ID";
   "analysis.timeBase": "时间基准";
-  "analysis.timeBaseTitle": "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图";
+  "analysis.timeBaseTitle": "PTS 为展示时间，DTS 为解码时间。裸码流的 DTS 按解码顺序推算。";
   "analysis.tools": "分析选项";
   "analysis.trackFocus": "轨道焦点 {slot}";
   "analysis.trackFocusWithContext": "轨道焦点 {slot} {rest}";
@@ -1594,6 +1595,7 @@ export interface MessageParameters {
   "analysis.currentFrameNumbersEmpty": {  };
   "analysis.decodeBitrateWindowHint": {  };
   "analysis.decodingTime": {  };
+  "analysis.derivedDts": {  };
   "analysis.diagramBucketDetail": { "count": string | number; "end": string | number; "start": string | number; "values": string | number };
   "analysis.diagramDetailEvicted": {  };
   "analysis.diagramNoTrack": {  };

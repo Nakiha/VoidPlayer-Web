@@ -1,3 +1,4 @@
+import { annexBTime } from '../../media/indexing/annex-b-index.ts';
 import {TsContainerPacketSource} from '../../media/containers/mpeg2-ts-packet-source.ts';
 import { retainVerifiedTsIndex, TsSourceChangedError } from '../../media/containers/ts-packet-source.ts';
 import { AnnexBPacketSource } from '../../media/containers/annex-b-packet-source.ts';
@@ -41,6 +42,7 @@ export async function openJsPacketAnalysisInput(format:JsPacketFormat,reader: An
     const configuration = Uint8Array.from(index.configuration);
     const packets: AnalysisPacket[] = index.packets.map(packet => ({ au: packet.au, configuration: packet.configuration,
       pts: packet.ptsUs, dts: packet.timing.dts === null ? null : Math.round(packet.timing.dts * 1e6 * packet.timing.timebase[0] / packet.timing.timebase[1]),
+      ...(index.kind === 'js-annexb-packets' ? {derivedDts:annexBTime(packet.au, index.frameRate)} : {}),
       // TS locators are opaque. Payload access always goes through the source.
       offset: packet.locator, size: packet.size, key: packet.key, timing: packet.timing }));
     const picture = (packet: AnalysisPacket, version: string): SourcePictureKey => {

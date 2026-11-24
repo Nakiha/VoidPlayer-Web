@@ -1,3 +1,4 @@
+import { axisOf } from './projection.ts';
 // 统一时间检查器：公共检查时间 T 负责所有轨道的指标读取，
 // 直接 glyph 身份只负责主高亮与精确点击。纯逻辑，无 DOM。
 // 与 tooltip/绘制解耦：调用方先算 InspectionState，再分别渲染表格与高亮。
@@ -83,7 +84,7 @@ export function getDerived(result: AnalysisResult, axis: 'pts' | 'dts'): Derived
   const entries: { idx: number; t: number; ordinal: number; id: string; size: number }[] = [];
   for (let i = 0; i < result.samples.length; i++) {
     const s = result.samples[i];
-    const raw = axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
+    const raw = axisOf(s, axis);
     if (raw == null || !Number.isFinite(raw)) continue;
     entries.push({
       idx: i, t: raw, ordinal: s.decodeOrdinal, id: s.sampleId,

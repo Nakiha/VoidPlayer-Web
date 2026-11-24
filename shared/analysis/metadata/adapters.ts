@@ -16,10 +16,13 @@ export interface PacketView {
   /** Stable demux ordinal when storage is ordered for presentation/transport. */
   ordinal?: number;
   dts: number | null;
+  derivedDts?: number;
   size: number;
   key: boolean;
-  originalPts?: number;
+  originalPts?: number | null;
 }
+
+export const packetDts = (packet: Pick<PacketView, 'dts' | 'derivedDts'>) => packet.dts ?? packet.derivedDts ?? null;
 
 export interface SourceQueryContext {
   mediaId: string;
@@ -70,9 +73,10 @@ export function toSample(packets: ArrayLike<PacketView>, ctx: Pick<SourceQueryCo
   return {
     sampleId: `${ctx.mediaId}:v:${p.ordinal ?? pos}`,
     decodeOrdinal: p.ordinal ?? pos,
-    containerPtsUs: p.originalPts ?? p.pts,
+    containerPtsUs: p.originalPts === undefined ? p.pts : p.originalPts,
     effectivePtsUs: p.pts == null ? null : p.pts - ctx.firstPtsUs,
     dtsUs: p.dts == null ? null : p.dts - ctx.firstPtsUs,
+    ...(p.derivedDts === undefined ? {} : {derivedDtsUs: p.derivedDts - ctx.firstPtsUs}),
     sizeBytes: p.size,
     randomAccess: p.key ? 'yes' : 'no',
     pictureType: null,
@@ -96,9 +100,10 @@ export function locateSampleById(
   return {
     sampleId: `${mediaId}:v:${pos}`,
     decodeOrdinal: p.ordinal ?? pos,
-    containerPtsUs: p.originalPts ?? p.pts,
+    containerPtsUs: p.originalPts === undefined ? p.pts : p.originalPts,
     effectivePtsUs: p.pts == null ? null : p.pts - firstPtsUs,
     dtsUs: p.dts == null ? null : p.dts - firstPtsUs,
+    ...(p.derivedDts === undefined ? {} : {derivedDtsUs: p.derivedDts - firstPtsUs}),
     sizeBytes: p.size,
     randomAccess: p.key ? 'yes' : 'no',
     pictureType: null,
@@ -110,7 +115,7 @@ export function locateSampleById(
 export function sortByAxis(packets: ArrayLike<PacketView>, firstPtsUs: number, axis: 'pts' | 'dts'): SortedAxis {
   const items: { pos: number; t: number }[] = [];
   for (let i = 0; i < packets.length; i++) {
-    const raw = axis === 'pts' ? packets[i].pts : packets[i].dts;
+    const raw = axis === 'pts' ? packets[i].pts : packetDts(packets[i]);
     if (raw == null || !Number.isFinite(raw)) continue;
     items.push({ pos: i, t: raw - firstPtsUs });
   }
@@ -348,7 +353,7 @@ export function createSourceQuerier(): SourceQuerier {
     const lo = lowerBound(sorted.times, tUs);
     const pos = sorted.times[lo] === tUs ? sorted.order[lo] : null, packet = pos == null ? null : packets[pos];
     return { rank: lo, total: sorted.times.length, ordinal: packet ? packet.ordinal ?? pos : null,
-      sourceDtsUs: packet?.dts ?? null };
+      sourceDtsUs: packet?.dts ?? null, ...(packet?.derivedDts === undefined ? {} : {derivedDtsUs:packet.derivedDts}) };
   };
   querier.sampleAtNumber = (packets, firstPtsUs, axis, number) => {
     if (!Number.isSafeInteger(number) || number < 0 || axis !== 'pts' && axis !== 'dts') return null;
@@ -374,7 +379,7 @@ export function mergeAppendedSort(
   const total = (packets as { length: number }).length;
   const fresh: { pos: number; t: number }[] = [];
   for (let i = oldLength; i < total; i++) {
-    const raw = axis === 'pts' ? packets[i].pts : packets[i].dts;
+    const raw = axis === 'pts' ? packets[i].pts : packetDts(packets[i]);
     if (raw == null || !Number.isFinite(raw)) continue;
     fresh.push({ pos: i, t: raw - firstPtsUs });
   }
