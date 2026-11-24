@@ -1,6 +1,6 @@
 import type { AnalysisIndexFrontier } from "./stream.ts";
 export interface AnalysisIndexCache {
-  load(reader: {size:number;read(offset:number,length:number):Promise<Uint8Array>;close():void}, version:string, format:'ts'|'matroska', signal:AbortSignal):Promise<import('../../media/containers/matroska-packet-index.ts').JsPacketIndex|undefined>;
+  load(reader: {size:number;read(offset:number,length:number):Promise<Uint8Array>;close():void}, version:string, format:import('../../media/containers/matroska-packet-index.ts').JsPacketFormat, signal:AbortSignal):Promise<import('../../media/containers/matroska-packet-index.ts').JsPacketIndex|undefined>;
   save(index:import('../../media/containers/matroska-packet-index.ts').JsPacketIndex, signal:AbortSignal):Promise<void>;
 }
 export interface AnalysisReader {
@@ -39,6 +39,8 @@ export interface AnalysisInputOptions {
 export interface AnalysisInput {
   /** Packet clocks carry explicit missingness; feed_known must preserve it. */
   rawTiming?: boolean;
+  /** Verified Annex-B AU order supplies decoder PTS while the source ticks remain absent. */
+  pictureOrderTiming?: true;
   /** Reset only bounded unconsumed IO after the consumer acknowledges a result. */
   acknowledge?(): void;
   codec: 'h264' | 'hevc' | 'vvc';

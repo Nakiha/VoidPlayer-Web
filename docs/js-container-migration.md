@@ -23,7 +23,7 @@ independent thread and frame-context counts.
 | Matroska/WebM | VP8 / VP9 | Browser or packet WASM; packet statistics do not imply block/QP support. |
 | Matroska | FFV1 | Packet WASM with admitted configuration and source-plane geometry; no block/QP analysis. |
 | WebM | AV1 temporal units | Packet playback preserves hidden/show-existing inputs; no exact one-AU picture identity. |
-| Annex-B | H.264 / HEVC / VVC | Access-unit byte ranges and picture order for playback, stepping and packet statistics. |
+| Annex-B | H.264 / HEVC / VVC | Access-unit byte ranges and picture order for playback, stepping and independent bitstream analysis. |
 | MP4/MOV/fMP4 | Supported visual sample descriptions | JS sample tables drive browser or packet WASM; multiple descriptions retain the conservative software policy. |
 
 Finite static stream/configuration rules are checked by the corresponding
@@ -53,8 +53,11 @@ interlaced AVC/HEVC, AVC slice groups and VVC gradual decoder refresh.
 The index separates compressed access units from their picture order. It assigns
 a playback timeline using nominal AVC/HEVC/VVC SPS timing when available and 30 fps
 otherwise. Track information shows the chosen rate and its origin. Raw PTS/DTS
-remain unknown. The synthetic clock supports stepping and seeks. Exact block/QP
-analysis requires a supported source clock and picture identity.
+remain unknown. An independently read, sealed Annex-B index supplies the same
+playback clock and AU ordinals to analysis. The core receives the derived display
+time with unknown DTS, and matches output by AU and that display time. Frame
+analysis still requires a verified single-picture layout and a closed anchor
+within the existing decode budget.
 
 Local files and external Range URLs use the shared JS scanner. The media library
 builds a version-bound index on the server and reuses its byte ranges on playback.
@@ -63,7 +66,7 @@ Installed Chromium PWAs advertise the same six extensions for OS launch.
 ## Identity, clocks and ownership
 
 TS locators are opaque packet locators, not payload byte offsets. The PES-header
-supplement preserves original 90 kHz ticks and explicit missingness. Derived
+supplement preserves original 90 kHz ticks and explicit missingness. Derived TS
 presentation timestamps cannot mint exact picture identity. Matroska retains
 original cluster/block clocks and TimestampScale; raw DTS remains null and is
 never replaced with PTS. Payload reads verify the selected locator, size,

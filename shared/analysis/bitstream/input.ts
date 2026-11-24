@@ -8,6 +8,13 @@ export type { AnalysisReader, AnalysisPacket } from './types.ts';
 /** Probe bytes, not file names. Each adapter owns an independent demux cursor. */
 export async function openAnalysisInput(reader: AnalysisReader, signal: AbortSignal,
   continuous = false, streamIndex?: AnalysisInputOptions): Promise<AnalysisInput> {
+  if (streamIndex?.indexIdentity?.kind === 'js-annexb') {
+    if (!streamIndex.sourceVersion) {
+      reader.close();
+      throw new AnalysisFailure('invalid-request', 'Annex-B source namespace is missing');
+    }
+    return openJsPacketAnalysisInput('annexb', reader, streamIndex.sourceVersion, signal);
+  }
   let header: Uint8Array;
   try {
     signal.throwIfAborted();

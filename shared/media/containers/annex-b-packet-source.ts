@@ -180,14 +180,14 @@ export class AnnexBPacketSource {
     return this.index = sealJsIndex(document);
   }
 
-  async readUnit(au: number) {
+  async readUnit(au: number, includeConfiguration = true) {
     this.signal.throwIfAborted();
     const packet = this.index?.packets[au];
     if (this.closed || !packet) throw new MediaOpenError('input', '裸码流画面索引无效或已释放。');
     const bytes = await this.reader.read(packet.locator, packet.size);
     this.signal.throwIfAborted();
     if (!isAnnexB(bytes)) throw new MediaOpenError('input', '裸码流画面起始码与索引不一致。');
-    if (!packet.key) return bytes;
+    if (!packet.key || !includeConfiguration) return bytes;
     // A later RAP can omit the original parameter sets. Supply them in-band
     // on every restart so native and software decoding receive the same bytes.
     const configuration = this.index!.configuration;

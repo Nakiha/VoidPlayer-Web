@@ -2,6 +2,7 @@ import { parseJsPacketIndex } from '../../../shared/media/indexing/js-packet-ind
 import type {JsPacketIndex} from '../../../shared/media/containers/matroska-packet-index.ts';
 import { parseFlvIndex, FLV_INDEX_BYTES } from '../../../shared/media/indexing/flv-index-cache.ts';
 import type { MediaLibraryIndex } from '../../library.ts';
+import { isJsPacketIndexKind, jsPacketIndexIdentity, mediaIndexIdentityKey } from '../../../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../../../shared/media/indexing/media-index-identity.ts';
 import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_BYTES, parseFfmpegIndex } from '../../../shared/media/indexing/ffmpeg-index-cache.ts';
 import { AnalysisFailure } from '../../../shared/analysis/bitstream/failure.ts';
@@ -66,15 +67,17 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
         }
         return { packets: flvPrefix, complete: flvComplete };
       }
-      if(identity.kind==='js-ts'||identity.kind==='js-matroska') {
+      if (isJsPacketIndexKind(identity.kind)) {
         const snapshot=await library.indexJobs.call('stream-manifest',{id,version,identity});
         if(snapshot.epoch!==epoch)throw new AnalysisFailure('source-changed','Index cache reset');
         if(!snapshot.manifest?.complete)return {packets:0,complete:false};
         const bytes=await library.indexJobs.call('get',{id,version,identity});
-        if(!bytes||bytes.length>64*1024*1024)throw new AnalysisFailure('resource-limit','Invalid JS TS index document');
+        if(!bytes||bytes.length>64*1024*1024)throw new AnalysisFailure('resource-limit','Invalid JS packet index document');
         const envelope=JSON.parse(Buffer.from(bytes).toString('utf8'));
         const document=parseJsPacketIndex(envelope.index??envelope,`${id}@${version}`,metadata.size);
-        if(!document)throw new AnalysisFailure('incomplete-reference-state','Invalid JS TS index identity');
+        if (envelope.epoch !== epoch) throw new AnalysisFailure('source-changed', 'Index cache reset');
+        if (!document || mediaIndexIdentityKey(jsPacketIndexIdentity(document)) !== mediaIndexIdentityKey(identity))
+          throw new AnalysisFailure('incomplete-reference-state', 'Invalid JS packet index identity');
         jsDocument=document;return {packets:document.packets.length,complete:true};
       }
       const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity });
@@ -116,7 +119,7 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
       return flvDocument!;
     },
     async jsSnapshot(active:()=>boolean=()=>true){
-      if(identity.kind!=='js-ts'&&identity.kind!=='js-matroska')throw new AnalysisFailure('unsupported-container','JS snapshot required');
+      if (!isJsPacketIndexKind(identity.kind))throw new AnalysisFailure('unsupported-container','JS snapshot required');
       const started=performance.now();while(!(await this.read()).complete){if(!active())throw new AnalysisFailure('cancelled','JS index subscriber closed');if(performance.now()-started>120000)throw new AnalysisFailure('resource-limit','JS snapshot stalled');await new Promise(resolve=>setTimeout(resolve,20));}
       if(!await library.resolve(id,version))throw new AnalysisFailure('source-changed','JS snapshot source changed');return jsDocument!;
     },

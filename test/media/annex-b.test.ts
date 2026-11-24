@@ -6,6 +6,9 @@ import { pathToFileURL } from 'node:url';
 import { AnnexBPacketSource } from '../../shared/media/containers/annex-b-packet-source.ts';
 import { probeContainer } from '../../src/media/policy/container-probe.ts';
 import { selectVideoInputs } from '../../src/ui/video-input.ts';
+import { openAnalysisInput } from '../../shared/analysis/bitstream/input.ts';
+import { analyzePicture, analyzeStream } from '../../shared/analysis/bitstream/runner.ts';
+import { JS_ANNEX_B_MEDIA_INDEX_IDENTITY } from '../../shared/media/indexing/media-index-identity.ts';
 import { parseAnnexBPacketIndex } from '../../shared/media/indexing/annex-b-index.ts';
 import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { JsContainerEngine } from '../../src/media/decoding/js-container-engine.ts';
@@ -19,7 +22,7 @@ const samples = [
   ['vvc', 'h266_10s_1920x1080.mp4', 60000 / 1001],
 ] as const;
 
-for (const [codec, name, sampleFps] of samples) test(`Annex-B ${codec} indexes B pictures and seeks to the native visible frame`, async () => {
+for (const [codec, name, sampleFps] of samples) test(`Annex-B ${codec} seeks to native pixels and analyzes the same reordered picture`, async () => {
   const file = `fixtures/video/${name}`, fixture = await annexBFixture(file, codec);
   const count = fixture.timestamps.length;
   assert.ok(count > 72);
@@ -57,9 +60,62 @@ for (const [codec, name, sampleFps] of samples) test(`Annex-B ${codec} indexes B
       assert.equal(frame.pts, opened.times[i]);
       assert.equal(visiblePixelHash(frame.description, frame.pixels!), nativeVisibleHash(frame.description, frames.get(i)!), `rank ${i}`);
     }
+    const signal = new AbortController().signal;
+    const analysisReader = () => new RangeReader({ file: local });
+    const identity = JS_ANNEX_B_MEDIA_INDEX_IDENTITY;
+    const analysis = await openAnalysisInput(analysisReader(), signal, false, { sourceVersion: name, indexIdentity: identity });
+    try {
+      const position = 71, pts = opened.times[position], au = order[position], packet = analysis.packets[au];
+      const presented = await engine.at(pts);
+      const picture = analysis.picture(packet, name), { sourceVersion: _version, picture: _picture, layer: _layer, field: _field, ...playbackPicture } = picture;
+      assert.deepEqual(presented.packetPicture, playbackPicture);
+      assert.equal(packet.timing?.pts, null);
+      assert.equal(packet.dts, null);
+      const firstAu = analysis.packets[0];
+      assert.deepEqual(await analysis.readUnit(firstAu), new Uint8Array(bytes.subarray(firstAu.offset, firstAu.offset + firstAu.size)));
+      await assert.rejects(analysis.plan({ sourceVersion: name, sourcePtsUs: pts, normalizedMediaUs: pts,
+        picture: { ...picture, au: picture.au + 1 } }), { code: 'ambiguous-picture-identity' });
+      const { default: createCore } = await import(pathToFileURL(resolve('public/vendor/voidplayer-analysis/voidplayer-analysis.js')).href);
+      const result = await analyzePicture(analysisReader(), { sourceVersion: name, sourcePtsUs: pts, normalizedMediaUs: pts,
+        picture, indexIdentity: identity }, createCore, 'annexb-test', signal);
+      assert.equal(result.confidence, 'exact');
+      assert.deepEqual(result.picture, picture);
+      assert.equal(result.sourcePtsUs, pts);
+      assert.equal(result.sourceDtsUs, null);
+      assert.equal(result.containerHeader?.box, 'annexb');
+      assert.ok(result.blocks.length > 0);
+      const originalReader = new RangeReader({ file: new Blob([await readFile(file)]) });
+      const original = await openAnalysisInput(originalReader, signal);
+      try {
+        const originalPacket = original.packets[au];
+        const reference = await analyzePicture(originalReader, { sourceVersion: 'mp4-oracle', sourcePtsUs: originalPacket.pts,
+          normalizedMediaUs: originalPacket.pts - original.packets[0].pts }, createCore, 'annexb-test', signal, { input: original });
+        assert.deepEqual(result.blocks, reference.blocks, 'raw and MP4 produce the same block geometry, modes and QP for this AU');
+        assert.deepEqual(result.references, reference.references);
+      } finally { original.close(); }
+      assert.equal((await engine.next(pts))?.pts, opened.times[position + 1], 'analysis leaves playback cursor in place');
+    } finally { analysis.close(); }
     await engine.at(opened.times.at(-1)!);
     assert.equal(await engine.next(opened.times.at(-1)!), null, 'EOF follows the final decoded frame');
   } finally { engine.close(); }
+});
+
+test('Annex-B VVC summary stream delivers each AU with its indexed display time', async () => {
+  const file = 'fixtures/video/h266_10s_1920x1080.mp4', fixture = await annexBFixture(file, 'vvc', 16);
+  const { default: createCore } = await import(pathToFileURL(resolve('public/vendor/voidplayer-analysis/voidplayer-analysis.js')).href);
+  const reader = new RangeReader({ file: new Blob([fixture.bytes]) });
+  const sourceVersion = 'raw-summary', indexIdentity = JS_ANNEX_B_MEDIA_INDEX_IDENTITY;
+  const seen = new Map<number, number>();
+  await analyzeStream(reader, { mode: 'stream', product: 'summary', sourceVersion, indexIdentity, firstPtsUs: 0,
+    durationUs: 266933 }, createCore, 'annexb-test', new AbortController().signal, async result => {
+    assert.equal(result.confidence, 'exact');
+    assert.equal(result.sourceDtsUs, null);
+    assert.ok(!seen.has(result.picture.au));
+    seen.set(result.picture.au, result.sourcePtsUs);
+  }, async () => {});
+  const order = fixture.timestamps.map((_, au) => au).sort((a, b) => fixture.timestamps[a] - fixture.timestamps[b]);
+  assert.equal(seen.size, order.length);
+  assert.deepEqual(order, [...seen].sort((a, b) => a[1] - b[1]).map(([au]) => au));
 });
 
 test('Annex-B open rejects parameter sets without a picture and propagates source cancellation', async () => {

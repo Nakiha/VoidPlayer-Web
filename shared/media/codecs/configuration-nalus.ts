@@ -1,8 +1,8 @@
 import { isAnnexB, nalRanges } from './nal-framing.ts';
 export type ConfigurationCodec = 'h264' | 'hevc' | 'vvc';
 export interface NaluRecord { offset: number; size: number; type: number; temporalId: number; layer: number }
-/** MP4 length-prefixed NALs. Sizes include the NAL header and exclude the
- * container length prefix; offsets are relative to the compressed AU. */
+/** Sizes include the NAL header. Offsets are relative to the compressed AU,
+ * after the length prefix or Annex-B start code. */
 export function readNalus(codec: ConfigurationCodec, description: Uint8Array, bytes: Uint8Array): NaluRecord[] {
   return nalRanges(codec, description, bytes).map(({offset: at, size}) => {
     if (bytes[at] & 128 || (codec !== 'h264' && !(bytes[at + 1] & 7))) throw new Error('Invalid NAL header');
@@ -18,7 +18,7 @@ export interface ContainerHeader {
 /** Configuration NALs remain out of band; offsets are relative to the record,
  * sizes exclude its two-byte length fields. No payload is retained or injected. */
 export function readContainerHeader(codec: ConfigurationCodec, description: Uint8Array): ContainerHeader {
-  if ((codec === 'h264'||codec==='hevc') && isAnnexB(description)) return {box: 'annexb', byteLength: description.length, nalus: readNalus(codec, description, description)};
+  if (isAnnexB(description)) return {box: 'annexb', byteLength: description.length, nalus: readNalus(codec, description, description)};
   let at = 0;
   const take = (count: number) => { if (at + count > description.length) throw new Error('Truncated container configuration'); const start = at; at += count; return start; };
   const byte = () => description[take(1)];

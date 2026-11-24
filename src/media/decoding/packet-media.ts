@@ -1,6 +1,6 @@
 import type { JsPacketFormat } from '../../../shared/media/containers/matroska-packet-index.ts';
 import { sharePixelFrame } from './pixel-frame.ts';
-import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
+import { JS_PACKET_IDENTITIES, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
 import { decodeThreadsForCodec, lightPlaybackThreads, wasmThreadMode } from '../policy/wasm-threads.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
@@ -374,7 +374,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | JsPacketFormat,
         },
       } : {}),
       info, ensureIndexed,
-      ...((container==='ts'||container==='matroska')?{bitstreamIndexIdentity:container==='ts'?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY}:{}),
+      ...(jsPackets ? { bitstreamIndexIdentity: JS_PACKET_IDENTITIES[container] } : {}),
       ...(container === 'flv' ? {
         requestCachedAudio(ptsUs: number, generation: number) { if (!disposed) activeRpc.requestCachedAudio(ptsUs + info.firstPtsUs, generation); },
       } : {}),

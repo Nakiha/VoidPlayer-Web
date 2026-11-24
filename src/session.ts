@@ -369,7 +369,7 @@ export class ReviewSession {
   async requestBitstreamAnalysis(slot: Slot, signal?: AbortSignal, product?: import('../shared/analysis/bitstream/predictions.ts').PredictionProduct) {
     const track = this.tracks.get(slot), token = this.getPresentedFrame(slot);
     return this.runBitstreamTask<import('../shared/analysis/bitstream/products.ts').AnalysisPredictions | import('../shared/analysis/bitstream/contract.ts').AnalysisResult>(slot, signal, { state: 'pending' }, (service, taskSignal) => {
-      if (!token?.picture) return service.fail(new AnalysisFailure(!['isobmff', 'flv'].includes(track!.source.info.container ?? '') ? 'unsupported-container' : 'unsupported-picture-layout', 'This playback picture cannot be precisely identified'));
+      if (!token?.picture) return service.fail(new AnalysisFailure(!['isobmff', 'flv', 'annexb'].includes(track!.source.info.container ?? '') ? 'unsupported-container' : 'unsupported-picture-layout', 'This playback picture cannot be precisely identified'));
       if (this.playing) return service.fail(new AnalysisFailure('invalid-request', 'Pause playback before requesting deep analysis'));
       const current = this.getPresentedFrame(slot);
       if (!current || current.commit !== token.commit || current.generation !== token.generation) throw new DOMException('Presented frame changed', 'AbortError');

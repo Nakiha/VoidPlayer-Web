@@ -16,6 +16,8 @@ import {WorkerRpc} from '../../src/media/workers/worker-rpc.ts';
 import type {PacketCommands} from '../../src/media/workers/worker-protocol.ts';
 import {loadServerJsIndex} from '../../src/media/indexing/js-packet-index-client.ts';
 import {TsCombinationNotMigrated} from '../../shared/media/containers/ts-packet-source.ts';
+import { AnalysisScheduler } from '../../server/analysis/bitstream/scheduler.ts';
+import { jsPictureStream } from '../../shared/media/containers/matroska-packet-index.ts';
 import {MatroskaPacketSource} from '../../shared/media/containers/matroska-packet-source.ts';
 import {RangeReader} from '../../shared/media/io/range-reader.ts';
 import {JsContainerEngine} from '../../src/media/decoding/js-container-engine.ts';
@@ -76,6 +78,29 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
   const rawIndex = await loadServerJsIndex(rawUrl, `${ref.id}@${ref.version}`, rawEntry.size, 'annexb', new AbortController().signal, undefined, ref);
   assert.equal(rawIndex?.kind, 'js-annexb-packets');
   assert.equal(rawIndex.packets.length, 16);
+  const scheduler = new AnalysisScheduler(library!, resolve('public/vendor/voidplayer-analysis'), join(temp, 'bitstream'));
+  try {
+    const packet = rawIndex.packets[8], sourceVersion = `${ref.id}@${ref.version}`;
+    const picture = { sourceVersion, stream: jsPictureStream(rawIndex), au: packet.au,
+      configuration: 0, picture: 0, layer: 0, field: 'frame' } as const;
+    const request = await scheduler.submit(ref.id, ref.version, { sourceVersion, sourcePtsUs: packet.ptsUs,
+      normalizedMediaUs: packet.ptsUs, picture, indexIdentity: JS_ANNEX_B_MEDIA_INDEX_IDENTITY }, 'annexb-test');
+    let status = scheduler.status(request.requestId, 'annexb-test')!;
+    const deadline = performance.now() + 15000;
+    while (['running', 'queued'].includes(status.state) && performance.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      status = scheduler.status(request.requestId, 'annexb-test')!;
+    }
+    assert.equal(status.state, 'complete', JSON.stringify(status.reason));
+    const resultId = new URL(status.resultUrl!, base).pathname.split('/').at(-1)!;
+    const analyzed = await scheduler.store.get(resultId);
+    assert.equal(analyzed?.confidence, 'exact');
+    assert.deepEqual(analyzed?.picture, picture);
+    assert.equal(analyzed?.sourcePtsUs, packet.ptsUs);
+    assert.equal(analyzed?.sourceDtsUs, null);
+    assert.equal(analyzed?.containerHeader?.box, 'annexb');
+  } finally { await scheduler.close(); }
+  builds = 0;
   const e=library!.browse().entries.find(e=>e.name==='hevc.mkv')!,version=`${e.id}@${e.version}`;
   // Node has no document origin. This fixture explicitly hosts the real
   // library application at base, including its fresh consumer Worker's origin.

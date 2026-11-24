@@ -149,6 +149,20 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].container), 'annexb');
     await offline.evaluate(() => window.voidPlayer.step(1));
     assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].frame.ptsUs), 16683);
+    const rawAnalysis = await offline.evaluate(async () => {
+      const api = window.voidPlayer, call = (name) => api.tools.find(tool => tool.name === name).execute({ slot: 'A' });
+      const before = await call('get_presented_frame');
+      const result = await call('request_bitstream_analysis');
+      const after = await call('get_presented_frame');
+      return { before, after, picture: result.picture, box: result.containerHeader.box,
+        confidence: result.confidence, blocks: result.blocks.length };
+    });
+    assert.equal(rawAnalysis.confidence, 'exact');
+    assert.equal(rawAnalysis.box, 'annexb');
+    assert.ok(rawAnalysis.blocks > 0);
+    assert.deepEqual(rawAnalysis.picture, rawAnalysis.before.picture);
+    assert.deepEqual(rawAnalysis.after.picture, rawAnalysis.before.picture);
+    assert.equal(rawAnalysis.after.sourcePtsUs, rawAnalysis.before.sourcePtsUs);
     await offline.locator('#remove-track-A').click();
     await offline.waitForFunction(() => !window.voidPlayer.getState().tracks.length);
     if (engine === 'chromium') await deliverFixture('offline-clip.mkv', fixture);

@@ -24,7 +24,8 @@ export async function writePlayerWorker(directory, chunks, coreDigests) {
     assets[file] = digest(await readFile(path.join(directory, file)));
   }
   for (const [file, hash] of Object.entries(coreDigests).sort()) {
-    if (/\/(voidplayer-(?:core|analysis)(?:-mt)?\.(?:js|wasm)|manifest\.json)$/.test(file)) assets[file + '?v=' + hash] = hash;
+    if (file === '/vendor/voidplayer-analysis/threading.json'
+      || /\/(voidplayer-(?:core|analysis)(?:-mt)?\.(?:js|wasm)|manifest\.json)$/.test(file)) assets[file + '?v=' + hash] = hash;
   }
   const integrity = Object.fromEntries(Object.entries(assets).map(([url, hash]) => [url, 'sha256-' + Buffer.from(hash, 'hex').toString('base64')]));
   const { buildId } = JSON.parse(await readFile(path.join(directory, 'build-info.json'), 'utf8'));

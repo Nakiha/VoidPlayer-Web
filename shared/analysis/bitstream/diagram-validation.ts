@@ -2,7 +2,7 @@ import type {AnalysisResult} from './contract.ts';
 import type {ContainerHeader,DiagramPicture} from './diagrams.ts';
 import {BUDGET} from './limits.ts';
 export function validateContainerHeader(codec: AnalysisResult['codec'], header: ContainerHeader) {
-  if (!header || !(codec === 'h264' ? ['avcC','annexb'] : codec==='hevc'?['hvcC','annexb']:['vvcC']).includes(header.box) ||
+  if (!header || !(codec === 'h264' ? ['avcC','annexb'] : codec==='hevc'?['hvcC','annexb']:['vvcC','annexb']).includes(header.box) ||
       !Number.isSafeInteger(header.byteLength) || header.byteLength < 1 || header.byteLength > 1024 * 1024 || !Array.isArray(header.nalus) || header.nalus.length > 256) throw new Error('Invalid container header');
   let end = 0;
   for (const n of header.nalus) {

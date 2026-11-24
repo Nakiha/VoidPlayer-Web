@@ -3,7 +3,7 @@ import {validateDemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
 import type {DemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
 import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, SUMMARY_BATCH_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
 import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
-import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, isJsPacketIndexKind } from '../../../shared/media/indexing/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import type { AnalysisDecoderSettings } from './limits.ts';
 import { availableParallelism } from 'node:os';
@@ -532,7 +532,11 @@ export class AnalysisScheduler {
         }
 
       }
-      if(work.target.indexIdentity?.kind==='js-ts'||work.target.indexIdentity?.kind==='js-matroska'){index??=await libraryAnalysisIndex(this.library,work.mediaId,work.version,work.filePath,work.target.indexIdentity);jsSnapshot=await index.jsSnapshot(()=>!this.closed&&work.state==='running'&&!!work.consumers.size);}
+      const identity = work.target.indexIdentity;
+      if (identity && isJsPacketIndexKind(identity.kind)) {
+        index ??= await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, identity);
+        jsSnapshot = await index.jsSnapshot(() => !this.closed && work.state === 'running' && !!work.consumers.size);
+      }
       if (this.closed || work.state !== 'running' || !work.consumers.size) return;
       const worker = (work.worker = new Worker(
         new URL(

@@ -31,11 +31,11 @@ UI 和 Agent 使用 `ReviewSession` 的相同入口：`getPresentedFrame`、`req
 
 ## 支持矩阵与身份
 
-可执行矩阵是 `scripts/bitstream-analysis-matrix.json`；浏览器回归逐行执行本地 File / 媒体库和 browser / reference software 播放路径。H.264、HEVC、VVC 的普通 MP4、有限 FLV 和有限自包含 fMP4 使用共享包索引与连续 AU。已准入的 TS、Matroska 组合由独立 JS 包源进入相同分析协议，具体范围见 [JS 容器与索引](js-container-migration.md)。WebCodecs 可用性由平台决定，实际 decoder 写入报告；VVC 使用 packet WASM。外部 init、直播、混合或多配置分片、时间断裂与无可验证 picture 身份的输入不授权精确分析。
+可执行矩阵是 `scripts/bitstream-analysis-matrix.json`；浏览器回归逐行执行本地 File / 媒体库和 browser / reference software 播放路径。H.264、HEVC、VVC 的普通 MP4、有限 FLV 和有限自包含 fMP4 使用共享包索引与连续 AU。已准入的 TS、Matroska 和 Annex-B 裸码流由独立 JS 包源进入相同分析协议，具体范围见 [JS 容器与索引](js-container-migration.md)。WebCodecs 可用性由平台决定，实际 decoder 写入报告；VVC 使用 packet WASM。外部 init、直播、混合或多配置分片、时间断裂与无可验证 picture 身份的输入不授权精确分析。
 
-持久 key 是 source version、video stream、description 配置段、稳定 sample/AU ordinal、picture 0、layer 0、frame。本地 File 使用会话中的随机来源 ID，不按文件名、长度或 mtime 拼身份；媒体库使用 `id@version`。配置、AU 索引、源时间戳缺失或重复以及不唯一的 packet/picture 映射必须拒绝。
+持久 key 是 source version、video stream、description 配置段、稳定 sample/AU ordinal、picture 0、layer 0、frame。本地 File 使用会话中的随机来源 ID，不按文件名、长度或 mtime 拼身份；媒体库使用 `id@version`。配置、AU 索引或唯一 picture 映射无法验证时拒绝精确分析。容器仍要求可验证的源时间戳。Annex-B 使用完整索引按画面顺序生成的播放时间，原始 PTS 与 DTS 保持未知。
 
-播放送包时只检查已经读入的 NAL 首部，不新增 I/O；H.264/HEVC 检查首 slice，VVC 首版限定单 slice；AVC 扩展层和 HEVC/VVC 非零 layer 被拒绝。输出以**唯一且完全相等**的源 PTS 关联 AU，不做最近 PTS 或容差匹配。HEVC 特殊时间映射复用现有经过验证的 POC 修复实现。分析核心用 FFmpeg COPY_OPAQUE 把源 AU 传到输出；VVC 的旧 range-local decode_order 已被替换。
+播放送包时只检查已经读入的 NAL 首部，不新增 I/O；H.264/HEVC 检查首 slice，VVC 首版限定单 slice；AVC 扩展层和 HEVC/VVC 非零 layer 被拒绝。输出以**唯一且完全相等**的解码输出时间关联 AU，不做最近匹配。对于 Annex-B，这个时间来自经验证的画面顺序，结果以源版本、索引构建与 AU 识别。HEVC 特殊时间映射复用现有经过验证的 POC 修复实现。分析核心用 FFmpeg COPY_OPAQUE 把源 AU 传到输出；VVC 的旧 range-local decode_order 已被替换。
 
 Presenter 在成功提交绘制后发布 token：真实 picture key、原始微秒时间戳、减去 first PTS 后的媒体时间、slot generation、commit 和几何快照。它是应用绘制提交，不是物理屏幕扫描时刻。轨道 offset 只在 session 边界换算；不进入缓存 key。coded 坐标经 visible crop、SAR 对应的共享显示矩形、旋转和当前视口变换投影。缩放和分屏只重投影；几何变化不重分析。分析层位于视频和标注之间。
 
