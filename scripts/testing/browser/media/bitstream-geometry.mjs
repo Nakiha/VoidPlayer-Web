@@ -374,26 +374,43 @@ await withBrowserFixture({ caseName, engine, roots: [directory],
     const drawer = page.locator('#bitstream-frame-inspector'), fold = page.locator('#bitstream-inspect-frame');
     if (await fold.getAttribute('aria-expanded') !== 'true') await fold.click();
     await drawer.waitFor({state:'visible'});
-    async function downloadFrame() {
+    const downloadFrame = () => phase('download-frame-inspection', async () => {
         const [download] = await Promise.all([page.waitForEvent('download', {timeout:15000}), drawer.locator('[data-export]').click()]);
         return JSON.parse(await readFile(await download.path(), 'utf8'));
-    }
+    });
     assert.equal(await drawer.locator('select, input[type="checkbox"]').count(), 0, 'frame inspector uses project menus without export toggles');
     for (const slot of ['A', 'B']) {
         checkpoint('export-frame-with-inter-prediction', {slot});
         await drawer.locator('#bitstream-inspect-track').click();
         await page.locator(`#bitstream-inspect-track-menu:popover-open [data-value="${slot}"]`).click();
         if (slot === 'B') {
-            const requests = '**/bitstream-analysis/requests*';
-            const failPrediction = route => route.request().method() === 'POST' && route.request().postDataJSON()?.target?.product === 'prediction-inter' ?
-                route.fulfill({status:429,json:{reason:{code:'resource-limit',message:'Injected prediction budget failure'}}}) : route.continue();
-            await page.route(requests, failPrediction);
+            // Keep the failure local to the prediction POST. Chromium can stall
+            // enabling network interception while analysis requests are closing.
+            const injection = await page.evaluateHandle(() => {
+                const originalFetch = window.fetch;
+                let failures = 0;
+                window.fetch = async (request, options) => {
+                    const url = new URL(request instanceof Request ? request.url : request, location.href);
+                    if (options?.method === 'POST' && url.pathname.endsWith('/bitstream-analysis/requests') &&
+                        typeof options.body === 'string' && JSON.parse(options.body).target?.product === 'prediction-inter') {
+                        options.signal?.throwIfAborted();
+                        failures++;
+                        return Response.json({reason:{code:'resource-limit', message:'Injected prediction budget failure'}}, {status:429});
+                    }
+                    return originalFetch.call(window, request, options);
+                };
+                return { failures: () => failures, restore: () => { window.fetch = originalFetch; } };
+            });
             try {
                 const partial = await downloadFrame();
                 assert.equal(partial.statistics.blockCount, partial.blocks.length);
                 assert.equal(partial.predictionInter, undefined);
                 assert.match(await drawer.locator('[data-export-status]').textContent(), /已导出块明细/);
-            } finally { await page.unroute(requests, failPrediction); }
+                assert.equal(await injection.evaluate(state => state.failures()), 1, 'the partial export receives the injected response');
+            } finally {
+                await injection.evaluate(state => state.restore());
+                await injection.dispose();
+            }
         }
         const exported = await downloadFrame();
         const token = await call('get_presented_frame', {slot});
