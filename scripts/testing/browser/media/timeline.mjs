@@ -73,6 +73,40 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.mouse.move(rail.x+rail.width*.8,rail.y+rail.height/2,{steps:8});await page.mouse.up();
  await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
  assert.ok(Math.abs(await page.evaluate(()=>window.voidPlayer.getState().positionUs)/max-.8)<.003,'native range retains drag seeking with a painted marker');
+ await timeline.click({ position: { x: Math.round(rail.width * .45), y: Math.round(rail.height / 2) } });
+ await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
+ const playback = () => page.evaluate(() => {
+   const { positionUs, tracks } = window.voidPlayer.getState();
+   return { positionUs, frames: tracks.map(track => track.frame.ptsUs) };
+ });
+ const clicked = await playback();
+ await page.evaluate(() => window.voidPlayer.step(1));
+ const nextFrame = await playback();
+ await page.evaluate(() => window.voidPlayer.step(-1));
+ const previousFrame = await playback();
+ assert.ok(nextFrame.positionUs > clicked.positionUs && previousFrame.positionUs < nextFrame.positionUs);
+ await seek(clicked.positionUs);
+ assert.deepEqual(await playback(), clicked);
+ // Some browsers leave focus on the body after a pointer click. Cover the
+ // retained timeline focus that otherwise turns these keys into native seeks.
+ if (!await timeline.evaluate(input => document.activeElement === input)) await timeline.focus();
+ await page.mouse.move(5,5);
+ const preview = page.locator('#timeline-preview');
+ await preview.waitFor({ state: 'hidden' });
+ await timeline.evaluate(input => {
+   input.dataset.stepInputCount = '0';
+   input.addEventListener('input', () => input.dataset.stepInputCount = String(Number(input.dataset.stepInputCount) + 1));
+ });
+ for (const [key, expected] of [['ArrowRight', nextFrame], ['ArrowLeft', previousFrame]]) {
+   await page.keyboard.press(key);
+   assert.equal(await timeline.getAttribute('data-step-input-count'), '0', `${key} must not adjust the native range`);
+   await page.waitForFunction(positionUs => !window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs === positionUs,
+     expected.positionUs, { timeout: 5000 });
+   assert.deepEqual(await playback(), expected, `${key} presents the same frames as transport stepping`);
+   assert.equal(await preview.isVisible(), false, `${key} does not reopen the time preview`);
+   assert.equal(await timeline.evaluate(input => document.activeElement === input), true, `${key} retains timeline focus`);
+ }
+ await page.mouse.move(rail.x + rail.width * .45, rail.y + rail.height / 2);
  await timeline.focus();await page.keyboard.press('Home');await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs===0);
  await timeline.focus();await page.keyboard.press('End');await page.waitForFunction(max=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs===max,max);
  await page.mouse.move(5,5);assert.equal(await page.locator('#timeline-hover').isVisible(),false);

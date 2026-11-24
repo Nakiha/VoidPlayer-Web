@@ -604,13 +604,15 @@ document.addEventListener('keydown', e => {
   if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || document.querySelector('dialog[open]') || drawingEditor.active()) return;
   // Directional widgets keep their own keys. Ordinary focused buttons must not
   // swallow frame stepping or turn the unhandled arrow into focus feedback.
+  const frameStep = matchesShortcut(e, 'previous') || matchesShortcut(e, 'next');
   const localKeys = 'input,textarea,select,[role="slider"],[role="separator"],[role="spinbutton"],[role="combobox"],'
     + '[role="menu"],[role="listbox"],[role="tablist"],[role="tree"],[role="grid"],[role="radiogroup"]';
   const path = e.composedPath();
-  if (path.some(node => node instanceof HTMLElement && (node.isContentEditable || node.matches(localKeys)))) return;
+  // The focused playback timeline shares the transport's frame shortcuts.
+  if (path.some(node => node instanceof HTMLElement &&
+    (node.isContentEditable || node.matches(localKeys) && !(frameStep && node.id === 'timeline')))) return;
   if (document.querySelector('.popup-menu:popover-open, .header-actions[popover]:popover-open')) return;
   if (!session.getState().tracks.length || e.ctrlKey || e.metaKey || e.altKey) return;
-  const frameStep = matchesShortcut(e, 'previous') || matchesShortcut(e, 'next');
   const button = path.find(node => node instanceof HTMLButtonElement);
   if (button && !frameStep && !button.matches('#play,#previous,#next')) return;
   inputTrigger = 'keyboard';
