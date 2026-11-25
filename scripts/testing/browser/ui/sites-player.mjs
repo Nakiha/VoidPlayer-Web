@@ -23,7 +23,9 @@ execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=64x48:rate=10', '-t', '1', '-c:v', 'ffv1', software]);
 await assert.rejects(access(path.join(dist, 'admin/index.html')));
 await access(path.join(dist, 'sw.js'));
-assert.match(await readFile(path.join(dist, 'index.html'), 'utf8'), /rel="manifest" href="\/manifest\.webmanifest"/);
+const indexHtml = await readFile(path.join(dist, 'index.html'), 'utf8');
+assert.match(indexHtml, /rel="manifest" href="\/manifest\.webmanifest"/);
+assert.equal(await readFile(path.join(dist, 'offline-shell.txt'), 'utf8'), indexHtml);
 const manifest = JSON.parse(await readFile(path.join(dist, 'manifest.webmanifest'), 'utf8'));
 assert.equal(manifest.display, 'standalone');
 assert.equal(manifest.file_handlers[0].action, '/?open=files');
@@ -32,12 +34,13 @@ for (const extension of ['.h264', '.h265', '.h266']) assert.ok(extensions.includ
 assert.deepEqual(JSON.parse(await readFile(path.join(dist, '../.openai/hosting.json'), 'utf8')), { static: { directory: 'dist' } });
 let isolated = false;
 const apiRequests = [], failures = [];
-const mimes = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json',
+const mimes = { '.html': 'text/html', '.txt': 'text/plain', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json',
   '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost');
     if (url.pathname.startsWith('/api/')) { apiRequests.push(url.pathname); response.writeHead(404).end(); return; }
+    if (url.pathname === '/index.html') { response.writeHead(307, {location: '/' + url.search}).end(); return; }
     const file = path.resolve(dist, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
     if (!file.startsWith(dist + path.sep)) { response.writeHead(403).end(); return; }
     if (isolated) {
@@ -46,7 +49,8 @@ const server = createServer(async (request, response) => {
     }
     response.setHeader('cache-control', 'no-store');
     response.setHeader('content-type', mimes[path.extname(file)] ?? 'application/octet-stream');
-    response.end(await readFile(file));
+    // Model hosted HTML rewriting without modifying the offline data asset.
+    response.end(url.pathname === '/' ? indexHtml + '\n<!-- hosted HTML transform -->' : await readFile(file));
   } catch { response.writeHead(404).end(); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -161,6 +165,7 @@ try {
     }, (await readFile(raw)).toString('base64'));
     const navigation = await offline.goto(base + (engine === 'chromium' ? manifest.file_handlers[0].action : '/'));
     assert.ok(navigation.fromServiceWorker(), 'offline launch comes from the versioned player cache');
+    assert.match(navigation.headers()['content-type'], /^text\/html\b/);
     await offline.locator('#settings-open').waitFor({ state: 'visible' });
     if (engine === 'webkit') await offline.locator('#file-A').setInputFiles(raw);
     await offline.waitForFunction(() => window.voidPlayer?.getState().tracks[0]?.frame, null, { timeout: 45000 });

@@ -7,7 +7,7 @@ export function isPlayerAsset(name) {
     || /^assets\/(favicon|apple-touch-icon)-[^/]+\.(ico|svg|png)$/.test(name);
 }
 
-export async function writePlayerWorker(directory, chunks, coreDigests) {
+export async function writePlayerWorker(directory, chunks, coreDigests, {sites = false} = {}) {
   const manifestFile = path.join(directory, 'manifest.webmanifest');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
   const assets = {};
@@ -19,7 +19,11 @@ export async function writePlayerWorker(directory, chunks, coreDigests) {
     assets[icon.src] = hash;
   }
   await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-  const files = ['/index.html', '/theme-init.js', '/startup-guard.js', '/manifest.webmanifest', '/icon-foreground.svg', ...chunks.map(file => '/' + file)];
+  const shellPath = sites ? '/offline-shell.txt' : '/index.html';
+  // Static hosts may redirect index.html or rewrite HTML responses. Publish the
+  // exact shell bytes as a text asset that the worker serves for navigation.
+  if (sites) await writeFile(path.join(directory, shellPath), await readFile(path.join(directory, 'index.html')));
+  const files = [shellPath, '/theme-init.js', '/startup-guard.js', '/manifest.webmanifest', '/icon-foreground.svg', ...chunks.map(file => '/' + file)];
   for (const file of [...new Set(files)].sort()) {
     assets[file] = digest(await readFile(path.join(directory, file)));
   }
@@ -32,5 +36,6 @@ export async function writePlayerWorker(directory, chunks, coreDigests) {
   const worker = await readFile(new URL('worker.js', import.meta.url), 'utf8');
   const inventory = JSON.stringify(integrity);
   const revision = digest(worker + inventory);
-  await writeFile(path.join(directory, 'sw.js'), `const revision = '${revision}';\nconst buildId = ${JSON.stringify(buildId ?? '')};\nconst assets = ${inventory};\n${worker}`);
+  await writeFile(path.join(directory, 'sw.js'), `const revision = '${revision}';\nconst buildId = ${JSON.stringify(buildId ?? '')};\n` +
+    `const assets = ${inventory};\nconst shellPath = ${JSON.stringify(shellPath)};\n${worker}`);
 }

@@ -42,22 +42,35 @@ function networkFirst(request, fallback) {
     return hit;
   });
 }
+async function playerShell(target) {
+  const retainedShell = target ? await retained(shellPath, cachePrefix + target + '-') : undefined;
+  const response = retainedShell ?? await cached(shellPath);
+  if (!response || shellPath === '/index.html') return response;
+  const headers = new Headers(response.headers);
+  headers.set('content-type', 'text/html; charset=utf-8');
+  headers.delete('content-encoding');
+  headers.delete('content-length');
+  return new Response(response.body, { headers });
+}
 async function playerNavigation(request) {
   // An explicit update applies only to this navigation. Sibling review windows retain their worker and cache.
   const target = new URL(request.url).searchParams.get('vp-update');
-  if (target && /^[a-f0-9-]{36}$/.test(target)) return fetch(request).catch(async error => {
-    const html = await retained('/index.html', cachePrefix + target + '-') ?? await cached('/index.html');
+  const explicitUpdate = target && /^[a-f0-9-]{36}$/.test(target);
+  let response;
+  try { response = await fetch(request); }
+  catch (error) {
+    const html = await playerShell(explicitUpdate ? target : undefined);
     if (!html) throw error;
     return html;
-  });
-  const response = await networkFirst(request, '/index.html');
+  }
+  if (explicitUpdate) return response;
   // Redirects, errors and per-document bridge credentials always come from the live service.
   if (response.status !== 200 || response.redirected || response.type !== 'basic'
     || response.headers.get('cache-control')?.includes('no-store') || !response.headers.get('content-type')?.includes('text/html')) return response;
   const html = await response.clone().text();
   if (!html.includes('name="voidplayer-offline-shell"') || html.includes('name="voidplayer-page-bridge"')) return response;
   // Keep this window on the same module/Worker graph as its controlling cache until the new worker activates.
-  return await cached('/index.html') ?? response;
+  return await playerShell() ?? response;
 }
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
@@ -74,7 +87,7 @@ self.addEventListener('fetch', event => {
       event.respondWith(retained(key, cachePrefix).then(hit => hit ?? fetch(request)));
     return;
   }
-  if (url.pathname === '/index.html') return;
+  if (url.pathname === shellPath) return;
   if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/vendor/') || url.pathname === '/startup-guard.js' || url.pathname === '/theme-init.js') {
     event.respondWith(cached(key).then(hit => hit ?? fetch(request)));
   } else {
